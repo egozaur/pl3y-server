@@ -29,7 +29,7 @@ Gry: `mafia` (DO `Room`, czysty silnik w `engine/`), `kurczacze` (`KiRoom`, siln
 
 ## Bulgot
 
-- `games/bulgot/`: roguelike solo. DO `BgPlayer` (jeden na gracza, klucz = `pl.n`): profil (odblokowania, najlepsze wyniki, Temperatura Garnka) i aktywny run; DO `BgRanks` (singleton): ranking osobno dla trybu `quick` i `full`, jeden wpis na gracza. Trasy: `POST /api/bg/state|start|pick|buy|reroll|rest|shop|bet|bonus|fightstart|fightfinish|abandon|history` (wymagają `pt`), `GET /api/bg/ranks?mode=`. Limit `bg` 90/min na IP (`core/limits.js`).
+- `games/bulgot/`: roguelike solo. DO `BgPlayer` (jeden na gracza, klucz = `pl.n`): profil (odblokowania, najlepsze wyniki, Temperatura Garnka) i aktywny run; DO `BgRanks` (singleton): ranking osobno dla trybu `quick` i `full`, jeden wpis na gracza. Trasy: `POST /api/bg/state|start|pick|buy|reroll|rest|shop|bet|bonus|choose|fightstart|fightfinish|abandon|history` (wymagają `pt`), `GET /api/bg/ranks?mode=`. Limit `bg` 90/min na IP (`core/limits.js`).
 - Serwer losuje oferty z ziarna runu (klient go nie widzi) i **powtarza każdą walkę** z listy wejść gracza (`sim.js`). Silnik jest deterministyczny: żadnego `Math.random`, `Date` ani trygonometrii w `rng.js`, `data.js`, `stats.js`, `sim.js`, `rules.js`.
 - `rng.js`, `data.js`, `stats.js`, `sim.js` są kopiowane do frontendu (`../bulgot/shared/`) skryptem `../bulgot/dev/sync-engine.mjs`. Po zmianie któregoś z nich: sync i commit w obu repo.
 - Balans: `node ../bulgot/dev/sim-balance.mjs` (bot gra setki runów). Testy: `test/games/bulgot/bulgot.suite.js`. Opis gry i protokołu: `../bulgot/CLAUDE.md`, `../bulgot/DESIGN.md`.
