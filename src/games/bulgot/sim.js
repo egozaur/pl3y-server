@@ -5,7 +5,7 @@
 // Każdy tick zostawia w this.ev listę zdarzeń do animacji. runFight(setup, inputs) puszcza całą walkę naraz.
 // Zasada: żadnego Math.random, Date ani funkcji trygonometrycznych.
 import { makeRng } from './rng.js';
-import { SKILLS, TILE_BY_ID } from './data.js';
+import { SKILLS, TILE_BY_ID, STATUS } from './data.js';
 import { heroStats } from './stats.js';
 
 export const MAX_TICKS = 900;      // 90 s
@@ -34,7 +34,7 @@ export class Fight {
 
   mk(e) {
     const o = { ...e, uid: ++this.uid, idleUntil: e.idle || 0, maxHp: e.hp, baseArmor: e.armor, acc: 0, stunUntil: 0, windup: null, nextSpec: e.spec ? e.spec.every : 0,
-      dead: false, bleed: null, aspdPct: 100, p2: false, p3: false, shield: e.shield ? fl(e.hp * e.shield / 100) : 0, shieldHits: e.shieldHits || 0 };
+      dead: false, aspdPct: 100, burn: 0, burnT: 0, frost: 0, frostT: 0, poison: 0, poisonT: 0, bleed: 0, bleedT: 0, frozenUntil: 0, resist: e.resist || null, p2: false, p3: false, shield: e.shield ? fl(e.hp * e.shield / 100) : 0, shieldHits: e.shieldHits || 0 };
     if (o.boss === 'brojler') o.nextSummon = 100;
     if (o.boss === 'skubarka') o.nextSkub = 1e9;
     if (o.boss === 'prezes') o.nextBlock = 1e9;
@@ -75,15 +75,71 @@ export class Fight {
     t.hp -= d; this.dealt += d; if (d > this.maxHit) this.maxHit = d;
     this.push({ k: 'hit', to: t.uid, d, crit, kind });
     if (this.S.shred && kind === 'atk' && this.rng.int(100) < this.S.shred && t.armor > 0) t.armor = Math.max(0, t.armor - Math.max(1, Math.ceil(t.baseArmor / 10)));
-    if (this.S.bleed && kind === 'atk') t.bleed = { until: this.tick + 30, dps: this.S.bleed };
+    if (kind === 'atk') {
+      if (this.S.bleed) this.applyStatus(t, 'bleed', 1);
+      if (this.S.burnHit && this.rng.int(100) < this.S.burnHit) this.applyStatus(t, 'burn', 1);
+      if (this.S.frostHit && this.rng.int(100) < this.S.frostHit) this.applyStatus(t, 'frost', 1);
+      if (this.S.poisonHit && this.rng.int(100) < this.S.poisonHit) this.applyStatus(t, 'poison', 1);
+    }
     if (t.hp <= 0) this.kill(t);
     return d;
+  }
+
+  // ---------- efekty statusowe ----------
+  // Nakłada n stosów efektu (burn|frost|poison|bleed) na wroga. Zwraca true, jeśli coś nałożono.
+  applyStatus(t, kind, n) {
+    if (!t || t.dead || t.immune || n <= 0) return false;
+    if (t.resist && t.resist.includes(kind)) { this.push({ k: 'resist', to: t.uid, s: kind }); return false; }
+    const def = STATUS[kind], S = this.S;
+    const until = this.tick + fl(def.dur * (100 + (S.stDur || 0)) / 100);
+    if (kind === 'frost') {
+      if (this.tick < t.frozenUntil) return false;
+      t.frost += n; t.frostT = until;
+      const need = Math.max(2, def.need - (S.frostNeed || 0));
+      if (t.frost >= need) {
+        t.frost = 0;
+        let d = fl(def.freeze * (100 + (S.freezePct || 0)) / 100);
+        if (t.boss) d = fl(d / 2);
+        t.frozenUntil = this.tick + d; t.stunUntil = Math.max(t.stunUntil, t.frozenUntil);
+        if (t.windup) { t.windup = null; t.nextSpec = t.frozenUntil + (t.spec ? t.spec.every : 0); this.push({ k: 'break', uid: t.uid }); }
+        this.push({ k: 'freeze', uid: t.uid });
+        if (S.shatter) for (const e of this.alive()) this.heroHit(e, S.shatter, false, 'shatter');
+      }
+      return true;
+    }
+    const max = def.max + (kind === 'bleed' ? (S.bleedMax || 0) : kind === 'burn' ? (S.burnMax || 0) : 0);
+    t[kind] = Math.min(max, t[kind] + n); t[kind + 'T'] = until;
+    return true;
+  }
+  // Obrażenia jednego stosu na sekundę.
+  dotPer(kind) {
+    const S = this.S;
+    if (kind === 'bleed') return S.bleed + fl(S.atk * STATUS.bleed.per / 100);
+    const bonus = kind === 'burn' ? (S.burnPct || 0) : (S.poisonPct || 0);
+    return Math.max(1, fl(S.atk * STATUS[kind].per * (100 + bonus) / 10000));
+  }
+  dots() {
+    for (const e of this.enemies) {
+      if (e.dead) continue;
+      if (e.frost && this.tick > e.frostT) e.frost = 0;
+      for (const kind of ['burn', 'poison', 'bleed']) {
+        if (!e[kind] || e.dead) continue;
+        if (this.tick > e[kind + 'T']) { e[kind] = 0; continue; }
+        if (e.immune) continue;
+        const d = e[kind] * this.dotPer(kind);
+        e.hp -= d; this.dealt += d;
+        this.push({ k: 'hit', to: e.uid, d, crit: false, kind });
+        if (kind === 'burn' && this.S.burnHeal) this.heal(fl(e.burn * this.S.burnHeal / 10));
+        if (e.hp <= 0) this.kill(e);
+      }
+    }
   }
 
   kill(t) {
     if (t.dead) return;
     t.dead = true; t.hp = 0; this.kills++;
     this.push({ k: 'kill', uid: t.uid });
+    if (t.poison > 0) { const nx = this.enemies.find(e => !e.dead && !e.immune); if (nx) this.applyStatus(nx, 'poison', Math.max(1, fl(t.poison * (STATUS.poison.spread + (this.S.spreadPct || 0)) / 100))); }
     if (t.boss === 'brojler') for (const m of this.enemies) if (m.minion && !m.dead) { m.dead = true; m.hp = 0; this.push({ k: 'kill', uid: m.uid }); }
   }
 
@@ -202,7 +258,7 @@ export class Fight {
       return;
     }
     if (e.spec && this.tick >= e.nextSpec) { e.windup = { end: this.tick + e.spec.windup }; this.push({ k: 'telegraph', uid: e.uid, end: e.windup.end }); return; }
-    e.acc += fl(e.aspd * e.aspdPct / 100);
+    e.acc += fl(fl(e.aspd * e.aspdPct / 100) * (100 - Math.min(60, e.frost * STATUS.frost.slow)) / 100);
     while (e.acc >= 1000 && !this.over) { e.acc -= 1000; this.enemyHit(e, 100); }
   }
 
@@ -218,9 +274,7 @@ export class Fight {
 
     if (t % 10 === 9) {
       this.heal(this.S.regen);
-      for (const e of this.enemies) if (!e.dead && e.bleed && t <= e.bleed.until) {
-        e.hp -= e.bleed.dps; this.dealt += e.bleed.dps; this.push({ k: 'hit', to: e.uid, d: e.bleed.dps, crit: false, kind: 'bleed' }); if (e.hp <= 0) this.kill(e);
-      }
+      this.dots();
     }
     if (this.S.egg && this.nextEgg && t >= this.nextEgg) {
       this.nextEgg = t + this.S.egg;

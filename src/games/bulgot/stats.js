@@ -4,7 +4,7 @@ import { CHARS, TILE_BY_ID } from './data.js';
 
 export function setCounts(tileIds) {
   const c = {};
-  for (const id of tileIds) { const t = TILE_BY_ID[id]; if (t && t.set) c[t.set] = (c[t.set] || 0) + 1; }
+  for (const id of tileIds) { const t = TILE_BY_ID[id]; if (!t) continue; for (const st of (t.sets || (t.set ? [t.set] : []))) c[st] = (c[st] || 0) + 1; }
   return c;
 }
 
@@ -44,6 +44,10 @@ export function heroStats(loadout, opt = {}) {
     egg: has('tykajace-jajo') ? ((sc.jajeczne || 0) >= 2 ? 60 : 80) : 0,   // co ile ticków wybucha Tykające Jajo
     eggHeal: (sc.jajeczne || 0) >= 3 ? 3 : 0,
     bleed: acc.bleed || 0,
+    // efekty statusowe: szansa nałożenia przy zwykłym ataku (%), moc i czas trwania
+    bleedMax: acc.bleedMax || 0, burnHit: Math.min(100, acc.burnHit || 0), frostHit: Math.min(100, acc.frostHit || 0), poisonHit: Math.min(100, acc.poisonHit || 0),
+    burnPct: acc.burnPct || 0, poisonPct: acc.poisonPct || 0, burnMax: acc.burnMax || 0, stDur: acc.stDur || 0, freezePct: acc.freezePct || 0,
+    frostNeed: acc.frostNeed || 0, shatter: acc.shatter || 0, spreadPct: acc.spreadPct || 0, burnHeal: acc.burnHeal || 0,
     shred: acc.shred || 0,
     okrzyk: (sc.rambo || 0) >= 3,
     revive: has('gniazdo-zapasowe'),

@@ -209,6 +209,66 @@ test('walka: Tykające Jajo, krwawienie, Młocarnia, Gniazdo Zapasowe, Ostatni O
   a = play(setup({ hp: 5000, enemies: [foe({ hp: 100000, atk: 1, aspd: 100, slow: { pct: 20, ticks: 30 } })] }));
   const swings = evs(a.ev, 'swing').length; assert(swings < MAX_TICKS / 10, 'spowolnienie zmniejsza liczbę ciosów (' + swings + ')');
 });
+// Walka z ręcznie podkręconymi statystykami bohatera (efekty statusowe bez kafelków).
+function playS(s0, patch, inputs = []) {
+  const f = new Fight(s0); Object.assign(f.S, patch); const all = [];
+  const by = new Map(); for (const [t, sl] of inputs) { if (!by.has(t)) by.set(t, []); by.get(t).push(sl); }
+  while (!f.over) { f.step(by.get(f.tick) || []); all.push(...f.ev); }
+  return { f, ev: all, res: f.result() };
+}
+
+test('efekty: Oparzenie kumuluje się do limitu i bije co sekundę mimo pancerza', () => {
+  const s0 = setup({ enemies: [foe({ hp: 100000, atk: 1, aspd: 10, armor: 200 })] });
+  const a = playS(s0, { burnHit: 100, atk: 50 });
+  const burns = evs(a.ev, 'hit').filter(e => e.kind === 'burn');
+  assert(burns.length > 20, 'oparzenie bije');
+  eq(Math.max(...burns.map(e => e.d)), D.STATUS.burn.max * 5, 'limit 10 stosów × 10% z 50 Ataku');
+  const f = new Fight(s0); Object.assign(f.S, { burnHit: 100, atk: 50 }); for (let i = 0; i < 300; i++) f.step();
+  eq(f.enemies[0].burn, D.STATUS.burn.max, 'stosy na limicie');
+});
+
+test('efekty: Mróz spowalnia, 5 stosów zamraża (przerywa szarżę), boss zamarza krócej', () => {
+  const f = new Fight(setup({ enemies: [foe({ hp: 100000, atk: 1, aspd: 100, spec: { every: 200, windup: 30, mult: 300 } })] }));
+  const e = f.enemies[0];
+  for (let i = 0; i < 4; i++) f.applyStatus(e, 'frost', 1);
+  eq([e.frost, e.frozenUntil], [4, 0], '4 stosy bez zamrożenia');
+  e.windup = { end: 50 };
+  f.applyStatus(e, 'frost', 1);
+  eq([e.frost, e.frozenUntil, e.stunUntil, e.windup], [0, D.STATUS.frost.freeze, D.STATUS.frost.freeze, null], 'zamrożenie przerywa szarżę');
+  assert(!f.applyStatus(e, 'frost', 1), 'zamrożony nie zbiera stosów');
+  const b = new Fight(setup({ enemies: [foe({ hp: 1000, boss: 'brojler' })] }));
+  b.applyStatus(b.enemies[0], 'frost', 5);
+  eq(b.enemies[0].frozenUntil, Math.floor(D.STATUS.frost.freeze / 2), 'boss o połowę krócej');
+  // spowolnienie: 3 stosy Mrozu = -24% tempa ataku wroga
+  const g = new Fight(setup({ enemies: [foe({ hp: 100000, atk: 1, aspd: 100 })] }));
+  g.applyStatus(g.enemies[0], 'frost', 3); g.enemies[0].frostT = 1e9; g.step();
+  eq(g.enemies[0].acc, 76, 'tempo wroga 76%');
+});
+
+test('efekty: Salmonella przechodzi na następnego wroga, odporność blokuje efekt, nietykalny nie dostaje', () => {
+  const f = new Fight(setup({ enemies: [foe({ hp: 5 }), foe({ hp: 1000 }), foe({ hp: 1000, resist: ['burn'] })] }));
+  const [a, b, c] = f.enemies;
+  f.applyStatus(a, 'poison', 8);
+  f.kill(a);
+  eq(b.poison, 4, 'połowa stosów przechodzi');
+  assert(!f.applyStatus(c, 'burn', 3) && c.burn === 0, 'odporność');
+  assert(f.applyStatus(c, 'poison', 1), 'inna odporność nie blokuje');
+  c.immune = true; assert(!f.applyStatus(c, 'bleed', 1), 'nietykalny');
+  // stosy wygasają po czasie
+  f.applyStatus(b, 'burn', 2); b.burnT = f.tick; f.tick = 9; f.dots(); eq(b.burn, 0, 'wygasło');
+});
+
+test('efekty: krwawienie kumuluje się do 3 stosów (+bleedMax), walka z efektami jest deterministyczna', () => {
+  const s0 = setup({ lo: { tiles: ['ostrogi-bojowe'] }, enemies: [foe({ hp: 100000, atk: 1, aspd: 10 })] });
+  const f = new Fight(s0); for (let i = 0; i < 100; i++) f.step();
+  eq(f.enemies[0].bleed, 3, '3 stosy');
+  const g = new Fight(s0); g.S.bleedMax = 2; for (let i = 0; i < 100; i++) g.step();
+  eq(g.enemies[0].bleed, 5, '+2 stosy');
+  const s1 = setup({ enemies: [foe({ hp: 3000 }), foe({ hp: 3000 })] });
+  const p = { burnHit: 40, frostHit: 40, poisonHit: 40, bleed: 3 };
+  eq(JSON.stringify(playS(s1, p).ev), JSON.stringify(playS(s1, p).ev), 'determinizm');
+});
+
 test('walka: tarcza Sortownika, szarża Wózka (telegraf, przerwanie ogłuszeniem), Mysz w roju', () => {
   let a = play(setup({ enemies: [foe({ hp: 60, atk: 1, aspd: 20, shieldHits: 3 })] }));
   assert(evs(a.ev, 'shield').length === 3, 'pochłania 3 ciosy');

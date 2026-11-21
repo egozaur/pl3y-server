@@ -66,6 +66,25 @@ export const SKILLS = {
   zagrzebanie: { id: 'zagrzebanie', name: 'Zagrzebanie w Sianie', cd: 160, pct: 30, text: 'Leczy 30% maks. Życia.', key: 'zagrzebanie' },
 };
 
+// ---------- Efekty statusowe (nakładane na wrogów) ----------
+// dur = czas trwania w tickach (odświeżany przy każdym nałożeniu), max = limit stosów.
+// Oparzenie i Salmonella zadają co sekundę (stosy × per% Ataku, min. 1 na stos), ignorują pancerz i tarcze.
+// Mróz: każdy stos spowalnia wroga o slow%, przy `need` stosach wróg zamarza na `freeze` ticków (bossowie o połowę krócej).
+// Salmonella: po śmierci nosiciela `spread`% stosów przechodzi na następnego żywego wroga.
+// Krwawienie: stosy × (moc krwawienia + 5% Ataku) na sekundę.
+export const STATUS = {
+  burn: { id: 'burn', name: 'Oparzenie', dur: 40, max: 10, per: 10, text: 'Obrażenia co sekundę, rosną z każdym stosem.' },
+  frost: { id: 'frost', name: 'Mróz', dur: 40, need: 5, slow: 8, freeze: 15, text: 'Spowalnia wroga; 5 stosów zamraża go na 1,5 s.' },
+  poison: { id: 'poison', name: 'Salmonella', dur: 60, max: 12, per: 6, spread: 50, text: 'Słabsze obrażenia co sekundę, ale przechodzą na kolejnego wroga.' },
+  bleed: { id: 'bleed', name: 'Krwawienie', dur: 30, max: 3, per: 5, text: 'Obrażenia co sekundę; do 3 stosów.' },
+};
+
+// Żywioły (oznaczenia kafelków): pokazywane na kartach, używane przez przepisy Wylęgarni i Odznaki.
+export const ELEMENTS = {
+  ogien: { name: 'Ogień', color: '#ff7a3d' }, lod: { name: 'Lód', color: '#7fd3ff' }, trucizna: { name: 'Salmonella', color: '#9ccc65' },
+  krew: { name: 'Krew', color: '#e53950' }, jajo: { name: 'Jajo', color: '#fff3d6' }, ziarno: { name: 'Ziarno', color: '#ffc933' }, korpo: { name: 'Korpo', color: '#b0bec5' },
+};
+
 // ---------- Zestawy przedmiotów ----------
 export const SETS = {
   jajeczne: { name: 'Jajeczne', b2: 'Tykające Jajo wybucha co 6 s', b3: 'Wybuchy leczą 3% maks. Życia' },
