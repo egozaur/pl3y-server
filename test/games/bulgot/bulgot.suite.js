@@ -377,6 +377,72 @@ test('run: powtórka z wejść gracza to jedyne źródło wyniku walki (podrobio
   eq(bad.result, runFight(s, []), 'śmieciowe wejścia są pomijane');
 });
 
+test('dokupowanie: cena wg rzadkości, kafelek znika z oferty, wolny wybór zostaje, wydarzeń nie kupisz', () => {
+  const run = fresh(); run.coins = 100;
+  force(run, 'ziarno-mocy', 'czujne-oko', 'unik-skrzydlem', 'hazard-w-kurniku');
+  const atk0 = R.statsOf(run).atk;
+  let r = R.buyOffer(run, 0); assert(r.ok && r.bought === 'ziarno-mocy' && r.price === D.RULES.prices[0], 'zwykły kosztuje ' + D.RULES.prices[0]);
+  assert(run.coins === 100 - D.RULES.prices[0] && R.statsOf(run).atk === atk0 + 4 && run.offer[0] === null && run.phase === 'offer', 'Ziarna pobrane, efekt od razu, faza oferty trwa');
+  assert(R.buyOffer(run, 0).code === 'index', 'drugi raz tego samego nie kupisz');
+  assert(R.buyOffer(run, 3).code === 'event', 'Hazard to wydarzenie: nie na sprzedaż');
+  r = R.buyOffer(run, 1); assert(r.ok && r.price === D.RULES.prices[1], 'rzadki kosztuje ' + D.RULES.prices[1]);
+  const lone = fresh(); lone.coins = 99; lone.offer = ['ziarno-mocy', null, null, null];
+  assert(R.buyOffer(lone, 0).code === 'last' && lone.coins === 99 && lone.offer[0] === 'ziarno-mocy', 'ostatniego kafelka nie da się kupić: zostaje do darmowego wyboru');
+  const poor = fresh(); poor.coins = 3; force(poor, 'ziarno-mocy', 'czujne-oko', 'szybki-dziob', 'pancerz-z-pierza');
+  assert(R.buyOffer(poor, 0).code === 'coins' && poor.coins === 3 && poor.offer[0] === 'ziarno-mocy', 'za mało Ziaren: nic się nie dzieje');
+  assert(R.pickTile(run, 0).code === 'index', 'kupionego slotu nie wybierzesz za darmo');
+  assert(R.pickTile(run, 2).ok && run.phase === 'fight', 'darmowy wybór nadal działa');
+  assert(R.buyOffer(run, 3).code === 'phase', 'po wyborze nie ma już dokupowania');
+  const sk3 = fresh(); sk3.coins = 50; sk3.skills = [sk('grad'), sk('pianie'), sk('granat')]; force(sk3, 'dziobniecie-szalu', 'ziarno-mocy', 'szybki-dziob', 'pancerz-z-pierza');
+  assert(R.buyOffer(sk3, 0).code === 'slot' && sk3.coins === 50 && sk3.offer[0] === 'dziobniecie-szalu', 'brak slotu: bez opłaty');
+  assert(R.buyOffer(sk3, 0, 2).ok && sk3.skills[2].id === 'dziobniecie' && sk3.coins === 50 - D.RULES.prices[1], 'z slotem: kupione');
+  const rr = fresh(); rr.coins = 50; R.buyOffer(rr, 0); R.reroll(rr); assert(rr.offer.length === 4 && rr.offer.every(x => x), 'po rerollu znów 4 kafelki');
+});
+test('pierwsza oferta zawsze ma umiejętność (też po rerollach), a kafelki są nadal różne', () => {
+  for (let seed = 1; seed <= 300; seed++) {
+    const r = fresh({ seed }); r.coins = 99;
+    for (let k = 0; k < 4; k++) {
+      assert(r.offer.some(id => D.TILE_BY_ID[id].type === 'skill'), 'umiejętność w ofercie, seed ' + seed + ' reroll ' + k);
+      assert(new Set(r.offer).size === 4, 'różne kafelki');
+      R.reroll(r);
+    }
+  }
+  const nosk = fresh({ pool: ALL.filter(id => D.TILE_BY_ID[id].type !== 'skill') }); assert(nosk.offer.length === 4, 'bez umiejętności w puli oferta nadal działa');
+});
+test('wczesne piętra: wrogowie mają więcej życia i mniejszy atak, po nich już normalnie', () => {
+  const r = fresh({ seed: 11 }), def = D.ENEMIES['szczur-pasz'], M = D.MODES.full.early;
+  const e1 = R.buildSetup(r).enemies[0];
+  eq(e1.hp, Math.round(def.hp * M.hp / 100), 'życie ×' + M.hp + '%'); assert(e1.atk <= def.atk, 'atak nie większy');
+  r.round = M.rounds + 1;
+  while (D.MODES.full.bosses[r.round]) r.round++;
+  const ids = R.encounterIds(r), late = R.buildSetup(r).enemies[0], d = D.ENEMIES[ids[0]];
+  let h = 1; for (let i = 1; i < r.round; i++) h *= D.MODES.full.grow.hp;
+  eq(late.hp, Math.max(1, Math.round(d.hp * h)), 'po wczesnych piętrach bez dodatku');
+});
+test('historia gier: pełny dziennik rund i podsumowanie, ostatnie 30, trasa history', async () => {
+  const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
+  assert((await post(o, 'history', { pl: PL })).j.history.length === 0, 'pusta historia');
+  await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
+  let r = (await post(o, 'state', { pl: PL })).j;
+  let guard = 0;
+  while (r.run.phase !== 'over' && guard++ < 100) {
+    const ph = r.run.phase;
+    if (ph === 'offer') r = (await post(o, 'pick', { pl: PL, i: 0, slot: 0 })).j;
+    else if (ph === 'event') r = (await post(o, r.run.pending.kind === 'shop' ? 'shop' : 'bet', { pl: PL, i: -1, amount: 0 })).j;
+    else if (ph === 'bonus') r = (await post(o, 'bonus', { pl: PL, i: 0, slot: 0 })).j;
+    else { await post(o, 'fightstart', { pl: PL }); r = (await post(o, 'fightfinish', { pl: PL, inputs: [] })).j; }
+  }
+  const h = (await post(o, 'history', { pl: PL })).j.history;
+  assert(h.length === 1, 'jeden zakończony run w historii');
+  const e = h[0]; assert(e.mode === 'quick' && e.char === 'pyrtek' && ['win', 'lose'].includes(e.outcome) && typeof e.score === 'number' && e.finalStats.maxHp > 0, 'podsumowanie runu');
+  assert(Array.isArray(e.log) && e.log.length >= 1, 'dziennik rund');
+  const f = e.log[0]; assert(f.r === 1 && f.enemies.length >= 1 && f.hero.maxHp > 0 && f.picked && Array.isArray(f.offer) && typeof f.ticks === 'number' && typeof f.hpAfter === 'number', 'wpis rundy: wrogowie, statystyki, wybór, wynik walki');
+  await post(o, 'start', { pl: PL, mode: 'full', char: 'pyrtek' }); await post(o, 'abandon', { pl: PL });
+  const h2 = (await post(o, 'history', { pl: PL })).j.history; assert(h2.length === 2 && h2[1].abandoned === true && h2[1].floorsDone === 0, 'porzucony run w historii');
+  for (let i = 0; i < 33; i++) { await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' }); await post(o, 'abandon', { pl: PL }); }
+  assert((await post(o, 'history', { pl: PL })).j.history.length === 30, 'historia ma limit 30');
+});
+
 // ---------- profil ----------
 test('profil: odblokowania postaci i kafelków, liczniki, najlepszy wynik, kolejny poziom Garnka', () => {
   const p = newProfile(); eq(p.chars, ['pyrtek'], 'start'); assert(poolFor(p).length === 20, '20 kafelków na start');

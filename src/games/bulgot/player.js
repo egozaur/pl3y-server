@@ -5,7 +5,7 @@
 // Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /reroll /shop /bet /bonus /fightstart /fightfinish /abandon.
 // Odpowiedź: { ok, profile, run, ...wynik akcji } albo { err, code } z kodem 400/409.
 import { mix, hash } from './rng.js';
-import { newRun, pickTile, reroll, shopBuy, bet, bonusPick, fightSetup, fightFinish, abandon, view, statsOf } from './rules.js';
+import { newRun, pickTile, reroll, buyOffer, shopBuy, bet, bonusPick, fightSetup, fightFinish, abandon, view, statsOf } from './rules.js';
 import { newProfile, poolFor, evaluate, onBossKill, onRunEnd, markSeen, publicProfile } from './profile.js';
 import { MODES, CHARS } from './data.js';
 
@@ -50,12 +50,14 @@ export class BgPlayer {
       }
       case 'pick': r = need(run) || pickTile(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot)); break;
       case 'reroll': r = need(run) || reroll(run); break;
+      case 'buy': r = need(run) || buyOffer(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot)); break;
       case 'shop': r = need(run) || shopBuy(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot)); break;
       case 'bet': r = need(run) || bet(run, Number(b.amount)); break;
       case 'bonus': r = need(run) || bonusPick(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot)); break;
       case 'fightstart': r = need(run) || fightSetup(run); break;
       case 'fightfinish': r = need(run) || fightFinish(run, Array.isArray(b.inputs) ? b.inputs : []); break;
       case 'abandon': r = need(run) || abandon(run); break;
+      case 'history': break;
       default: return json({ err: 'Nie znaleziono.' }, 404);
     }
     if (r.err) return json({ err: r.err, code: r.code, ...this.out(profile, run) }, 409);
@@ -69,6 +71,7 @@ export class BgPlayer {
         const end = onRunEnd(profile, run);
         fresh.push(...evaluate(profile, run));
         extra.end = { ...end, score: run.score, rounds: run.done, ended: run.ended };
+        await this.saveHistory(st, pl, run, path === 'abandon');
         if (run.done > 0 && this.env && this.env.BG_RANKS) {
           try {
             const res = await this.env.BG_RANKS.get(this.env.BG_RANKS.idFromName('ranks')).fetch('https://bg/submit', {
@@ -79,12 +82,25 @@ export class BgPlayer {
       }
       if (fresh.length) extra.unlocks = fresh.map(u => ({ id: u.id, kind: u.kind, target: u.target, text: u.text }));
     }
+    if (path === 'history') extra.history = (await st.get('history')) || [];
     await st.put({ profile, ...(run ? { run } : {}) });
     const o = this.out(profile, run);
     const body = { ok: true, ...o, ...extra };
     if (r.setup) body.setup = r.setup;
     for (const k of ['result', 'reward', 'boss', 'bonus', 'event', 'crate', 'bought', 'price', 'bet', 'won', 'tile', 'cost', 'left']) if (r[k] !== undefined) body[k] = r[k];
     return json(body);
+  }
+
+  // TESTOWA historia gier: pełny dziennik każdego zakończonego runu (ostatnie 30), do analizy balansu. Do usunięcia po testach.
+  async saveHistory(st, pl, run, abandoned) {
+    try {
+      const hist = (await st.get('history')) || [];
+      hist.push({ id: run.id, nick: pl.nick, started: run.started, ended: this.now(), mode: run.mode, char: run.char, garnek: run.garnek, outcome: run.ended, abandoned,
+        floorsDone: run.done, endedOnRound: run.round, score: run.score, timeBonus: run.timeBonus, coinsLeft: run.coins, buys: run.stats.buys || 0, rerolls: run.stats.rerolls,
+        tiles: run.tiles, skills: run.skills, finalStats: statsOf(run), log: run.log });
+      while (hist.length > 30) hist.shift();
+      await st.put('history', hist);
+    } catch (e) {}
   }
 
   out(profile, run) { return { profile: publicProfile(profile), run: view(run) }; }
