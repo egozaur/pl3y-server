@@ -27,7 +27,7 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0 }) {
   const run = {
     v: 1, id: String(seed), mode, char, garnek: garnek | 0, seed: seed >>> 0, round: 1, phase: 'offer',
     hp: 1, coins: ch.coins, tiles: [], skills: ch.startSkills.map(([id, lvl]) => ({ id, lvl })), offer: [], rerolls: 0, paid: 0, freeLeft: ch.freeRerolls,
-    pending: null, pool: pool.slice(), started: now, ended: null, score: 0, timeBonus: 0, done: 0,
+    pending: null, rested: false, pool: pool.slice(), started: now, ended: null, score: 0, timeBonus: 0, done: 0,
     flags: { bonusAtk: 0, bossHpBonus: 0, revived: false },
     stats: { riskPicks: 0, fox: 0, maxCoins: ch.coins, maxHit: 0, lowWin: false, maxRound: 1, bossKills: [], picks: 0, rerolls: 0 },
     log: [],
@@ -119,7 +119,7 @@ function nextRound(run) {
   const M = MODES[run.mode];
   if (run.round > M.rounds) return endRun(run, 'win');
   run.stats.maxRound = Math.max(run.stats.maxRound, run.round);
-  run.phase = 'offer'; run.pending = null; run.rerolls = 0; run.paid = 0; run.freeLeft = CHARS[run.char].freeRerolls;
+  run.phase = 'offer'; run.pending = null; run.rested = false; run.rerolls = 0; run.paid = 0; run.freeLeft = CHARS[run.char].freeRerolls;
   run.offer = makeOffer(run, 0);
   run.cur = freshCur(run);
   return { ok: true };
@@ -193,6 +193,21 @@ export function buyOffer(run, i, slot) {
   setCoins(run, run.coins - price);
   run.offer[i] = null; run.stats.buys = (run.stats.buys || 0) + 1; cur(run).bought.push(t.id);
   return { ok: true, bought: t.id, price };
+}
+
+// Odpoczynek: za Ziarna leczysz część życia, raz na rundę, przed walką (nie w jej trakcie).
+export function rest(run) {
+  if (run.phase !== 'offer' && run.phase !== 'fight') return fail('Teraz nie można odpoczywać.', 'phase');
+  if (run.phase === 'fight' && run.fight) return fail('Walka już się zaczęła.', 'fighting');
+  if (run.rested) return fail('W tej rundzie już odpoczywałeś.', 'rested');
+  const S = statsOf(run);
+  if (run.hp >= S.maxHp) return fail('Masz pełne życie.', 'full');
+  if (run.coins < RULES.restCost) return fail('Odpoczynek kosztuje ' + RULES.restCost + ' Ziarna.', 'coins');
+  setCoins(run, run.coins - RULES.restCost);
+  const before = run.hp;
+  run.hp = Math.min(S.maxHp, run.hp + Math.max(1, fl(S.maxHp * RULES.restPct / 100)));
+  run.rested = true; cur(run).rested = (cur(run).rested || 0) + (run.hp - before);
+  return { ok: true, healed: run.hp - before, cost: RULES.restCost };
 }
 
 export function shopBuy(run, i, slot) {
@@ -282,6 +297,7 @@ export function buildSetup(run) {
       const g = ENEMIES['kot-ochroniarz'];
       const guards = [0, 1].map(() => concrete(g, s, gm, { name: 'Ochroniarz', guard: true }));
       enemies = [...guards, be];
+      for (const e of enemies) e.idle = 30;   // Zebranie Zarządu: przez pierwsze 3 s nikt nie atakuje, gracz zdąży użyć umiejętności
     }
     const bp = M.bossPct;
     for (const e of enemies) { e.hp = Math.max(1, fl(e.hp * bp.hp / 100)); e.atk = Math.max(1, fl(e.atk * bp.atk / 100)); }
@@ -309,7 +325,7 @@ export function fightFinish(run, inputs) {
   const setup = buildSetup(run), res = runFight(setup, inputs);
   const S = statsOf(run), gm = garnekMods(run.garnek), c = cur(run), coinsBefore = run.coins, hpBefore = setup.hero.hp;
   const entry = () => ({ r: run.round, zone: setup.zone, boss: setup.boss, elite: setup.elite, enemies: setup.enemies.map(e => ({ n: e.name, hp: e.hp, atk: e.atk })),
-    offer: c.offer, picked: c.picked, bought: c.bought, rerolls: c.rerolls, event: c.event, bet: c.bet || null,
+    offer: c.offer, picked: c.picked, bought: c.bought, rerolls: c.rerolls, rested: c.rested || 0, event: c.event, bet: c.bet || null,
     hero: { maxHp: S.maxHp, atk: S.atk, aspd: S.aspd, armor: S.armor, crit: S.crit, evade: S.evade, regen: S.regen }, tiles: run.tiles.length, skills: run.skills.map(s => s.id + (s.lvl > 1 ? '*' : '')),
     coinsBefore, coinsAfter: run.coins, hpBefore, hpAfter: res.hp, win: res.win, ticks: res.ticks, dealt: res.dealt, taken: res.taken, maxHit: res.maxHit, skillsUsed: res.skillsUsed, stolen: res.stolen, revived: res.usedRevive, timeout: res.timeout });
   setCoins(run, run.coins - Math.min(run.coins, res.stolen));
@@ -355,7 +371,7 @@ export function view(run) {
   const v = {
     id: run.id, mode: run.mode, char: run.char, garnek: run.garnek, round: run.round, rounds: M.rounds, phase: run.phase,
     hp: run.hp, maxHp: S.maxHp, coins: run.coins, tiles: run.tiles, skills: run.skills, offer: run.offer, pending: run.pending,
-    rerollCost: run.phase === 'offer' ? rerollCost(run) : null, freeLeft: run.freeLeft, stats: run.stats, flags: { bossHpBonus: run.flags.bossHpBonus, revived: run.flags.revived, bonusAtk: run.flags.bonusAtk },
+    rerollCost: run.phase === 'offer' ? rerollCost(run) : null, freeLeft: run.freeLeft, rested: run.rested, restCost: RULES.restCost, restPct: RULES.restPct, stats: run.stats, flags: { bossHpBonus: run.flags.bossHpBonus, revived: run.flags.revived, bonusAtk: run.flags.bonusAtk },
     score: over ? run.score : liveScore(run), done: run.done, timeBonus: run.timeBonus, ended: run.ended, form: formFor(run.mode, run.round).id, zone: zoneOf(run.mode, run.round),
     boss: M.bosses[run.round] || null, elite: !over && isElite(run), hero: S,
   };

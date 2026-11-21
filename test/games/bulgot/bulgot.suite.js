@@ -71,12 +71,12 @@ test('rng: ten sam seed daje ten sam ciąg, mix i hash są stabilne', () => {
 });
 
 // ---------- dane ----------
-test('dane: 30 kafelków (20 na start, 10 zablokowanych), spójne odwołania', () => {
-  assert(D.TILES.length === 30, '30 kafelków, jest ' + D.TILES.length);
-  assert(D.STARTER_TILES.length === 20, '20 na start, jest ' + D.STARTER_TILES.length);
-  assert(new Set(ALL).size === 30, 'unikalne id');
+test('dane: 31 kafelków (21 na start, 10 zablokowanych), spójne odwołania', () => {
+  assert(D.TILES.length === 31, '31 kafelków, jest ' + D.TILES.length);
+  assert(D.STARTER_TILES.length === 21, '21 na start, jest ' + D.STARTER_TILES.length);
+  assert(new Set(ALL).size === 31, 'unikalne id');
   const by = t => D.TILES.filter(x => x.type === t).length;
-  eq([by('stat'), by('skill'), by('item'), by('risk')], [8, 6, 10, 6], 'podział na typy');
+  eq([by('stat'), by('skill'), by('item'), by('risk')], [9, 6, 10, 6], 'podział na typy');
   for (const t of D.TILES) {
     assert(t.name && t.text && t.rarity >= 0 && t.rarity <= 3 && D.TYPES[t.type], 'pola ' + t.id);
     if (t.type === 'skill') assert(D.SKILLS[t.skill], 'umiejętność ' + t.id);
@@ -97,7 +97,7 @@ test('statystyki: baza, kafelki, procenty, zestawy, Worek, Zakazana Pasza, wył�
   let S = heroStats(loadout());
   eq([S.maxHp, S.atk, S.aspd, S.crit, S.critMult], [B.hp, B.atk, 100, 5, 150], 'baza');
   S = heroStats(loadout({ tiles: ['ziarno-mocy', 'ziarno-mocy', 'twardy-grzebien', 'szybki-dziob', 'pancerz-z-pierza'] }));
-  eq([S.atk, S.maxHp, S.aspd, S.armor], [16, B.hp + 20, 110, 6], 'płaskie i procentowe');
+  eq([S.atk, S.maxHp, S.aspd, S.armor], [8 + 2 * 6, B.hp + 20, 110, 6], 'płaskie i procentowe');
   S = heroStats(loadout({ tiles: ['pakt-z-lisem'] }));
   eq([S.atk, S.maxHp], [Math.floor(8 * 150 / 100), Math.floor(B.hp * 70 / 100)], 'Pakt z Lisem');
   S = heroStats(loadout({ tiles: ['opaska-rambo', 'ostrogi-bojowe'] }));
@@ -147,7 +147,7 @@ test('walka: pancerz, unik, krytyk i obrażenia bohatera liczą się wg wzoru', 
   try {
     const a = play(setup({ lo, enemies: [foe({ hp: 200, atk: 1, armor: 100 })] }));
     const hit = evs(a.ev, 'hit').find(e => e.kind === 'atk');
-    eq(hit.d, Math.floor(Math.floor(32 * 100 / 100) * 100 / 200), 'Atak 32 przy pancerzu 100 = 16');
+    eq(hit.d, Math.floor(Math.floor(44 * 100 / 100) * 100 / 200), 'Atak 44 przy pancerzu 100 = 22');
     const b = play(setup({ enemies: [foe({ hp: 40, atk: 1, evade: 100 })] }));
     assert(evs(b.ev, 'miss').length > 0 && evs(b.ev, 'hit').length === 0, 'wróg z 100% uniku nie dostaje ciosów');
   } finally { D.CHARS.pyrtek.base = base; }
@@ -156,8 +156,8 @@ test('walka: umiejętności (Grad, Granat, Pianie, Dziobnięcie, Unik, Zagrzeban
   const none = { ...D.CHARS.pyrtek.base, crit: 0 }, keep = D.CHARS.pyrtek.base; D.CHARS.pyrtek.base = none;
   try {
     const mk = id => setup({ lo: { skills: [sk(id)] }, enemies: [foe({ hp: 100000, atk: 1, aspd: 20 })] });
-    const t0 = Math.floor(D.SKILLS.grad.cd * 40 / 100);
-    // start z 40% cooldownu: wcześniejsze wejście jest ignorowane
+    const t0 = Math.floor(D.SKILLS.grad.cd * 15 / 100);
+    // start z 15% cooldownu: wcześniejsze wejście jest ignorowane
     let a = play(mk('grad'), [[0, 0]]); assert(evs(a.ev, 'skill').length === 0, 'przed końcem startowego cooldownu nic się nie dzieje');
     a = play(mk('grad'), [[t0, 0]]);
     assert(evs(a.ev, 'skill').length === 1 && evs(a.ev, 'hit').filter(e => e.kind === 'grad').length === 5, 'Grad = 5 trafień');
@@ -165,27 +165,27 @@ test('walka: umiejętności (Grad, Granat, Pianie, Dziobnięcie, Unik, Zagrzeban
     a = play(mk('grad'), [[t0, 0], [t0 + 5, 0]]); assert(evs(a.ev, 'skill').length === 1, 'cooldown blokuje drugie użycie');
     a = play(mk('grad'), [[t0, 0], [t0 + D.SKILLS.grad.cd, 0]]); assert(evs(a.ev, 'skill').length === 2, 'po cooldownie znów działa');
     a = play(mk('grad'), [[t0, 5], [t0, -1]]); assert(evs(a.ev, 'skill').length === 0, 'zły slot ignorowany');
-    const tg = Math.floor(D.SKILLS.granat.cd * 40 / 100);
+    const tg = Math.floor(D.SKILLS.granat.cd * 15 / 100);
     a = play(mk('granat'), [[tg, 0]]); eq(evs(a.ev, 'hit').find(e => e.kind === 'granat').d, 20, 'Granat = 250% z 8');
     // poziom 2: +30% mocy, -20% cooldownu
     const s2 = setup({ lo: { skills: [sk('granat', 2)] }, enemies: [foe({ hp: 100000, atk: 1, aspd: 20 })] });
-    a = play(s2, [[Math.floor(D.SKILLS.granat.cd * 40 / 100), 0]]); eq(evs(a.ev, 'hit').find(e => e.kind === 'granat').d, Math.floor(8 * Math.floor(250 * 130 / 100) / 100), 'Granat lvl 2');
+    a = play(s2, [[Math.floor(D.SKILLS.granat.cd * 15 / 100), 0]]); eq(evs(a.ev, 'hit').find(e => e.kind === 'granat').d, Math.floor(8 * Math.floor(250 * 130 / 100) / 100), 'Granat lvl 2');
     // Pianie: ogłuszeni wrogowie nie atakują
     const sp = setup({ lo: { skills: [sk('pianie')] }, enemies: [foe({ hp: 100000, atk: 3, aspd: 200 })] });
-    const tp = Math.floor(D.SKILLS.pianie.cd * 40 / 100);
+    const tp = Math.floor(D.SKILLS.pianie.cd * 15 / 100);
     a = play(sp, [[tp, 0]]);
     assert(evs(a.ev, 'stun').length === 1, 'ogłuszenie');
     assert(evs(a.ev, 'hurt').filter(e => e.t > tp && e.t < tp + 20).length === 0 && evs(a.ev, 'hurt').filter(e => e.t >= tp + 20).length > 0, 'przez 2 s wróg milczy, potem wraca');
     // Unik: nietykalność
     const su = setup({ lo: { skills: [sk('unik')] }, enemies: [foe({ hp: 100000, atk: 3, aspd: 200 })] });
-    const tu = Math.floor(D.SKILLS.unik.cd * 40 / 100);
+    const tu = Math.floor(D.SKILLS.unik.cd * 15 / 100);
     a = play(su, [[tu, 0]]); assert(evs(a.ev, 'block').length > 0 && evs(a.ev, 'hurt').filter(e => e.t >= tu && e.t < tu + 15).length === 0, 'Unik blokuje');
     // Zagrzebanie: leczy 30% maks. Życia
     const sz = setup({ lo: { skills: [sk('zagrzebanie')] }, hp: 10, enemies: [foe({ hp: 100000, atk: 1, aspd: 20 })] });
-    a = play(sz, [[Math.floor(D.SKILLS.zagrzebanie.cd * 40 / 100), 0]]); eq(evs(a.ev, 'heal')[0].n, Math.floor(70 * 30 / 100), 'leczy 30%');
+    a = play(sz, [[Math.floor(D.SKILLS.zagrzebanie.cd * 15 / 100), 0]]); eq(evs(a.ev, 'heal')[0].n, Math.floor(70 * 30 / 100), 'leczy 30%');
     // Dziobnięcie: więcej ciosów w oknie 6 s
     const sd = setup({ lo: { skills: [sk('dziobniecie')] }, enemies: [foe({ hp: 100000, atk: 1, aspd: 20 })] });
-    const td = Math.floor(D.SKILLS.dziobniecie.cd * 40 / 100);
+    const td = Math.floor(D.SKILLS.dziobniecie.cd * 15 / 100);
     const sw = (r) => evs(r.ev, 'swing').filter(e => e.t >= td && e.t < td + 60).length;
     assert(sw(play(sd, [[td, 0]])) > sw(play(sd, [])), 'więcej ciosów po Dziobnięciu');
   } finally { D.CHARS.pyrtek.base = keep; }
@@ -215,12 +215,12 @@ test('walka: tarcza Sortownika, szarża Wózka (telegraf, przerwanie ogłuszenie
   const ch = foe({ hp: 100000, atk: 5, aspd: 20, spec: { every: 50, windup: 20, mult: 300 } });
   a = play(setup({ hp: 5000, enemies: [ch] }));
   assert(evs(a.ev, 'telegraph').length > 3 && evs(a.ev, 'hurt').some(e => e.d >= 15), 'szarża z telegrafem bije 3x');
-  const tp = Math.floor(D.SKILLS.pianie.cd * 40 / 100);
+  const tp = Math.floor(D.SKILLS.pianie.cd * 15 / 100);
   a = play(setup({ hp: 5000, lo: { skills: [sk('pianie')] }, enemies: [ch] }), [[tp, 0]]);
   assert(evs(a.ev, 'telegraph').length > 0, 'telegraf był');
 });
 test('bossowie: Brojler wzywa stażystów i wścieka się, Skubarka ma tarczę, Prezes jest nietykalny do śmierci Ochroniarzy', () => {
-  const bro = foe({ id: 'brojler', boss: 'brojler', name: 'Brojler', hp: 220, atk: 2, aspd: 60 });
+  const bro = foe({ id: 'brojler', boss: 'brojler', name: 'Brojler', hp: 520, atk: 2, aspd: 60 });
   let a = play(setup({ hp: 100000, lo: { tiles: ['ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy'] }, enemies: [bro] }));
   assert(evs(a.ev, 'summon').length >= 2 && evs(a.ev, 'phase').some(e => e.n === 2), 'stażyści i faza 2');
   assert(a.res.win && a.res.boss === 'brojler', 'po śmierci bossa stażyści znikają, wygrana');
@@ -382,7 +382,7 @@ test('dokupowanie: cena wg rzadkości, kafelek znika z oferty, wolny wybór zost
   force(run, 'ziarno-mocy', 'czujne-oko', 'unik-skrzydlem', 'hazard-w-kurniku');
   const atk0 = R.statsOf(run).atk;
   let r = R.buyOffer(run, 0); assert(r.ok && r.bought === 'ziarno-mocy' && r.price === D.RULES.prices[0], 'zwykły kosztuje ' + D.RULES.prices[0]);
-  assert(run.coins === 100 - D.RULES.prices[0] && R.statsOf(run).atk === atk0 + 4 && run.offer[0] === null && run.phase === 'offer', 'Ziarna pobrane, efekt od razu, faza oferty trwa');
+  assert(run.coins === 100 - D.RULES.prices[0] && R.statsOf(run).atk === atk0 + 6 && run.offer[0] === null && run.phase === 'offer', 'Ziarna pobrane, efekt od razu, faza oferty trwa');
   assert(R.buyOffer(run, 0).code === 'index', 'drugi raz tego samego nie kupisz');
   assert(R.buyOffer(run, 3).code === 'event', 'Hazard to wydarzenie: nie na sprzedaż');
   r = R.buyOffer(run, 1); assert(r.ok && r.price === D.RULES.prices[1], 'rzadki kosztuje ' + D.RULES.prices[1]);
@@ -443,9 +443,44 @@ test('historia gier: pełny dziennik rund i podsumowanie, ostatnie 30, trasa his
   assert((await post(o, 'history', { pl: PL })).j.history.length === 30, 'historia ma limit 30');
 });
 
+test('odpoczynek: za Ziarna leczy 20% życia, raz na rundę, nie w trakcie walki, nie przy pełnym życiu', () => {
+  const run = fresh(); run.coins = 20; run.hp = 20;
+  const S = R.statsOf(run), heal = Math.floor(S.maxHp * D.RULES.restPct / 100);
+  let r = R.rest(run); assert(r.ok && r.healed === heal && run.hp === 20 + heal && run.coins === 20 - D.RULES.restCost, 'leczy ' + heal + ' za ' + D.RULES.restCost);
+  assert(R.rest(run).code === 'rested', 'drugi raz w tej samej rundzie nie');
+  const full = fresh(); full.coins = 20; assert(R.rest(full).code === 'full' && full.coins === 20, 'pełne życie: bez opłaty');
+  const poor = fresh(); poor.hp = 10; poor.coins = D.RULES.restCost - 1; assert(R.rest(poor).code === 'coins' && poor.hp === 10, 'za mało Ziaren');
+  const cap = fresh(); cap.coins = 20; cap.hp = S.maxHp - 1; R.rest(cap); assert(cap.hp === S.maxHp, 'nie przekracza maks. życia');
+  // przed walką (po wyborze kafelka) też można, ale nie po rozpoczęciu walki
+  const pre = fresh(); pre.coins = 20; pre.hp = 15; force(pre, 'ziarno-mocy'); R.pickTile(pre, 0);
+  assert(pre.phase === 'fight' && R.rest(pre).ok, 'odpoczynek w przygotowaniu do walki');
+  const mid = fresh(); mid.coins = 20; mid.hp = 15; force(mid, 'ziarno-mocy'); R.pickTile(mid, 0); R.fightSetup(mid);
+  assert(R.rest(mid).code === 'fighting' && mid.hp === 15, 'po starcie walki nie można (powtórka musi się zgadzać)');
+  // nowa runda = znów można
+  const nx = fresh(); nx.coins = 20; nx.hp = 10; R.rest(nx); nx.phase = 'fight'; nx.fight = {}; R.fightFinish(nx, []);
+  if (nx.phase === 'offer') { nx.hp = 5; assert(R.rest(nx).ok, 'w następnej rundzie znów można'); }
+  assert(R.view(run).rested === true && R.view(run).restCost === D.RULES.restCost, 'widok niesie stan odpoczynku');
+});
+test('Prezes: Zebranie Zarządu, przez pierwsze 3 s nikt nie atakuje; umiejętności startują z 15% cooldownu', () => {
+  const r = fresh({ mode: 'quick' }); r.round = 10;
+  const s = R.buildSetup(r);
+  assert(s.enemies.length === 3 && s.enemies.every(e => e.idle === 30), 'wszyscy trzej mają 3 s opóźnienia');
+  const hero = { id: 'h', lo: { skills: [sk('grad')] } };
+  const a = play(setup({ hp: 9999, lo: hero.lo, enemies: s.enemies }));
+  const first = evs(a.ev, 'hurt')[0];
+  assert(first && first.t >= 30, 'pierwsze obrażenia dopiero po 3 s (jest tick ' + (first && first.t) + ')');
+  assert(evs(a.ev, 'hit').some(e => e.t < 30), 'ale bohater już bije Ochroniarzy');
+  const g = play(setup({ lo: { skills: [sk('grad')] }, enemies: [foe({ hp: 100000, atk: 1, aspd: 20 })] }), [[D.SKILLS.grad.cd * 15 / 100 | 0, 0]]);
+  assert(evs(g.ev, 'skill').length === 1, 'umiejętność gotowa po ' + (D.SKILLS.grad.cd * 15 / 100 | 0) + ' tickach');
+});
+test('nowe kafelki ofensywne: Ziarno Mocy +6 Ataku, Ostry Dziób +12% obrażeń', () => {
+  eq(heroStats(loadout({ tiles: ['ziarno-mocy'] })).atk, 14, 'Ziarno Mocy');
+  eq(heroStats(loadout({ tiles: ['ostry-dziob', 'ostry-dziob'] })).dmg, 24, 'Ostry Dziób kumuluje się');
+  assert(D.TILE_BY_ID['ostry-dziob'].repeat && D.STARTER_TILES.includes('ostry-dziob'), 'dostępny od startu i powtarzalny');
+});
 // ---------- profil ----------
 test('profil: odblokowania postaci i kafelków, liczniki, najlepszy wynik, kolejny poziom Garnka', () => {
-  const p = newProfile(); eq(p.chars, ['pyrtek'], 'start'); assert(poolFor(p).length === 20, '20 kafelków na start');
+  const p = newProfile(); eq(p.chars, ['pyrtek'], 'start'); assert(poolFor(p).length === 21, '21 kafelków na start');
   const run = fresh();
   run.stats.riskPicks = 5; assert(evaluate(p, run).some(u => u.target === 'kaczor') && p.chars.includes('kaczor'), 'Kaczor: 5 kafelków ryzyka');
   run.stats.maxCoins = 100; evaluate(p, run); assert(p.tiles.includes('czterolistna-koniczyna'), 'Koniczyna: 100 Ziaren');

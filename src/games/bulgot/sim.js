@@ -23,7 +23,7 @@ export class Fight {
     this.S = heroStats(this.loadout);
     this.hp = Math.min(h.hp, this.S.maxHp);
     this.acc = 0;                                         // naładowanie ataku bohatera (1000 = cios)
-    this.skills = this.loadout.skills.map(s => ({ id: s.id, lvl: s.lvl, cd: fl(SKILLS[s.id].cd * 40 / 100), blockedUntil: 0 }));   // start z 40% cooldownu, żeby nie zabijać w 1. ticku
+    this.skills = this.loadout.skills.map(s => ({ id: s.id, lvl: s.lvl, cd: fl(SKILLS[s.id].cd * 15 / 100), blockedUntil: 0 }));   // start z 15% cooldownu (nie zabija w 1. ticku, a umiejętność jest gotowa po ok. 1 s)
     this.hasteUntil = 0; this.invulnUntil = 0; this.slowUntil = 0;
     this.nextEgg = this.S.egg || 0;
     this.revive = !!h.revive; this.revived = false; this.okUsed = false;
@@ -33,7 +33,7 @@ export class Fight {
   }
 
   mk(e) {
-    const o = { ...e, uid: ++this.uid, maxHp: e.hp, baseArmor: e.armor, acc: 0, stunUntil: 0, windup: null, nextSpec: e.spec ? e.spec.every : 0,
+    const o = { ...e, uid: ++this.uid, idleUntil: e.idle || 0, maxHp: e.hp, baseArmor: e.armor, acc: 0, stunUntil: 0, windup: null, nextSpec: e.spec ? e.spec.every : 0,
       dead: false, bleed: null, aspdPct: 100, p2: false, p3: false, shield: e.shield ? fl(e.hp * e.shield / 100) : 0, shieldHits: e.shieldHits || 0 };
     if (o.boss === 'brojler') o.nextSummon = 100;
     if (o.boss === 'skubarka') o.nextSkub = 1e9;
@@ -194,6 +194,7 @@ export class Fight {
   }
 
   enemyAct(e) {
+    if (this.tick < e.idleUntil) return;           // wróg jeszcze „wchodzi do walki” (Zebranie Zarządu: pierwsze 3 s Prezesa)
     if (this.tick < e.stunUntil) return;
     if (e.boss) this.bossAct(e);
     if (e.windup) {

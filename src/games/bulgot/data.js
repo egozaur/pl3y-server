@@ -11,9 +11,9 @@ export const TYPES = { stat: 'Statystyka', skill: 'Umiejętność', item: 'Przed
 // ---------- Tryby ----------
 // grow: o ile rośnie życie i atak wrogów z każdą rundą (mnożnik). bosses: runda -> boss. bonusAfter: po tych bossach dodatkowa oferta.
 export const MODES = {
-  quick: { name: 'Szybki', rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.085, atk: 1.057 }, bossPct: { hp: 80, atk: 90 },
+  quick: { name: 'Szybki', rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.13, atk: 1.092 }, bossPct: { hp: 80, atk: 90 },
     zones: [{ upTo: 5, zone: 0 }, { upTo: 10, zone: 1 }], elite: [3, 8] },
-  full: { name: 'Pełny', rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 135, atk: 80 }, grow: { hp: 1.085, atk: 1.052 }, bossPct: { hp: 100, atk: 100 },
+  full: { name: 'Pełny', rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 135, atk: 80 }, grow: { hp: 1.107, atk: 1.07 }, bossPct: { hp: 100, atk: 100 },
     zones: [{ upTo: 6, zone: 0 }, { upTo: 12, zone: 1 }, { upTo: 20, zone: 2 }], elite: [3, 9, 15] },
 };
 
@@ -25,7 +25,7 @@ export const ZONES = [
 
 // Stałe zasad. prices = cena dokupienia kafelka wg rzadkości (zwykły, rzadki, epicki, legendarny); early = osłabienie ataku i wzmocnienie życia wrogów na pierwszych piętrach (dłuższe, spokojniejsze walki).
 export const RULES = {
-  coinsRound: 4, coinsBoss: 6, prices: [6, 12, 20, 30], healPct: 35, rerollBase: 2, offerSize: 4, bonusSize: 3,
+  coinsRound: 4, coinsBoss: 6, prices: [6, 12, 20, 30], restCost: 4, restPct: 20, healPct: 35, rerollBase: 2, offerSize: 4, bonusSize: 3,
   eliteCoinsPct: 50, scoreRound: 1000, scoreCoin: 50, scoreTimeMax: 2000, garnekScore: 25, maxSkills: 3, maxSkillLvl: 2,
 };
 
@@ -58,12 +58,12 @@ export const CHARS = {
 // ---------- Umiejętności aktywne ----------
 // cd i dur w tickach. Poziom 2: +30% mocy i -20% cooldownu.
 export const SKILLS = {
-  grad: { id: 'grad', name: 'Kukurydziany Grad', cd: 100, hits: 5, pct: 60, text: '5 pocisków po 60% Ataku w losowych wrogów.', key: 'grad' },
-  pianie: { id: 'pianie', name: 'Pianie Grozy', cd: 140, dur: 20, text: 'Ogłusza wszystkich wrogów na 2 s i przerywa ich szarże.', key: 'pianie' },
-  granat: { id: 'granat', name: 'Jajeczny Granat', cd: 120, pct: 250, text: '250% Ataku w jednym uderzeniu.', key: 'granat' },
-  dziobniecie: { id: 'dziobniecie', name: 'Dziobnięcie Szału', cd: 180, dur: 60, text: '+50% tempa ataku przez 6 s.', key: 'dziobniecie' },
-  unik: { id: 'unik', name: 'Unik Skrzydłem', cd: 160, dur: 15, text: 'Nietykalność przez 1,5 s.', key: 'unik' },
-  zagrzebanie: { id: 'zagrzebanie', name: 'Zagrzebanie w Sianie', cd: 250, pct: 30, text: 'Leczy 30% maks. Życia.', key: 'zagrzebanie' },
+  grad: { id: 'grad', name: 'Kukurydziany Grad', cd: 65, hits: 5, pct: 60, text: '5 pocisków po 60% Ataku w losowych wrogów.', key: 'grad' },
+  pianie: { id: 'pianie', name: 'Pianie Grozy', cd: 90, dur: 20, text: 'Ogłusza wszystkich wrogów na 2 s i przerywa ich szarże.', key: 'pianie' },
+  granat: { id: 'granat', name: 'Jajeczny Granat', cd: 80, pct: 250, text: '250% Ataku w jednym uderzeniu.', key: 'granat' },
+  dziobniecie: { id: 'dziobniecie', name: 'Dziobnięcie Szału', cd: 120, dur: 60, text: '+50% tempa ataku przez 6 s.', key: 'dziobniecie' },
+  unik: { id: 'unik', name: 'Unik Skrzydłem', cd: 100, dur: 15, text: 'Nietykalność przez 1,5 s.', key: 'unik' },
+  zagrzebanie: { id: 'zagrzebanie', name: 'Zagrzebanie w Sianie', cd: 160, pct: 30, text: 'Leczy 30% maks. Życia.', key: 'zagrzebanie' },
 };
 
 // ---------- Zestawy przedmiotów ----------
@@ -78,7 +78,8 @@ export const SETS = {
 // repeat = można brać wielokrotnie; event = kafelek-wydarzenie (obsługa w rules.js).
 export const TILES = [
   // Statystyki
-  { id: 'ziarno-mocy', name: 'Ziarno Mocy', type: 'stat', rarity: 0, repeat: true, text: '+4 Atak', fx: [{ k: 'atkFlat', v: 4 }], flavor: 'Jedno ziarno, a w nim cała sprawiedliwość.' },
+  { id: 'ziarno-mocy', name: 'Ziarno Mocy', type: 'stat', rarity: 0, repeat: true, text: '+6 Atak', fx: [{ k: 'atkFlat', v: 6 }], flavor: 'Jedno ziarno, a w nim cała sprawiedliwość.' },
+  { id: 'ostry-dziob', name: 'Ostry Dziób', type: 'stat', rarity: 0, repeat: true, text: '+12% obrażeń', fx: [{ k: 'dmg', v: 12 }], flavor: 'Naostrzony na kamieniu, na którym ostrzy się cennik.' },
   { id: 'twardy-grzebien', name: 'Twardy Grzebień', type: 'stat', rarity: 0, repeat: true, text: '+20 maks. Życia', fx: [{ k: 'hpFlat', v: 20 }], flavor: 'Im czerwieńszy, tym trudniej go zgasić.' },
   { id: 'szybki-dziob', name: 'Szybki Dziób', type: 'stat', rarity: 0, repeat: true, text: '+10% tempa ataku', fx: [{ k: 'aspdPct', v: 10 }], flavor: 'Stuk, stuk, stuk. Księgowość nie nadąża.' },
   { id: 'pancerz-z-pierza', name: 'Pancerz z Pierza', type: 'stat', rarity: 0, repeat: true, text: '+6 Pancerza', fx: [{ k: 'armor', v: 6 }], flavor: 'Miękki w dotyku, twardy w boju.' },
@@ -87,12 +88,12 @@ export const TILES = [
   { id: 'cieple-gniazdko', name: 'Ciepłe Gniazdko', type: 'stat', rarity: 1, repeat: true, text: '+2 Regeneracji / s', fx: [{ k: 'regen', v: 2 }], flavor: 'Nawet w fabryce znajdzie się kąt na drzemkę.' },
   { id: 'czterolistna-koniczyna', name: 'Czterolistna Koniczyna', type: 'stat', rarity: 2, repeat: true, lock: 'u-koniczyna', text: '+10 Szczęścia (lepsze kafelki w ofertach)', fx: [{ k: 'luck', v: 10 }], flavor: 'Rzadkie jak kurczak, który wraca z ubojni.' },
   // Umiejętności aktywne
-  { id: 'kukurydziany-grad', name: 'Kukurydziany Grad', type: 'skill', rarity: 0, skill: 'grad', text: 'Umiejętność: 5 pocisków po 60% Ataku, cooldown 10 s', flavor: 'Deszcz ziarna, który nikogo nie nakarmi.' },
-  { id: 'pianie-grozy', name: 'Pianie Grozy', type: 'skill', rarity: 1, skill: 'pianie', text: 'Umiejętność: ogłusza wrogów na 2 s, cooldown 14 s', flavor: 'Kikiriki, które słychać na dwudziestym piętrze.' },
-  { id: 'jajeczny-granat', name: 'Jajeczny Granat', type: 'skill', rarity: 1, skill: 'granat', text: 'Umiejętność: 250% Ataku w jednym uderzeniu, cooldown 12 s', flavor: 'Zniesione ze złości.' },
-  { id: 'dziobniecie-szalu', name: 'Dziobnięcie Szału', type: 'skill', rarity: 1, skill: 'dziobniecie', text: 'Umiejętność: +50% tempa ataku przez 6 s, cooldown 18 s', flavor: 'Gdy kurczak się wścieknie, dziób nie zna litości.' },
-  { id: 'unik-skrzydlem', name: 'Unik Skrzydłem', type: 'skill', rarity: 2, skill: 'unik', lock: 'u-unik', text: 'Umiejętność: nietykalność przez 1,5 s, cooldown 16 s', flavor: 'Trzepot, którego nie dogoni żadna łyżka.' },
-  { id: 'zagrzebanie-w-sianie', name: 'Zagrzebanie w Sianie', type: 'skill', rarity: 2, skill: 'zagrzebanie', lock: 'u-zagrzebanie', text: 'Umiejętność: leczy 30% maks. Życia, cooldown 25 s', flavor: 'Siano leczy wszystko. Prawie.' },
+  { id: 'kukurydziany-grad', name: 'Kukurydziany Grad', type: 'skill', rarity: 0, skill: 'grad', text: 'Umiejętność: 5 pocisków po 60% Ataku, cooldown 6,5 s', flavor: 'Deszcz ziarna, który nikogo nie nakarmi.' },
+  { id: 'pianie-grozy', name: 'Pianie Grozy', type: 'skill', rarity: 1, skill: 'pianie', text: 'Umiejętność: ogłusza wrogów na 2 s, cooldown 9 s', flavor: 'Kikiriki, które słychać na dwudziestym piętrze.' },
+  { id: 'jajeczny-granat', name: 'Jajeczny Granat', type: 'skill', rarity: 1, skill: 'granat', text: 'Umiejętność: 250% Ataku w jednym uderzeniu, cooldown 8 s', flavor: 'Zniesione ze złości.' },
+  { id: 'dziobniecie-szalu', name: 'Dziobnięcie Szału', type: 'skill', rarity: 1, skill: 'dziobniecie', text: 'Umiejętność: +50% tempa ataku przez 6 s, cooldown 12 s', flavor: 'Gdy kurczak się wścieknie, dziób nie zna litości.' },
+  { id: 'unik-skrzydlem', name: 'Unik Skrzydłem', type: 'skill', rarity: 2, skill: 'unik', lock: 'u-unik', text: 'Umiejętność: nietykalność przez 1,5 s, cooldown 10 s', flavor: 'Trzepot, którego nie dogoni żadna łyżka.' },
+  { id: 'zagrzebanie-w-sianie', name: 'Zagrzebanie w Sianie', type: 'skill', rarity: 2, skill: 'zagrzebanie', lock: 'u-zagrzebanie', text: 'Umiejętność: leczy 30% maks. Życia, cooldown 16 s', flavor: 'Siano leczy wszystko. Prawie.' },
   // Przedmioty z synergią
   { id: 'zlote-jajo', name: 'Złote Jajo', type: 'item', rarity: 1, set: 'jajeczne', text: '+3 Ziarna po każdej wygranej rundzie', fx: [{ k: 'coinFlat', v: 3 }], flavor: 'Prezes by za nie zabił. Dosłownie.' },
   { id: 'tykajace-jajo', name: 'Tykające Jajo', type: 'item', rarity: 1, set: 'jajeczne', text: 'Co 8 s wybucha za 120% Ataku', fx: [{ k: 'egg', v: 1 }], flavor: 'Tik, tak. Lepiej się nie przyglądać.' },

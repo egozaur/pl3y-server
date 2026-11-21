@@ -5,7 +5,7 @@
 // Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /reroll /shop /bet /bonus /fightstart /fightfinish /abandon.
 // Odpowiedź: { ok, profile, run, ...wynik akcji } albo { err, code } z kodem 400/409.
 import { mix, hash } from './rng.js';
-import { newRun, pickTile, reroll, buyOffer, shopBuy, bet, bonusPick, fightSetup, fightFinish, abandon, view, statsOf } from './rules.js';
+import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, fightSetup, fightFinish, abandon, view, statsOf } from './rules.js';
 import { newProfile, poolFor, evaluate, onBossKill, onRunEnd, markSeen, publicProfile } from './profile.js';
 import { MODES, CHARS } from './data.js';
 
@@ -50,6 +50,7 @@ export class BgPlayer {
       }
       case 'pick': r = need(run) || pickTile(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot)); break;
       case 'reroll': r = need(run) || reroll(run); break;
+      case 'rest': r = need(run) || rest(run); break;
       case 'buy': r = need(run) || buyOffer(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot)); break;
       case 'shop': r = need(run) || shopBuy(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot)); break;
       case 'bet': r = need(run) || bet(run, Number(b.amount)); break;
@@ -87,7 +88,7 @@ export class BgPlayer {
     const o = this.out(profile, run);
     const body = { ok: true, ...o, ...extra };
     if (r.setup) body.setup = r.setup;
-    for (const k of ['result', 'reward', 'boss', 'bonus', 'event', 'crate', 'bought', 'price', 'bet', 'won', 'tile', 'cost', 'left']) if (r[k] !== undefined) body[k] = r[k];
+    for (const k of ['healed', 'result', 'reward', 'boss', 'bonus', 'event', 'crate', 'bought', 'price', 'bet', 'won', 'tile', 'cost', 'left']) if (r[k] !== undefined) body[k] = r[k];
     return json(body);
   }
 
