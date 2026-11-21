@@ -46,6 +46,7 @@ export const HTTP_LIMITS = {
   pin:     { max: 20,  windowMs: 60_000 },   // logowanie / zakładanie nicka PIN-em (dodatkowo blokada nicka po 5 błędach)
   guess:   { max: 60,  windowMs: 60_000 },   // próby w Wordle (słowo dnia)
   read:    { max: 120, windowMs: 60_000 },   // odczyty statystyk, rankingów, eksport
+  bg:      { max: 90,  windowMs: 60_000 },   // akcje w Bulgocie (wybory, rerolle, walki)
 };
 
 export class IpLimiter {

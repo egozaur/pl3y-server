@@ -9,5 +9,6 @@ import { rzTests } from './games/rozejrzyj/rozejrzyj.suite.js';
 import { kiTests } from './games/kurczacze/kurczacze.suite.js';
 import { authTests } from './core/auth.suite.js';
 import { plTests } from './core/players.suite.js';
+import { bgTests } from './games/bulgot/bulgot.suite.js';
 
-for (const t of [...tests, ...roomTests, ...tjTests, ...mlTests, ...rzTests, ...kiTests, ...tjDuoTests, ...authTests, ...plTests]) test(t.name, t.fn);
+for (const t of [...tests, ...roomTests, ...tjTests, ...mlTests, ...rzTests, ...kiTests, ...tjDuoTests, ...authTests, ...plTests, ...bgTests]) test(t.name, t.fn);

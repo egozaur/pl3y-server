@@ -1,4 +1,4 @@
-# Wspólny serwer gier PL3Y (Mafia + Tajniacy + Milion + Rozejrzyj się + Kurczacze Imperium). Kod mieszka w repo pl3y-server (ten folder).
+# Wspólny serwer gier PL3Y (Mafia + Tajniacy + Milion + Rozejrzyj się + Kurczacze Imperium + Wordle + Bulgot). Kod mieszka w repo pl3y-server (ten folder).
 name = "pl3y-server"
 main = "src/index.js"
 compatibility_date = "2025-09-01"
@@ -84,6 +84,19 @@ class_name = "WdDaily"
 [[migrations]]
 tag = "v7"
 new_sqlite_classes = ["Players", "WdDaily"]
+
+# Bulgot (roguelike solo): profil gracza + aktywny run (jeden DO na gracza) i ranking.
+[[durable_objects.bindings]]
+name = "BG_PLAYERS"
+class_name = "BgPlayer"
+
+[[durable_objects.bindings]]
+name = "BG_RANKS"
+class_name = "BgRanks"
+
+[[migrations]]
+tag = "v8"
+new_sqlite_classes = ["BgPlayer", "BgRanks"]
 
 [observability]
 enabled = true

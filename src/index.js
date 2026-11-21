@@ -1,4 +1,4 @@
-// Wspólny serwer gier PL3Y: Mafia, Tajniacy, Milion, Rozejrzyj się, Kurczacze Imperium, Wordle i gracze (nick + PIN). Tworzenie pokojów, połączenia WebSocket do Durable Objects
+// Wspólny serwer gier PL3Y: Mafia, Tajniacy, Milion, Rozejrzyj się, Kurczacze Imperium, Wordle, Bulgot i gracze (nick + PIN). Tworzenie pokojów, połączenia WebSocket do Durable Objects
 // i wspólna lista zapisanych gier Tajniaków.
 import { Room } from './games/mafia/room.js';
 import { TjRoom } from './games/tajniacy/room.js';
@@ -11,10 +11,12 @@ import { LEVELS as KI_LEVELS } from './games/kurczacze/bot.js';
 import { TjDuo } from './games/tajniacy/duo.js';
 import { Players, normNick, validPin, playersCall, playerFromToken, playerToken, resetLink, resetFromLink, notifyAdmin, AVATARS } from './core/players.js';
 import { WdDaily } from './games/wordle/daily.js';
+import { BgPlayer } from './games/bulgot/player.js';
+import { BgRanks } from './games/bulgot/ranks.js';
 import { authMode, login, refresh, tokenFrom, verifyToken, verifyData } from './core/auth.js';
 import { IpLimiter } from './core/limits.js';
 
-export { Room, TjRoom, TjSaves, MlRoom, MlScores, RzWords, KiRoom, TjDuo, Players, WdDaily };
+export { Room, TjRoom, TjSaves, MlRoom, MlScores, RzWords, KiRoom, TjDuo, Players, WdDaily, BgPlayer, BgRanks };
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // bez 0/O, 1/I
 const CODE_LEN = 5;
@@ -82,6 +84,8 @@ export function limitKind(method, path) {
   if (path === '/api/pl/reset-request' || path === '/api/pl/avatar') return 'write';
   if (path === '/api/pl/admin-reset') return 'admin';
   if (path.startsWith('/api/pl/')) return 'read';
+  if (path === '/api/bg/ranks') return 'read';
+  if (path.startsWith('/api/bg/')) return 'bg';
   if (path === '/api/wd/guess') return 'guess';
   if (path.startsWith('/api/wd/')) return 'read';
   if (path.startsWith('/api/tj/saves')) return method === 'GET' ? 'read' : 'write';
@@ -202,6 +206,23 @@ export default {
       if (!pl) return deny(origin, 401, 'Zaloguj się swoim nickiem.', 'player');
       const stub = env.WD_DAILY.get(env.WD_DAILY.idFromName('wordle'));
       return cors(origin, await stub.fetch('https://wd/' + m[1], { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pl, w: b.w }) }));
+    }
+
+    // ---------- Bulgot (roguelike solo: serwer losuje oferty, trzyma run i sprawdza każdą walkę powtórką) ----------
+    if (url.pathname === '/api/bg/ranks' && req.method === 'GET') {
+      if (!origin) return new Response('Forbidden', { status: 403 });
+      const mode = url.searchParams.get('mode') || 'full';
+      return cors(origin, await env.BG_RANKS.get(env.BG_RANKS.idFromName('ranks')).fetch('https://bg/list?mode=' + encodeURIComponent(mode)));
+    }
+    m = url.pathname.match(/^\/api\/bg\/(state|start|pick|reroll|shop|bet|bonus|fightstart|fightfinish|abandon)$/);
+    if (m && req.method === 'POST') {
+      if (!origin) return new Response('Forbidden', { status: 403 });
+      const b = await readJson(req, 20000);
+      const pl = b && await playerFromToken(env, b.pt);
+      if (!pl) return deny(origin, 401, 'Zaloguj się swoim nickiem, żeby grać w Bulgot.', 'player');
+      delete b.pt;
+      const stub = env.BG_PLAYERS.get(env.BG_PLAYERS.idFromName(pl.n));
+      return cors(origin, await stub.fetch('https://bg/' + m[1], { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...b, pl }) }));
     }
 
     // ---------- Kurczacze Imperium (2 graczy, serwer pilnuje zasad) ----------

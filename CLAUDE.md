@@ -13,7 +13,7 @@ Always respond in Polish (zawsze odpowiadaj po polsku). UI text and code comment
 | `src/games/<gra>/` | serwer jednej gry; frontend gry jest w osobnym repo `../<gra>` |
 | `test/core/`, `test/games/<gra>/` | testy; `test/all.test.js` zbiera wszystko |
 
-Gry: `mafia` (DO `Room`, czysty silnik w `engine/`), `kurczacze` (`KiRoom`, silnik + bot + `data.js` generowane, nie edytuj), `milion` (`MlRoom`, `MlScores`), `tajniacy` (`TjRoom`, `TjSaves`, `TjDuo`), `rozejrzyj` (`RzWords`), `wordle` (`WdDaily`; `words-pl.js` generowane przez `../wordle/dev/build-words-pl.mjs`). Opis protokołu każdej gry jest w CLAUDE.md jej frontendu (`../<gra>/CLAUDE.md`, sekcja „Server”); trzymaj obie strony w zgodzie.
+Gry: `mafia` (DO `Room`, czysty silnik w `engine/`), `kurczacze` (`KiRoom`, silnik + bot + `data.js` generowane, nie edytuj), `milion` (`MlRoom`, `MlScores`), `tajniacy` (`TjRoom`, `TjSaves`, `TjDuo`), `rozejrzyj` (`RzWords`), `wordle` (`WdDaily`; `words-pl.js` generowane przez `../wordle/dev/build-words-pl.mjs`), `bulgot` (`BgPlayer`, `BgRanks`; silnik walki `sim.js`, reguły runu `rules.js`, dane `data.js`). Opis protokołu każdej gry jest w CLAUDE.md jej frontendu (`../<gra>/CLAUDE.md`, sekcja „Server”); trzymaj obie strony w zgodzie.
 
 ## Zasady
 
@@ -26,6 +26,13 @@ Gry: `mafia` (DO `Room`, czysty silnik w `engine/`), `kurczacze` (`KiRoom`, siln
 - `core/auth.js`: hasło (`PL3Y_PASSWORD`) → token HMAC (`PL3Y_TOKEN_SECRET`; rodzaje `d` 30 min, `p` 12 h, `t` test 1 h). Każde `/api/*` poza `/api/health` i `/api/auth/login` wymaga tokena wg `AUTH_MODE` (`off`/`optional`/`required`, brak = `required`). Token WebSocket jako `?tok=`. Kontrakt klienta: `../egozaur.github.io/CLAUDE.md`.
 - `core/limits.js`: limity na IP (login 8/min, tworzenie pokoju 10/min, ws join 30/min, zapisy 30/min, odczyty 120/min, `pin` 20/min, `guess` 60/min) i na gniazdo WebSocket (burst 40, potem 20 msg/s, 100 przekroczeń z rzędu = zamknięcie 4429). `ttlFor`/`ENDED_TTL`: zakończona gra trzyma pokój 30 min.
 - Testy: `test/core/auth.suite.js`.
+
+## Bulgot
+
+- `games/bulgot/`: roguelike solo. DO `BgPlayer` (jeden na gracza, klucz = `pl.n`): profil (odblokowania, najlepsze wyniki, Temperatura Garnka) i aktywny run; DO `BgRanks` (singleton): ranking osobno dla trybu `quick` i `full`, jeden wpis na gracza. Trasy: `POST /api/bg/state|start|pick|reroll|shop|bet|bonus|fightstart|fightfinish|abandon` (wymagają `pt`), `GET /api/bg/ranks?mode=`. Limit `bg` 90/min na IP (`core/limits.js`).
+- Serwer losuje oferty z ziarna runu (klient go nie widzi) i **powtarza każdą walkę** z listy wejść gracza (`sim.js`). Silnik jest deterministyczny: żadnego `Math.random`, `Date` ani trygonometrii w `rng.js`, `data.js`, `stats.js`, `sim.js`, `rules.js`.
+- `rng.js`, `data.js`, `stats.js`, `sim.js` są kopiowane do frontendu (`../bulgot/shared/`) skryptem `../bulgot/dev/sync-engine.mjs`. Po zmianie któregoś z nich: sync i commit w obu repo.
+- Balans: `node ../bulgot/dev/sim-balance.mjs` (bot gra setki runów). Testy: `test/games/bulgot/bulgot.suite.js`. Opis gry i protokołu: `../bulgot/CLAUDE.md`, `../bulgot/DESIGN.md`.
 
 ## Gracze i Wordle
 
