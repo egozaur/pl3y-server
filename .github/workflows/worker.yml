@@ -1,0 +1,27 @@
+# Testy przy każdym pushu. Deploy na Cloudflare tylko z main i tylko gdy w ustawieniach repo
+# (Settings → Secrets and variables → Actions → Variables) jest zmienna DEPLOY_ENABLED = true.
+# Bezpiecznik: dopóki stare repo `mafia` też potrafi deployować, tylko jedno z nich może mieć tę flagę.
+name: Worker
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - run: node --test test/all.test.js
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

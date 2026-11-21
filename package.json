@@ -1,0 +1,12 @@
+{
+  "name": "pl3y-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/all.test.js",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
