@@ -1,6 +1,6 @@
 // Bulgot: liczenie statystyk bohatera z postaci i kafelków. Czysta funkcja, bez losowości.
 // loadout = { char, tiles: [id...], skills: [{id,lvl}], coins, bonusAtk, noRegen }; opt.off = indeks kafelka wyłączonego (Skubanie).
-import { CHARS, TILE_BY_ID } from './data.js';
+import { CHARS, TILE_BY_ID, MILESTONES, MILESTONE_EVERY } from './data.js';
 
 export function setCounts(tileIds) {
   const c = {};
@@ -17,6 +17,9 @@ export function heroStats(loadout, opt = {}) {
   const has = id => ids.includes(id);
   for (const id of ids) { const t = TILE_BY_ID[id]; if (t && t.fx) for (const f of t.fx) add(f.k, f.v); }
   const sc = setCounts(ids);
+  // progi statystyk (co 3 kopie)
+  const cnt = {}; for (const id of ids) cnt[id] = (cnt[id] || 0) + 1;
+  for (const [id, m] of Object.entries(MILESTONES)) { const n = Math.floor((cnt[id] || 0) / MILESTONE_EVERY); if (n) for (const f of m.fx) add(f.k, f.v * n); }
 
   // Przedmioty z logiką zależną od runu.
   if (has('worek-kukurydzy')) {
@@ -51,7 +54,8 @@ export function heroStats(loadout, opt = {}) {
     critMult: b.critMult + (acc.critMult || 0),
     dmg: b.dmg + (acc.dmg || 0),
     luck: b.luck + (acc.luck || 0),
-    egg: has('tykajace-jajo') ? ((sc.jajeczne || 0) >= 2 ? 60 : 80) : 0,   // co ile ticków wybucha Tykające Jajo
+    egg: has('jajko-na-twardo') ? 60 : has('tykajace-jajo') ? ((sc.jajeczne || 0) >= 2 ? 60 : 80) : 0,   // co ile ticków wybucha Tykające Jajo
+    eggAll: !!acc.eggAll, eggBurn: acc.eggBurn || 0, bleedStacks: acc.bleedStacks || 1, revivePct: acc.revivePct || 40, reviveBurn: acc.reviveBurn || 0,
     eggHeal: (sc.jajeczne || 0) >= 3 ? 3 : 0,
     bleed: acc.bleed || 0,
     // efekty statusowe: szansa nałożenia przy zwykłym ataku (%), moc i czas trwania
@@ -64,7 +68,7 @@ export function heroStats(loadout, opt = {}) {
     freeReroll: acc.freeReroll || 0, noSteal: !!acc.noSteal, bossCoins: acc.bossCoins || 0, restDisc: acc.restDisc || 0, buyDisc: acc.buyDisc || 0, interest: acc.interest || 0,
     shred: acc.shred || 0,
     okrzyk: (sc.rambo || 0) >= 3,
-    revive: has('gniazdo-zapasowe'),
+    revive: has('gniazdo-zapasowe') || has('feniks-z-rosolu'),
     coinFlat: acc.coinFlat || 0,
     coinPct: acc.coinPct || 0,
     sets: sc,

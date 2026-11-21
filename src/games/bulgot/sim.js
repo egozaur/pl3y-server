@@ -78,7 +78,7 @@ export class Fight {
     this.push({ k: 'hit', to: t.uid, d, crit, kind });
     if (this.S.shred && kind === 'atk' && this.rng.int(100) < this.S.shred && t.armor > 0) t.armor = Math.max(0, t.armor - Math.max(1, Math.ceil(t.baseArmor / 10)));
     if (kind === 'atk') {
-      if (this.S.bleed) this.applyStatus(t, 'bleed', 1);
+      if (this.S.bleed) this.applyStatus(t, 'bleed', this.S.bleedStacks);
       if (this.frenzyBleed && this.tick < this.hasteUntil) this.applyStatus(t, 'bleed', 2);
       if (this.S.burnHit && this.rng.int(100) < this.S.burnHit) this.applyStatus(t, 'burn', 1);
       if (this.S.frostHit && this.rng.int(100) < this.S.frostHit) this.applyStatus(t, 'frost', 1);
@@ -267,7 +267,8 @@ export class Fight {
 
   heroDown() {
     if (this.revive && !this.revived) {
-      this.revived = true; this.hp = fl(this.S.maxHp * 40 / 100); this.push({ k: 'revive' });
+      this.revived = true; this.hp = fl(this.S.maxHp * this.S.revivePct / 100); this.push({ k: 'revive' });
+      if (this.S.reviveBurn) for (const e of this.alive()) this.applyStatus(e, 'burn', this.S.reviveBurn);
       return;
     }
     this.hp = 0; this.over = true; this.win = false;
@@ -353,7 +354,9 @@ export class Fight {
     if (this.S.egg && this.nextEgg && t >= this.nextEgg) {
       this.nextEgg = t + this.S.egg;
       const tg = this.target();
-      if (tg) { this.push({ k: 'egg' }); this.heroHit(tg, 120, false, 'egg'); if (this.S.eggPoison) this.applyStatus(tg, 'poison', this.S.eggPoison); if (this.S.eggHeal) this.heal(fl(this.S.maxHp * this.S.eggHeal / 100)); }
+      if (tg) {
+        this.push({ k: 'egg' });
+        for (const x of (this.S.eggAll ? this.alive() : [tg])) { this.heroHit(x, 120, false, 'egg'); if (this.S.eggPoison) this.applyStatus(x, 'poison', this.S.eggPoison); if (this.S.eggBurn) this.applyStatus(x, 'burn', this.S.eggBurn); } if (this.S.eggHeal) this.heal(fl(this.S.maxHp * this.S.eggHeal / 100)); }
     }
     // atak bohatera
     this.acc += this.heroAspd();

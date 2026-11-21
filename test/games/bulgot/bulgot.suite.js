@@ -73,7 +73,10 @@ test('rng: ten sam seed daje ten sam ciąg, mix i hash są stabilne', () => {
 // ---------- dane ----------
 test('dane: kafelki, umiejętności z Mutacjami, odblokowania, spójne odwołania', () => {
   assert(D.TILES.length >= 39, 'co najmniej 39 kafelków, jest ' + D.TILES.length);
-  eq(D.STARTER_TILES.length, D.TILES.filter(t => !t.lock).length, 'na start = bez blokady');
+  eq(D.STARTER_TILES.length, D.TILES.filter(t => !t.lock && !t.hatched).length, 'na start = bez blokady (bez wyklutych)');
+  for (const r of D.RECIPES) { const o = D.TILE_BY_ID[r.out]; assert(o && o.hatched && o.rarity === 3 && r.of.length === 2 && r.of.every(id => D.TILE_BY_ID[id] && D.TILE_BY_ID[id].type === 'item'), 'przepis ' + r.out); for (const st of o.sets) assert(D.SETS[st], 'zestaw ' + r.out); }
+  eq(new Set(D.RECIPES.flatMap(r => r.of)).size, D.RECIPES.length * 2, 'każdy składnik w jednym przepisie');
+  for (const id of Object.keys(D.MILESTONES)) assert(D.TILE_BY_ID[id] && D.TILE_BY_ID[id].type === 'stat' && D.TILE_BY_ID[id].repeat, 'próg ' + id);
   assert(new Set(ALL).size === D.TILES.length, 'unikalne id');
   const by = t => D.TILES.filter(x => x.type === t).length;
   assert(by('skill') === Object.keys(D.SKILLS).length && by('skill') === 14, '14 umiejętności, każda ma kafelek');
@@ -149,7 +152,7 @@ test('walka: pancerz, unik, krytyk i obrażenia bohatera liczą się wg wzoru', 
   try {
     const a = play(setup({ lo, enemies: [foe({ hp: 200, atk: 1, armor: 100 })] }));
     const hit = evs(a.ev, 'hit').find(e => e.kind === 'atk');
-    eq(hit.d, Math.floor(Math.floor(44 * 100 / 100) * 100 / 200), 'Atak 44 przy pancerzu 100 = 22');
+    eq(hit.d, Math.floor(Math.floor(44 * 130 / 100) * 100 / 200), 'Atak 44 (+30% z dwóch progów Kolby Mocy) przy pancerzu 100 = połowa');
     const b = play(setup({ enemies: [foe({ hp: 40, atk: 1, evade: 100 })] }));
     assert(evs(b.ev, 'miss').length > 0 && evs(b.ev, 'hit').length === 0, 'wróg z 100% uniku nie dostaje ciosów');
   } finally { D.CHARS.pyrtek.base = base; }
@@ -344,6 +347,36 @@ test('przedmioty: ekonomia (Teczka, Krawat, Premia Kwartalna, zniżki zestawu Ko
   assert(out.result.win, 'wygrana w 1. rundzie');
   eq(run.coins - coins0, D.RULES.coinsRound + 2, 'Teczka +2');
   eq(run.freeLeft, 1, 'Krawat: darmowy reroll w nowej rundzie');
+});
+
+test('Wylęgarnia: dwa składniki wykluwają legendarny przedmiot, który znika z ofert, a składniki nie wracają', () => {
+  const run = fresh();
+  run.offer = ['tykajace-jajo', 'ziarno-mocy', 'twardy-grzebien', 'szybki-dziob']; R.pickTile(run, 0); run.phase = 'offer';
+  assert(!run.hatchedNow, 'jeden składnik to za mało');
+  run.offer = ['kostka-rosolowa', 'ziarno-mocy', 'twardy-grzebien', 'szybki-dziob']; R.pickTile(run, 0);
+  assert(run.tiles.includes('jajko-na-twardo') && !run.tiles.includes('tykajace-jajo') && !run.tiles.includes('kostka-rosolowa'), 'wyklute');
+  eq(run.hatchedNow, ['jajko-na-twardo'], 'informacja dla gracza'); eq(run.stats.hatched, ['jajko-na-twardo'], 'statystyka');
+  const offer = R.makeOffer(run, 7, { size: 80 });
+  assert(!offer.includes('jajko-na-twardo') && !offer.includes('tykajace-jajo') && !offer.includes('kostka-rosolowa'), 'ani wyklute, ani składniki w ofertach');
+  const S = R.statsOf(run); assert(S.egg === 60 && S.eggAll && S.eggBurn === 4 && S.burnPct >= 40, 'Jajko na Twardo');
+  eq([S.sets.jajeczne, S.sets.rosolowe], [1, 1], 'liczy się do obu zestawów');
+  const f = new Fight(setup({ lo: { tiles: ['jajko-na-twardo'] }, enemies: [foe({ hp: 100000, atk: 1, aspd: 10 }), foe({ hp: 100000, atk: 1, aspd: 10 })] }));
+  for (let i = 0; i < 70; i++) f.step(); assert(f.enemies.every(e => e.burn >= 4 && e.hp < 100000), 'wybuch we wszystkich z Oparzeniem');
+  const p = newProfile(); evaluate(p, run); eq(p.recipes, ['jajko-na-twardo'], 'przepis odkryty w profilu');
+  // Feniks: wskrzeszenie z 70% i Oparzeniem
+  const fx = new Fight(setup({ hp: 5, revive: true, lo: { tiles: ['feniks-z-rosolu'] }, enemies: [foe({ hp: 100000, atk: 30, aspd: 100 })] }));
+  const ev = []; while (!fx.revived && !fx.over) { fx.step(); ev.push(...fx.ev); }
+  assert(fx.revived && fx.hp === Math.floor(fx.S.maxHp * 70 / 100) && fx.enemies[0].burn === 6, 'Feniks z Rosołu');
+  const zs = fresh(); zs.tiles = ['zlote-jajo']; zs.offer = ['teczka', 'ziarno-mocy', 'twardy-grzebien', 'szybki-dziob']; R.pickTile(zs, 0);
+  eq(zs.tiles, ['zloty-spadochron'], 'Złoty Spadochron'); assert(R.statsOf(zs).coinFlat === 7 && R.statsOf(zs).noSteal, 'efekty Spadochronu');
+});
+
+test('progi statystyk: co 3 kopie premia (Kolba Mocy, Koguci Hełm), dwa progi przy 6 kopiach', () => {
+  const S = tiles => heroStats(loadout({ tiles }));
+  const a2 = S(['ziarno-mocy', 'ziarno-mocy']).atk, a3 = S(['ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy']).atk;
+  eq([a2, a3], [8 + 12, Math.floor((8 + 18) * 115 / 100)], 'Kolba Mocy +15% Ataku');
+  eq(S(Array(6).fill('ziarno-mocy')).atk, Math.floor((8 + 36) * 130 / 100), 'dwa progi');
+  const h = S(['twardy-grzebien', 'twardy-grzebien', 'twardy-grzebien']); eq([h.maxHp, h.armor], [Math.floor(130 * 110 / 100), 4], 'Koguci Hełm');
 });
 
 test('walka: tarcza Sortownika, szarża Wózka (telegraf, przerwanie ogłuszeniem), Mysz w roju', () => {

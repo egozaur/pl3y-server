@@ -35,6 +35,7 @@ const CHECKS = {
 // Sprawdza wszystkie odblokowania; zwraca listę świeżo odblokowanych wpisów UNLOCKS.
 export function evaluate(p, r) {
   const fresh = [];
+  if (r && r.stats.hatched) for (const id of r.stats.hatched) { p.recipes = p.recipes || []; if (!p.recipes.includes(id)) p.recipes.push(id); }
   for (const u of UNLOCKS) {
     if (p.unlocked.includes(u.id)) continue;
     const ok = CHECKS[u.id];
@@ -76,7 +77,7 @@ export function markSeen(p, ids) { for (const id of ids) if (!p.seen.includes(id
 export function publicProfile(p) {
   return {
     nick: p.nick, avatar: p.avatar || 0, chars: p.chars, tiles: p.tiles, garnek: p.garnek, best: p.best,
-    counters: p.counters, bosses: p.bosses, seen: p.seen, unlocked: p.unlocked,
+    counters: p.counters, bosses: p.bosses, seen: p.seen, unlocked: p.unlocked, recipes: p.recipes || [],
     locks: UNLOCKS.filter(u => !p.unlocked.includes(u.id)).map(u => ({ id: u.id, kind: u.kind, target: u.target, text: u.text })),
     modes: Object.keys(MODES),
   };

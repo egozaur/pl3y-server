@@ -84,6 +84,7 @@ export class BgPlayer {
       if (fresh.length) extra.unlocks = fresh.map(u => ({ id: u.id, kind: u.kind, target: u.target, text: u.text }));
     }
     if (path === 'history') extra.history = (await st.get('history')) || [];
+    if (run && run.hatchedNow) { extra.hatched = run.hatchedNow; delete run.hatchedNow; }
     await st.put({ profile, ...(run ? { run } : {}) });
     const o = this.out(profile, run);
     const body = { ok: true, ...o, ...extra };

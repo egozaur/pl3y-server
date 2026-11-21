@@ -2,7 +2,7 @@
 // Wszystkie losowania biorą ziarno z run.seed, więc ten sam run daje te same oferty i spotkania.
 // Każda funkcja zwraca { ok: true, ... } albo { err, code }. Stan zapisuje i autoryzuje BgPlayer (player.js).
 import { mix, hash, makeRng } from './rng.js';
-import { MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, RARITY_WEIGHTS, TYPE_WEIGHTS, garnekMods, formFor } from './data.js';
+import { RECIPES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, RARITY_WEIGHTS, TYPE_WEIGHTS, garnekMods, formFor } from './data.js';
 import { heroStats } from './stats.js';
 import { runFight } from './sim.js';
 
@@ -41,7 +41,9 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0 }) {
 
 // ---------- Oferta kafelków ----------
 function tileAvailable(run, t) {
+  if (t.hatched) return false;
   if (t.repeat) return true;
+  if (RECIPES.some(r => r.of.includes(t.id) && run.tiles.includes(r.out))) return false;   // składnik już wyklutego przedmiotu
   if (t.type === 'skill') { const s = run.skills.find(x => x.id === t.skill); return !s || s.lvl < RULES.maxSkillLvl; }
   return !run.tiles.includes(t.id);
 }
@@ -110,6 +112,7 @@ function applyTile(run, t, slot, mut) {
     if (!run.tiles.includes(t.id)) run.tiles.push(t.id);
   } else {
     run.tiles.push(t.id);
+    hatch(run);
     if (t.type === 'risk') run.stats.riskPicks++;
     if (t.id === 'pakt-z-lisem') run.stats.fox = 1;
     if (t.id === 'zakazana-pasza') run.flags.bossHpBonus = 30;
@@ -119,6 +122,17 @@ function applyTile(run, t, slot, mut) {
   run.hp = Math.max(1, run.hp);
   run.stats.picks++;
   return null;
+}
+
+// Wylęgarnia: gdy gracz ma oba składniki przepisu, znikają i powstaje wyklęty przedmiot. run.hatchedNow trafia do odpowiedzi (player.js).
+function hatch(run) {
+  for (const r of RECIPES) {
+    if (run.tiles.includes(r.out) || !r.of.every(id => run.tiles.includes(id))) continue;
+    for (const id of r.of) run.tiles.splice(run.tiles.indexOf(id), 1);
+    run.tiles.push(r.out);
+    (run.stats.hatched = run.stats.hatched || []).push(r.out);
+    (run.hatchedNow = run.hatchedNow || []).push(r.out);
+  }
 }
 
 function nextRound(run) {
@@ -160,7 +174,7 @@ export function pickTile(run, i, slot, mut) {
   if (t.event === 'skrzynka') {
     const rr = makeRng(mix(run.seed, run.round, hash('crate')));
     const trap = rr.int(100) < 25;
-    const epics = run.pool.map(x => TILE_BY_ID[x]).filter(x => x && x.rarity >= 2 && !x.event && tileAvailable(run, x));
+    const epics = run.pool.map(x => TILE_BY_ID[x]).filter(x => x && x.rarity >= 2 && !x.event && tileAvailable(run, x));   // wyklutych nie ma w puli (tileAvailable)
     const prize = epics.length ? rr.pick(epics) : null;
     const note = { crate: { tile: prize ? prize.id : null, trap } };
     if (prize) { const e = applyTile(run, prize, undefined, 1); if (e && e.code === 'slot') applyTile(run, prize, 0, 1); }   // pełne sloty: umiejętność ze skrzynki zastępuje pierwszy slot; Mutacja ze skrzynki to zawsze gałąź 1

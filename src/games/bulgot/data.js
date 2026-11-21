@@ -184,6 +184,36 @@ export const TILES = [
   { id: 'hazard-w-kurniku', name: 'Hazard w Kurniku', type: 'risk', rarity: 0, repeat: true, event: 'hazard', lock: 'u-hazard', text: 'Wydarzenie: stawiasz Ziarna, 50% podwajasz, 50% tracisz', flavor: 'Zasady proste: dom zawsze wygrywa. Dom to kurnik.' },
   { id: 'zakazana-pasza', name: 'Zakazana Pasza', type: 'risk', rarity: 3, lock: 'u-pasza', text: '+25% wszystkich statystyk, ale następny boss ma +30% Życia', fx: [{ k: 'allPct', v: 25 }], flavor: 'Smakuje jak moc. Kosztuje jak rachunek.' },
 ];
+// ---------- Wylęgarnia: przedmioty wyklute z dwóch innych ----------
+// Gdy gracz ma oba składniki przepisu, znikają i wykluwa się z nich legendarny przedmiot (ma efekty obu i premię, liczy się do ich zestawów).
+// Wyklutych przedmiotów nie ma w ofertach.
+const HATCHED = [
+  { id: 'jajko-na-twardo', name: 'Jajko na Twardo', of: ['tykajace-jajo', 'kostka-rosolowa'], sets: ['jajeczne', 'rosolowe'], tags: ['jajo', 'ogien'], text: 'Co 6 s jajo wybucha we WSZYSTKICH wrogów (120% Ataku) i nakłada 4 stosy Oparzenia; +40% obrażeń od Oparzenia, limit +5', fx: [{ k: 'eggAll', v: 1 }, { k: 'eggBurn', v: 4 }, { k: 'burnPct', v: 40 }, { k: 'burnMax', v: 5 }], flavor: 'Gotowane dziesięć minut. W złości.' },
+  { id: 'termos', name: 'Termos', of: ['chochla', 'kostka-lodu'], sets: ['rosolowe', 'chlodnicze'], tags: ['ogien', 'lod'], text: '40% szans na Oparzenie i 40% szans na Mróz przy każdym ataku', fx: [{ k: 'burnHit', v: 40 }, { k: 'frostHit', v: 40 }], flavor: 'Trzyma ciepło. I zimno. Nikt nie wie jak.' },
+  { id: 'ostrogi-rzeznika', name: 'Ostrogi Rzeźnika', of: ['ostrogi-bojowe', 'kolczatka'], sets: ['rambo', 'rambo'], tags: ['krew'], text: 'Każdy atak nakłada 2 stosy Krwawienia (8 na stos), limit Krwawienia +4', fx: [{ k: 'bleed', v: 8 }, { k: 'bleedMax', v: 4 }, { k: 'bleedStacks', v: 2 }], flavor: 'Rzeźnik zrezygnował z pracy. Ostrogi zostały.' },
+  { id: 'zloty-spadochron', name: 'Złoty Spadochron', of: ['zlote-jajo', 'teczka'], sets: ['jajeczne', 'korpo'], tags: ['jajo', 'korpo'], text: '+7 Ziaren po każdej wygranej rundzie, nikt nie kradnie ci Ziaren', fx: [{ k: 'coinFlat', v: 7 }, { k: 'noSteal', v: 1 }], flavor: 'Zarząd ląduje miękko. Teraz ty też.' },
+  { id: 'spojrzenie-rambo', name: 'Spojrzenie Rambo', of: ['okulary-aviatory', 'opaska-rambo'], sets: ['rambo', 'rambo'], tags: ['krew'], text: '+20% obrażeń, +25% szansy na trafienie krytyczne, +50% siły trafienia krytycznego', fx: [{ k: 'dmg', v: 20 }, { k: 'crit', v: 25 }, { k: 'critMult', v: 50 }], flavor: 'Wrogowie mdleją, zanim zdejmie okulary.' },
+  { id: 'kurtka-puchowa', name: 'Kurtka Puchowa', of: ['kamizelka-kuloodporna', 'szron'], sets: ['rambo', 'chlodnicze'], tags: ['lod'], text: '+30 Pancerza; każdy wróg, który cię trafi, dostaje 2 stosy Mrozu', fx: [{ k: 'armor', v: 30 }, { k: 'frostThorns', v: 2 }], flavor: 'Puch z własnych piór. Bez komentarza.' },
+  { id: 'kompostownik', name: 'Kompostownik', of: ['mokra-pasza', 'zepsute-jajo'], sets: ['zbozowe', 'jajeczne'], tags: ['trucizna'], text: '40% szans na Salmonellę przy ataku, +50% jej obrażeń; jaja i Granat nakładają 3 stosy; przy śmierci wroga przechodzą WSZYSTKIE stosy', fx: [{ k: 'poisonHit', v: 40 }, { k: 'poisonPct', v: 50 }, { k: 'eggPoison', v: 3 }, { k: 'spreadPct', v: 50 }], flavor: 'Nic się nie marnuje. Zwłaszcza zaraza.' },
+  { id: 'feniks-z-rosolu', name: 'Feniks z Rosołu', of: ['gniazdo-zapasowe', 'lubczyk'], sets: ['jajeczne', 'rosolowe'], tags: ['ogien'], text: 'Raz na run: wskrzeszenie z 70% Życia i 6 stosami Oparzenia na wszystkich wrogach; +15 maks. Życia, płonący wrogowie leczą', fx: [{ k: 'revivePct', v: 70 }, { k: 'reviveBurn', v: 6 }, { k: 'hpFlat', v: 15 }, { k: 'burnHeal', v: 5 }], flavor: 'Powstaje z garnka. Pachnie lubczykiem.' },
+];
+for (const h of HATCHED) TILES.push({ ...h, type: 'item', rarity: 3, hatched: true });
+export const RECIPES = HATCHED.map(h => ({ out: h.id, of: h.of }));
+
+// Progi statystyk: każde 3 kopie tego samego kafelka statystyki dają nazwaną premię.
+export const MILESTONE_EVERY = 3;
+export const MILESTONES = {
+  'ziarno-mocy': { name: 'Kolba Mocy', text: '+15% Ataku', fx: [{ k: 'atkPct', v: 15 }] },
+  'ostry-dziob': { name: 'Dziób Brzytwa', text: '+8% szansy na trafienie krytyczne, +20% jego siły', fx: [{ k: 'crit', v: 8 }, { k: 'critMult', v: 20 }] },
+  'twardy-grzebien': { name: 'Koguci Hełm', text: '+10% maks. Życia, +4 Pancerza', fx: [{ k: 'hpPct', v: 10 }, { k: 'armor', v: 4 }] },
+  'szybki-dziob': { name: 'Młot Pneumatyczny', text: '+12% tempa ataku', fx: [{ k: 'aspdPct', v: 12 }] },
+  'pancerz-z-pierza': { name: 'Pierzasta Twierdza', text: '+6 Pancerza, +25 maks. Życia', fx: [{ k: 'armor', v: 6 }, { k: 'hpFlat', v: 25 }] },
+  'czujne-oko': { name: 'Sokole Oko', text: '+30% siły trafienia krytycznego', fx: [{ k: 'critMult', v: 30 }] },
+  'zwinne-nogi': { name: 'Taniec Kurczaka', text: '+5% uniku, +8% tempa ataku', fx: [{ k: 'evade', v: 5 }, { k: 'aspdPct', v: 8 }] },
+  'cieple-gniazdko': { name: 'Kurza Drzemka', text: '+3 Regeneracji / s, +10 maks. Życia', fx: [{ k: 'regen', v: 3 }, { k: 'hpFlat', v: 10 }] },
+  'czterolistna-koniczyna': { name: 'Pięciolistna Koniczyna', text: '+15 Szczęścia, +2 Ziarna po każdej rundzie', fx: [{ k: 'luck', v: 15 }, { k: 'coinFlat', v: 2 }] },
+};
+
 export const TILE_BY_ID = Object.fromEntries(TILES.map(t => [t.id, t]));
 
 // ---------- Odblokowania ----------
@@ -212,7 +242,7 @@ export const UNLOCKS = [
 export const UNLOCK_BY_ID = Object.fromEntries(UNLOCKS.map(u => [u.id, u]));
 
 // Kafelki dostępne od początku (bez blokady).
-export const STARTER_TILES = TILES.filter(t => !t.lock).map(t => t.id);
+export const STARTER_TILES = TILES.filter(t => !t.lock && !t.hatched).map(t => t.id);
 
 // ---------- Wrogowie ----------
 // hp/atk to wartości bazowe w rundzie 1; skalowane mnożnikiem rundy (rules.js). aspd w % (100 = 1 cios/s).
