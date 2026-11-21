@@ -116,7 +116,7 @@ test('statystyki: baza, kafelki, procenty, zestawy, Worek, Zakazana Pasza, wył�
   S = heroStats(loadout({ tiles: ['zakazana-pasza'] })); eq([S.atk, S.maxHp, S.aspd], [10, 87, 125], 'Zakazana Pasza +25% wszystkiego');
   S = heroStats(loadout({ tiles: ['czujne-oko', 'ziarno-mocy'] }), { off: 1 }); eq(S.atk, 8, 'wyłączony kafelek (Skubanie) nie liczy się');
   S = heroStats(loadout({ tiles: ['czujne-oko'].concat(Array(20).fill('czujne-oko')) })); eq(S.crit, 100, 'krytyk ma sufit 100%');
-  S = heroStats(loadout({ tiles: ['cieple-gniazdko'], noRegen: true })); eq(S.regen, 0, 'Wulkan wyłącza regenerację');
+  S = heroStats(loadout({ tiles: ['cieple-gniazdko'], noRegen: true })); eq(S.regen, 1, 'Wulkan: regeneracja o połowę słabsza');
   S = heroStats(loadout({ char: 'kwoka' })); eq([S.maxHp, S.aspd], [Math.floor(B.hp * 130 / 100), 80], 'Kwoka');
   S = heroStats(loadout({ char: 'indor' })); eq([S.atk, S.aspd, S.crit], [Math.floor(8 * 160 / 100), 70, 15], 'Indor');
 });
@@ -396,7 +396,7 @@ test('nowi wrogowie: Kaczka podpala bohatera, Kurczak z Zamrażarki wstaje (chyb
 });
 
 test('cechy elit: wampiryzm, wybuch po śmierci, regeneracja, odporność, szybkość', () => {
-  const run = fresh({ mode: 'full' }); run.round = 3;
+  const run = fresh({ mode: 'full' }); run.round = 4;
   for (const a of Object.keys(D.AFFIXES)) assert(D.AFFIXES[a].name && D.AFFIXES[a].text, 'opis ' + a);
   const v = new Fight(setup({ hp: 1000, enemies: [foe({ hp: 1000, atk: 20, aspd: 100, vamp: 50 })] })); v.enemies[0].hp = 500;
   for (let i = 0; i < 12; i++) v.step(); assert(v.enemies[0].hp > 500 - v.dealt + 5, 'wampir się leczy');
@@ -581,7 +581,9 @@ test('run: pełna partia botem (zawsze 1. kafelek, bez umiejętności) kończy s
 });
 test('run: poziomy Garnka (elitarni wrogowie, premie bossów, brak regeneracji), Zakazana Pasza wzmacnia następnego bossa raz', () => {
   const r0 = fresh({ mode: 'full' }), r2 = fresh({ mode: 'full', garnek: 2 });
-  r0.round = r2.round = 3; assert(R.view(r0).elite && R.view(r2).elite, 'elitarny wróg w rundzie 3 od Garnka 0');
+  r0.round = r2.round = 10; assert(R.view(r0).elite && R.view(r2).elite, 'elitarny wróg w rundzie 10 od Garnka 0');
+  const r2e = fresh({ mode: 'full', garnek: 2 }); r2e.round = 4; eq(R.view(r2e).affixes.length, 1, 'na wczesnych piętrach elita ma 1 cechę');
+  eq(R.encounterIds(r0).length <= 2, true, 'elita z najwyżej jednym pomocnikiem');
   eq([R.view(r0).affixes.length, R.view(r2).affixes.length], [1, 2], 'Garnek 2: elita ma 2 cechy');
   const e2 = R.buildSetup(r2).enemies[0], r4 = fresh({ mode: 'full' }); r4.round = 4; const e0 = R.buildSetup(r4).enemies[0];
   assert(e2.elite && e2.name.startsWith('Elitarny ') && e2.affixes.length === 2, 'elita z cechami');

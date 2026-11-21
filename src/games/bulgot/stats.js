@@ -48,7 +48,7 @@ export function heroStats(loadout, opt = {}) {
   const armor = Math.max(0, Math.floor((b.armor + (acc.armor || 0)) * (100 + all) / 100));
   const crit = Math.min(100, Math.floor((b.crit + (acc.crit || 0)) * (100 + all) / 100));
   const evade = Math.min(75, Math.floor((b.evade + (acc.evade || 0)) * (100 + all) / 100));
-  const regen = loadout.noRegen ? 0 : Math.floor((b.regen + (acc.regen || 0)) * (100 + all) / 100);
+  const regen = Math.floor(Math.floor((b.regen + (acc.regen || 0)) * (100 + all) / 100) * (loadout.noRegen ? 50 : 100) / 100);   // Garnek 5: regeneracja o połowę słabsza
 
   return {
     maxHp, atk, aspd, armor, crit, evade, regen,

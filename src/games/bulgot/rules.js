@@ -348,13 +348,14 @@ export function encounterIds(run) {
   count = Math.min(3, count);
   const ids = []; for (let i = 0; i < count; i++) ids.push(rr.pick(pool));
   const sw = ids.find(id => ENEMIES[id].swarm);
-  return sw ? Array(ENEMIES[sw].swarm).fill(sw) : ids;
+  const out = sw ? Array(ENEMIES[sw].swarm).fill(sw) : ids;
+  return isElite(run) ? out.slice(0, 2) : out;   // elita przychodzi najwyżej z jednym pomocnikiem
 }
 
 // Cechy elity: losowane z ziarna runu (widoczne w podglądzie piętra, bo dotyczą bieżącego spotkania).
 export function eliteAffixes(run) {
   const rr = makeRng(mix(run.seed, run.round, hash('affix'))), keys = Object.keys(AFFIXES), out = [];
-  const n = garnekMods(run.garnek).eliteAffixes;
+  const n = run.round <= MODES[run.mode].early.rounds ? 1 : garnekMods(run.garnek).eliteAffixes;   // na wczesnych piętrach elita ma zawsze 1 cechę
   while (out.length < n) { const a = rr.pick(keys); if (!out.includes(a)) out.push(a); }
   return out;
 }
@@ -398,7 +399,9 @@ export function buildSetup(run) {
   } else {
     const early = run.round <= M.early.rounds ? M.early : null;
     enemies = ids.map(id => concrete(ENEMIES[id], s, gm, {}, early));
-    if (elite) { const e0 = enemies[0]; e0.hp = fl(e0.hp * 150 / 100); e0.atk = fl(e0.atk * 125 / 100); e0.elite = true; e0.name = 'Elitarny ' + e0.name; e0.affixes = eliteAffixes(run); for (const a of e0.affixes) applyAffix(e0, a); }
+    const zm = M.zoneMul && M.zoneMul[zoneOf(run.mode, run.round)];   // mnożnik strefy (późne strefy groźniejsze niż sam wzrost)
+    if (zm) for (const e of enemies) { e.hp = Math.max(1, fl(e.hp * zm.hp / 100)); e.atk = Math.max(1, fl(e.atk * zm.atk / 100)); }
+    if (elite) { const e0 = enemies[0]; e0.hp = fl(e0.hp * 130 / 100); e0.atk = fl(e0.atk * 112 / 100); e0.elite = true; e0.name = 'Elitarny ' + e0.name; e0.affixes = eliteAffixes(run); for (const a of e0.affixes) applyAffix(e0, a); }
   }
   const S = statsOf(run);
   return {

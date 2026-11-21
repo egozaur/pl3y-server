@@ -10,11 +10,12 @@ export const TYPES = { stat: 'Statystyka', skill: 'Umiejętność', item: 'Przed
 
 // ---------- Tryby ----------
 // grow: o ile rośnie życie i atak wrogów z każdą rundą (mnożnik). bosses: runda -> boss. bonusAfter: po tych bossach dodatkowa oferta.
+// elite: rundy z elitą (nagroda: Odznaka). zoneMul: dodatkowy mnożnik życia/ataku zwykłych wrogów w strefie (%, null = brak).
 export const MODES = {
-  quick: { name: 'Szybki', rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.13, atk: 1.092 }, bossPct: { hp: 80, atk: 90 },
-    zones: [{ upTo: 5, zone: 0 }, { upTo: 10, zone: 1 }], elite: [3, 8] },
-  full: { name: 'Pełny', rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 135, atk: 80 }, grow: { hp: 1.107, atk: 1.07 }, bossPct: { hp: 100, atk: 100 },
-    zones: [{ upTo: 6, zone: 0 }, { upTo: 12, zone: 1 }, { upTo: 20, zone: 2 }], elite: [3, 9, 15] },
+  quick: { name: 'Szybki', rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.14, atk: 1.098 }, bossPct: { hp: 80, atk: 90 },
+    zones: [{ upTo: 5, zone: 0 }, { upTo: 10, zone: 1 }], elite: [4, 8] },
+  full: { name: 'Pełny', rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 135, atk: 80 }, grow: { hp: 1.125, atk: 1.08 }, bossPct: { hp: 100, atk: 100 },
+    zones: [{ upTo: 6, zone: 0 }, { upTo: 12, zone: 1 }, { upTo: 20, zone: 2 }], elite: [4, 10, 16], zoneMul: [null, null, { hp: 130, atk: 112 }] },
 };
 
 export const ZONES = [
@@ -262,7 +263,7 @@ export const ENEMIES = {
   'jajo-sortownik': { id: 'jajo-sortownik', name: 'Jajo-Sortownik', zone: 2, hp: 60, atk: 5, aspd: 90, armor: 8, evade: 0, crit: 0, shieldHits: 3, art: 'robot', text: 'Tarcza pochłania pierwsze 3 ciosy.' },
   'kot-ochroniarz': { id: 'kot-ochroniarz', name: 'Kot Ochroniarz', zone: 2, hp: 39, atk: 6, aspd: 130, armor: 2, evade: 25, crit: 25, art: 'cat', text: 'Wysoki unik i krytyk.' },
   'ksiegowy-kanarek': { id: 'ksiegowy-kanarek', name: 'Księgowy Kanarek', zone: 2, hp: 37, atk: 5, aspd: 100, armor: 0, evade: 0, crit: 0, steal: { n: 1, max: 99 }, art: 'canary', text: 'Każdy cios zabiera Ziarno.' },
-  'kaczka-podpalaczka': { id: 'kaczka-podpalaczka', name: 'Kaczka Podpalaczka', zone: 0, hp: 22, atk: 2, aspd: 100, armor: 0, evade: 0, crit: 0, ignite: 40, art: 'duck', text: 'Jej ciosy cię podpalają: Oparzenie co sekundę.' },
+  'kaczka-podpalaczka': { id: 'kaczka-podpalaczka', name: 'Kaczka Podpalaczka', zone: 0, hp: 22, atk: 2, aspd: 100, armor: 0, evade: 0, crit: 0, ignite: 30, art: 'duck', text: 'Jej ciosy cię podpalają: Oparzenie co sekundę.' },
   'kurczak-z-zamrazarki': { id: 'kurczak-z-zamrazarki', name: 'Kurczak z Zamrażarki', zone: 1, hp: 52, atk: 6, aspd: 80, armor: 2, evade: 0, crit: 0, rise: 50, resist: ['frost'], art: 'zombie', text: 'Odporny na Mróz. Po śmierci wstaje z połową Życia, chyba że płonie.' },
   'sep-audytor': { id: 'sep-audytor', name: 'Sęp Audytor', zone: 2, hp: 55, atk: 6, aspd: 90, armor: 4, evade: 0, crit: 0, audit: 60, art: 'vulture', text: 'Co 6 s Audyt: zdejmuje efekty z sojuszników i dostaje tarczę na 2 ciosy.' },
   'pisklak-stazysta': { id: 'pisklak-stazysta', name: 'Pisklak-stażysta', zone: 0, hp: 9, atk: 2, aspd: 100, armor: 0, evade: 0, crit: 0, minion: true, art: 'intern', text: 'Pracuje za darmo i za nic.' },
@@ -273,7 +274,7 @@ export const BOSSES = {
     text: 'Co jakiś czas wzywa stażystów. Poniżej połowy życia dostaje Premię Motywacyjną.', quote: 'Nikt nie widział go na urlopie.' },
   skubarka: { id: 'skubarka', name: 'Skubarka 3000', title: 'Maszyna', hp: 149, atk: 12, aspd: 80, armor: 6, evade: 0, crit: 0, shield: 25, art: 'plucker',
     text: 'Tarcza z pierza, potem fale uderzeń, a na koniec Skubanie twoich kafelków.', quote: 'Skubie, bo kocha.' },
-  prezes: { id: 'prezes', name: 'Prezes Rosołu', title: 'Zarząd', hp: 88, atk: 11, aspd: 90, armor: 6, evade: 0, crit: 0, art: 'boss',
+  prezes: { id: 'prezes', name: 'Prezes Rosołu', title: 'Zarząd', hp: 108, atk: 12, aspd: 90, armor: 6, evade: 0, crit: 0, art: 'boss',
     text: 'Nietykalny, dopóki żyją Ochroniarze. Potem Restrukturyzacja i Wrzący Garnek.', quote: 'Padł Prezes, a z nim upadł cały cennik.' },
 };
 
@@ -309,10 +310,10 @@ export const BADGE_OFFER = 3;
 export const GARNEK = [
   { name: 'Letni', text: 'Brak modyfikatorów.' },
   { name: 'Ciepły', text: 'Wrogowie mają +10% Życia.' },
-  { name: 'Gorący', text: 'Reroll droższy o 1 Ziarno, elitarni wrogowie mają 2 cechy.' },
+  { name: 'Gorący', text: 'Reroll droższy o 1 Ziarno, elitarni wrogowie (poza pierwszymi piętrami) mają 2 cechy.' },
   { name: 'Wrzący', text: 'Leczenie po rundzie spada z 35% do 20%.' },
   { name: 'Kipiący', text: 'Bossowie mają +20% tempa ataku.' },
-  { name: 'Wulkan Rosołu', text: 'Wrogowie mają +15% Ataku, a regeneracja w walce jest wyłączona.' },
+  { name: 'Wulkan Rosołu', text: 'Wrogowie mają +5% Ataku, a regeneracja w walce działa o połowę słabiej.' },
 ];
 // Modyfikatory sumują się od poziomu 0 do wybranego.
 export function garnekMods(level) {
@@ -323,7 +324,7 @@ export function garnekMods(level) {
     elites: true, eliteAffixes: L >= 2 ? 2 : 1,
     healPct: L >= 3 ? 20 : RULES.healPct,
     bossAspd: L >= 4 ? 20 : 0,
-    enemyAtk: L >= 5 ? 15 : 0,
+    enemyAtk: L >= 5 ? 5 : 0,
     noRegen: L >= 5,
   };
 }
