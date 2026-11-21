@@ -26,6 +26,16 @@ export function heroStats(loadout, opt = {}) {
   if (has('siewnik')) add('atkFlat', loadout.bonusAtk || 0);
   if ((sc.rambo || 0) >= 2) add('atkPct', 20);
   if ((sc.zbozowe || 0) >= 2) add('coinPct', 10);
+  const rs = sc.rosolowe || 0, chl = sc.chlodnicze || 0, kp = sc.korpo || 0;
+  if (rs >= 2) add('burnPct', 25);
+  if (rs >= 3) add('burnHit', 100);
+  if (rs >= 4) add('startBurn', 3);
+  if (chl >= 2) add('frostSlow', 4);
+  if (chl >= 3) add('shatter', 80);
+  if (chl >= 4) add('startFrost', 2);
+  if (kp >= 2) add('restDisc', 2);
+  if (kp >= 3) add('buyDisc', 25);
+  if (kp >= 4) add('interest', 10);
 
   const all = acc.allPct || 0;
   const atk = Math.floor((b.atk + (acc.atkFlat || 0)) * (100 + (acc.atkPct || 0) + all) / 100);
@@ -48,6 +58,10 @@ export function heroStats(loadout, opt = {}) {
     bleedMax: acc.bleedMax || 0, burnHit: Math.min(100, acc.burnHit || 0), frostHit: Math.min(100, acc.frostHit || 0), poisonHit: Math.min(100, acc.poisonHit || 0),
     burnPct: acc.burnPct || 0, poisonPct: acc.poisonPct || 0, burnMax: acc.burnMax || 0, stDur: acc.stDur || 0, freezePct: acc.freezePct || 0,
     frostNeed: acc.frostNeed || 0, shatter: acc.shatter || 0, spreadPct: acc.spreadPct || 0, burnHeal: acc.burnHeal || 0,
+    pressure: acc.pressure || 0, vsCold: acc.vsCold || 0, frostThorns: acc.frostThorns || 0, frostSlow: acc.frostSlow || 0, eggPoison: acc.eggPoison || 0,
+    startBurn: acc.startBurn || 0, startFrost: acc.startFrost || 0, cdPct: Math.min(50, acc.cdPct || 0),
+    // ekonomia (liczona w rules.js)
+    freeReroll: acc.freeReroll || 0, noSteal: !!acc.noSteal, bossCoins: acc.bossCoins || 0, restDisc: acc.restDisc || 0, buyDisc: acc.buyDisc || 0, interest: acc.interest || 0,
     shred: acc.shred || 0,
     okrzyk: (sc.rambo || 0) >= 3,
     revive: has('gniazdo-zapasowe'),

@@ -308,6 +308,44 @@ test('umiejętności: Kontra zmniejsza obrażenia i oddaje, Kąpiel oślepia, Un
   for (let i = 0; i < 12; i++) sz.step(i === 0 ? [0] : []); assert(sz.enemies[0].bleed >= 2, 'Szał Krwi nakłada krwawienie');
 });
 
+test('przedmioty: zestawy Rosołowe, Chłodnicze i Korporacyjne (progi 2/3/4), przedmioty w kilku zestawach', () => {
+  const S = tiles => heroStats(loadout({ tiles }));
+  eq([S(['chochla']).burnHit, S(['chochla', 'kostka-rosolowa']).burnPct, S(['chochla', 'kostka-rosolowa', 'lubczyk']).burnHit], [25, 65, 125 > 100 ? 100 : 125], 'Rosołowe: 25% → +25% obrażeń → zawsze');
+  eq(S(['chochla', 'kostka-rosolowa', 'lubczyk', 'garnek-cisnieniowy']).startBurn, 3, 'Rosołowe x4: start z Oparzeniem');
+  eq([S(['kostka-lodu', 'termometr']).frostSlow, S(['kostka-lodu', 'termometr', 'zamrazarka']).shatter, S(['kostka-lodu', 'termometr', 'zamrazarka', 'szron']).startFrost], [4, 80, 2], 'Chłodnicze');
+  eq([S(['teczka', 'krawat']).restDisc, S(['teczka', 'krawat', 'polisa']).buyDisc, S(['teczka', 'krawat', 'polisa', 'premia-kwartalna']).interest], [2, 25, 10], 'Korporacyjne');
+  eq(S(['zepsute-jajo', 'tykajace-jajo']).egg, 60, 'Zepsute Jajo liczy się do zestawu Jajecznego');
+  const f = new Fight(setup({ lo: { tiles: ['chochla', 'kostka-rosolowa', 'lubczyk', 'garnek-cisnieniowy'] }, enemies: [foe({ hp: 100000, atk: 1, aspd: 10 })] }));
+  eq(f.enemies[0].burn, 3, 'start walki z 3 stosami');
+  const ev = []; for (let i = 0; i < 120; i++) { f.step(); ev.push(...f.ev); }
+  assert(evs(ev, 'boom').length > 0 && evs(ev, 'hit').some(e => e.kind === 'boom'), 'Garnek Ciśnieniowy wybucha');
+  assert(evs(ev, 'heal').length > 0 || f.hp === f.S.maxHp, 'Lubczyk leczy');
+});
+
+test('przedmioty: Szron mrozi atakujących, Termometr bije mocniej, Polisa chroni Ziarna, Mokra Pasza truje', () => {
+  const sz = new Fight(setup({ lo: { tiles: ['szron'] }, enemies: [foe({ hp: 100000, atk: 2, aspd: 200 })] }));
+  for (let i = 0; i < 20; i++) sz.step(); assert(sz.enemies[0].frost > 0 || sz.freezes > 0, 'Szron');
+  const hit = tiles => { const f = new Fight(setup({ lo: { tiles }, enemies: [foe({ hp: 100000, atk: 1, aspd: 10 })] })); f.enemies[0].frost = 2; f.enemies[0].frostT = 1e9; return f.heroHit(f.enemies[0], 100, false, 'atk'); };
+  assert(hit(['termometr']) > hit([]), 'Termometr: +30% przeciw zmrożonym');
+  const thief = () => foe({ hp: 100000, atk: 1, aspd: 300, steal: { n: 1, max: 99 } });
+  const a = new Fight(setup({ enemies: [thief()] })), b = new Fight(setup({ lo: { tiles: ['polisa'] }, enemies: [thief()] }));
+  for (let i = 0; i < 30; i++) { a.step(); b.step(); }
+  assert(a.stolen > 0 && b.stolen === 0, 'Polisa: brak kradzieży');
+  const mp = new Fight(setup({ lo: { tiles: ['mokra-pasza'] }, enemies: [foe({ hp: 100000, atk: 1, aspd: 10 })] }));
+  for (let i = 0; i < 200; i++) mp.step(); assert(mp.enemies[0].poison > 0, 'Mokra Pasza');
+});
+
+test('przedmioty: ekonomia (Teczka, Krawat, Premia Kwartalna, zniżki zestawu Korporacyjnego)', () => {
+  const run = fresh(); run.tiles = ['teczka', 'krawat', 'polisa']; run.coins = 40;
+  eq([R.shopPrice(D.TILE_BY_ID['ziarno-mocy'], run), R.shopPrice(D.TILE_BY_ID['ziarno-mocy'])], [4, 6], 'dokupowanie 25% taniej');
+  eq(R.restCost(run), D.RULES.restCost - 2, 'odpoczynek taniej');
+  run.offer = ['ziarno-mocy', 'twardy-grzebien', 'szybki-dziob', 'ostry-dziob']; R.pickTile(run, 0);
+  R.fightSetup(run); const coins0 = run.coins; const out = R.fightFinish(run, []);
+  assert(out.result.win, 'wygrana w 1. rundzie');
+  eq(run.coins - coins0, D.RULES.coinsRound + 2, 'Teczka +2');
+  eq(run.freeLeft, 1, 'Krawat: darmowy reroll w nowej rundzie');
+});
+
 test('walka: tarcza Sortownika, szarża Wózka (telegraf, przerwanie ogłuszeniem), Mysz w roju', () => {
   let a = play(setup({ enemies: [foe({ hp: 60, atk: 1, aspd: 20, shieldHits: 3 })] }));
   assert(evs(a.ev, 'shield').length === 3, 'pochłania 3 ciosy');
@@ -602,7 +640,8 @@ test('profil: odblokowania postaci i kafelków, liczniki, najlepszy wynik, kolej
   const rich = fresh(); rich.ended = 'lose'; rich.coins = 31; rich.phase = 'over'; onRunEnd(p, rich); onRunEnd(p, rich); evaluate(p, null); assert(p.tiles.includes('hazard-w-kurniku'), 'Hazard: porażka z >30 Ziarnami');
   p.counters.fox = 3; evaluate(p, null); assert(p.tiles.includes('szklane-skrzydlo'), 'Szklane Skrzydło: 3 runy z Paktem');
   assert(p.tiles.includes('tajemnicza-skrzynka'), 'Skrzynka: 5 zakończonych runów');
-  const nr = fresh(); nr.stats.tankWin = true; nr.stats.maxCoins = 40; nr.stats.muts = 1; evaluate(p, nr);
+  const nr = fresh(); nr.stats.tankWin = true; nr.stats.maxCoins = 40; nr.stats.muts = 1; nr.stats.maxBurn = 250; nr.stats.freezes = 8; nr.stats.richBoss = true; evaluate(p, nr);
+  assert(['garnek-cisnieniowy', 'szron', 'premia-kwartalna'].every(id => p.tiles.includes(id)), 'Garnek, Szron, Premia Kwartalna');
   assert(['kogucia-kontra', 'dziobanie-premii', 'egzekucja-ostroga'].every(id => p.tiles.includes(id)), 'Kontra, Premia, Egzekucja');
   assert(p.unlocked.length === D.UNLOCKS.length, 'wszystkie odblokowania sprawdzalne');
 });

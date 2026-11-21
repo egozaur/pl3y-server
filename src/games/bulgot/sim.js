@@ -29,6 +29,8 @@ export class Fight {
     this.revive = !!h.revive; this.revived = false; this.okUsed = false;
     this.uid = 0;
     this.enemies = setup.enemies.map(e => this.mk(e));
+    this.burnDealt = 0; this.freezes = 0;
+    if (this.S.startBurn || this.S.startFrost) for (const e of this.enemies) { if (this.S.startBurn) this.applyStatus(e, 'burn', this.S.startBurn); if (this.S.startFrost) this.applyStatus(e, 'frost', this.S.startFrost); }
     this.stolen = 0; this.dealt = 0; this.taken = 0; this.maxHit = 0; this.kills = 0; this.used = 0; this.lowest = this.hp;
   }
 
@@ -66,7 +68,7 @@ export class Fight {
     if (t.immune) { this.push({ k: 'immune', to: t.uid }); return 0; }
     if (t.evade && this.rng.int(100) < t.evade) { this.push({ k: 'miss', to: t.uid }); return 0; }
     let raw = fl(this.S.atk * pct / 100);
-    raw = fl(raw * (100 + this.S.dmg) / 100);
+    raw = fl(raw * (100 + this.S.dmg + (this.S.vsCold && (t.frost > 0 || this.tick < t.frozenUntil) ? this.S.vsCold : 0)) / 100);
     let crit = false;
     if (canCrit && (this.tick < this.critUntil || this.rng.int(100) < this.S.crit)) { crit = true; raw = fl(raw * this.S.critMult / 100); }
     let d = Math.max(1, fl(raw * 100 / (100 + Math.max(0, t.armor))));
@@ -103,7 +105,7 @@ export class Fight {
         if (t.boss) d = fl(d / 2);
         t.frozenUntil = this.tick + d; t.stunUntil = Math.max(t.stunUntil, t.frozenUntil);
         if (t.windup) { t.windup = null; t.nextSpec = t.frozenUntil + (t.spec ? t.spec.every : 0); this.push({ k: 'break', uid: t.uid }); }
-        this.push({ k: 'freeze', uid: t.uid });
+        this.push({ k: 'freeze', uid: t.uid }); this.freezes++;
         if (S.shatter) for (const e of this.alive()) this.heroHit(e, S.shatter, false, 'shatter');
       }
       return true;
@@ -128,10 +130,15 @@ export class Fight {
         if (this.tick > e[kind + 'T']) { e[kind] = 0; continue; }
         if (e.immune) continue;
         const d = e[kind] * this.dotPer(kind);
-        e.hp -= d; this.dealt += d;
+        e.hp -= d; this.dealt += d; if (kind === 'burn') this.burnDealt += d;
         this.push({ k: 'hit', to: e.uid, d, crit: false, kind });
         if (kind === 'burn' && this.S.burnHeal) this.heal(fl(e.burn * this.S.burnHeal / 10));
         if (e.hp <= 0) this.kill(e);
+      }
+      // Garnek Ciśnieniowy: wróg z 8+ stosami Oparzenia wybucha
+      if (this.S.pressure && !e.dead && e.burn >= 8) {
+        e.burn = 0; this.push({ k: 'boom', uid: e.uid });
+        for (const x of this.alive()) this.heroHit(x, this.S.pressure, false, 'boom');
       }
     }
   }
@@ -175,6 +182,7 @@ export class Fight {
         this.heroHit(t, P(def.pct), false, 'granat');
         if (m === 1) for (const e of rest) this.heroHit(e, fl(P(def.pct) * 60 / 100), false, 'granat');
         if (m === 2) this.applyStatus(t, 'burn', 5);
+        if (this.S.eggPoison) this.applyStatus(t, 'poison', this.S.eggPoison);
         break;
       }
       case 'dziobniecie': this.hasteUntil = tick + P(def.dur) * (m === 2 ? 2 : 1); this.frenzyBleed = m === 1; break;
@@ -248,7 +256,8 @@ export class Fight {
     if (kontra) d = Math.max(1, fl(d * (100 - this.kontraRed) / 100));
     this.hp -= d; this.taken += d; if (this.hp < this.lowest) this.lowest = Math.max(0, this.hp);
     this.push({ k: 'hurt', from: e.uid, d, crit });
-    if (e.steal && this.stolenBy(e) < e.steal.max) { this.stolen += e.steal.n; e.stole = (e.stole || 0) + e.steal.n; this.push({ k: 'steal', from: e.uid }); }
+    if (this.S.frostThorns && !e.dead) this.applyStatus(e, 'frost', this.S.frostThorns);
+    if (e.steal && !this.S.noSteal && this.stolenBy(e) < e.steal.max) { this.stolen += e.steal.n; e.stole = (e.stole || 0) + e.steal.n; this.push({ k: 'steal', from: e.uid }); }
     if (e.slow) { this.slowUntil = this.tick + e.slow.ticks; }
     if (kontra && this.hp > 0) this.heroHit(e, this.kontraPct, false, 'kontra');
     if (this.hp > 0 && this.S.okrzyk && !this.okUsed && this.hp * 100 < this.S.maxHp * 20) { this.okUsed = true; this.invulnUntil = this.tick + 30; this.push({ k: 'okrzyk' }); }
@@ -323,7 +332,7 @@ export class Fight {
       return;
     }
     if (e.spec && this.tick >= e.nextSpec) { e.windup = { end: this.tick + e.spec.windup }; this.push({ k: 'telegraph', uid: e.uid, end: e.windup.end }); return; }
-    e.acc += fl(fl(e.aspd * e.aspdPct / 100) * (100 - Math.min(60, e.frost * STATUS.frost.slow)) / 100);
+    e.acc += fl(fl(e.aspd * e.aspdPct / 100) * (100 - Math.min(60, e.frost * (STATUS.frost.slow + (this.S.frostSlow || 0)))) / 100);
     while (e.acc >= 1000 && !this.over && !e.dead) { e.acc -= 1000; this.enemyHit(e, 100); }
   }
 
@@ -344,7 +353,7 @@ export class Fight {
     if (this.S.egg && this.nextEgg && t >= this.nextEgg) {
       this.nextEgg = t + this.S.egg;
       const tg = this.target();
-      if (tg) { this.push({ k: 'egg' }); this.heroHit(tg, 120, false, 'egg'); if (this.S.eggHeal) this.heal(fl(this.S.maxHp * this.S.eggHeal / 100)); }
+      if (tg) { this.push({ k: 'egg' }); this.heroHit(tg, 120, false, 'egg'); if (this.S.eggPoison) this.applyStatus(tg, 'poison', this.S.eggPoison); if (this.S.eggHeal) this.heal(fl(this.S.maxHp * this.S.eggHeal / 100)); }
     }
     // atak bohatera
     this.acc += this.heroAspd();
@@ -367,7 +376,7 @@ export class Fight {
     return {
       win: this.win, ticks: this.tick, hp: Math.max(0, this.hp), maxHp: this.S.maxHp, timeout: this.timeout,
       usedRevive: this.revived, stolen: this.stolen, dealt: this.dealt, taken: this.taken, maxHit: this.maxHit,
-      kills: this.kills, skillsUsed: this.used, coinsWon: this.coinsWon, lowest: this.lowest, boss: this.win && boss ? boss.boss : null,
+      kills: this.kills, skillsUsed: this.used, coinsWon: this.coinsWon, burnDealt: this.burnDealt, freezes: this.freezes, lowest: this.lowest, boss: this.win && boss ? boss.boss : null,
     };
   }
 }

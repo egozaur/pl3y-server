@@ -113,9 +113,12 @@ export const SETS = {
   jajeczne: { name: 'Jajeczne', b2: 'Tykające Jajo wybucha co 6 s', b3: 'Wybuchy leczą 3% maks. Życia' },
   zbozowe: { name: 'Zbożowe', b2: '+10% Ziaren z nagród', b3: 'Worek Kukurydzy bez limitu premii' },
   rambo: { name: 'Rambo', b2: '+20% Ataku', b3: 'Ostatni Okrzyk: raz na walkę 3 s nietykalności poniżej 20% Życia' },
+  rosolowe: { name: 'Rosołowe', b2: '+25% obrażeń od Oparzenia', b3: 'Ataki zawsze nakładają Oparzenie', b4: 'Wrogowie zaczynają walkę z 3 stosami Oparzenia' },
+  chlodnicze: { name: 'Chłodnicze', b2: 'Każdy stos Mrozu spowalnia o 12% zamiast 8%', b3: 'Zamrożenie wywołuje Lodową Falę: 80% Ataku we wszystkich wrogów', b4: 'Wrogowie zaczynają walkę z 2 stosami Mrozu' },
+  korpo: { name: 'Korporacyjne', b2: 'Odpoczynek tańszy o 2 Ziarna', b3: 'Dokupowanie kafelków 25% taniej', b4: 'Odsetki: po każdej wygranej +10% posiadanych Ziaren (maks. 5)' },
 };
 
-// ---------- Kafelki (30) ----------
+// ---------- Kafelki ----------
 // rarity 0..3; type stat|skill|item|risk; fx = lista modyfikatorów statystyk (patrz stats.js); lock = id odblokowania (patrz UNLOCKS);
 // repeat = można brać wielokrotnie; event = kafelek-wydarzenie (obsługa w rules.js).
 export const TILES = [
@@ -155,6 +158,24 @@ export const TILES = [
   { id: 'kamizelka-kuloodporna', name: 'Kamizelka Kuloodporna', type: 'item', rarity: 0, set: 'rambo', text: '+15 Pancerza, -10% tempa ataku', fx: [{ k: 'armor', v: 15 }, { k: 'aspdPct', v: -10 }], flavor: 'Ciężka, ale rosół zostaje na zewnątrz.' },
   { id: 'ostrogi-bojowe', name: 'Ostrogi Bojowe', type: 'item', rarity: 1, set: 'rambo', text: 'Ataki krwawią: 4 obrażenia / s przez 3 s', fx: [{ k: 'bleed', v: 4 }], flavor: 'Dwa kolce, jedna reputacja.' },
   { id: 'okulary-aviatory', name: 'Okulary Aviatory', type: 'item', rarity: 2, set: 'rambo', lock: 'u-okulary', text: '+30% do siły trafienia krytycznego', fx: [{ k: 'critMult', v: 30 }], flavor: 'Gdy wchodzisz do biura w okularach, nikt nie pyta o urlop.' },
+  { id: 'zepsute-jajo', name: 'Zepsute Jajo', type: 'item', rarity: 1, set: 'jajeczne', tags: ['trucizna', 'jajo'], text: 'Wybuchy jaj i Granat nakładają 3 stosy Salmonelli; 10% szans na Salmonellę przy ataku', fx: [{ k: 'eggPoison', v: 3 }, { k: 'poisonHit', v: 10 }], flavor: 'Nikt nie chce wiedzieć, ile leżało w kącie.' },
+  { id: 'mokra-pasza', name: 'Mokra Pasza', type: 'item', rarity: 0, set: 'zbozowe', tags: ['trucizna', 'ziarno'], text: '25% szans na Salmonellę przy ataku, +20% obrażeń Salmonelli', fx: [{ k: 'poisonHit', v: 25 }, { k: 'poisonPct', v: 20 }], flavor: 'Pachnie jak magazyn po powodzi.' },
+  { id: 'kolczatka', name: 'Kolczatka', type: 'item', rarity: 1, set: 'rambo', tags: ['krew'], text: 'Ataki krwawią (3 na stos), +2 do limitu stosów Krwawienia', fx: [{ k: 'bleed', v: 3 }, { k: 'bleedMax', v: 2 }], flavor: 'Obroża po psie łańcuchowym. Teraz w lepszych rękach.' },
+  // Zestaw Rosołowy (Oparzenie)
+  { id: 'chochla', name: 'Chochla', type: 'item', rarity: 0, set: 'rosolowe', tags: ['ogien'], text: '25% szans na Oparzenie przy ataku', fx: [{ k: 'burnHit', v: 25 }], flavor: 'Służbowa. Z inwentarzem numer 0001.' },
+  { id: 'kostka-rosolowa', name: 'Kostka Rosołowa', type: 'item', rarity: 1, set: 'rosolowe', tags: ['ogien'], text: '+40% obrażeń od Oparzenia, limit Oparzenia +5 stosów', fx: [{ k: 'burnPct', v: 40 }, { k: 'burnMax', v: 5 }], flavor: 'Skoncentrowany smak wroga.' },
+  { id: 'lubczyk', name: 'Lubczyk', type: 'item', rarity: 1, set: 'rosolowe', tags: ['ogien'], text: '+15 maks. Życia; płonący wrogowie leczą cię (1 Życie na 2 stosy co sekundę)', fx: [{ k: 'hpFlat', v: 15 }, { k: 'burnHeal', v: 5 }], flavor: 'Bez lubczyku to nie rosół, tylko woda z kurczakiem.' },
+  { id: 'garnek-cisnieniowy', name: 'Garnek Ciśnieniowy', type: 'item', rarity: 2, set: 'rosolowe', tags: ['ogien'], lock: 'u-garnek', text: 'Wróg z 8+ stosami Oparzenia wybucha: 150% Ataku we wszystkich, stosy znikają', fx: [{ k: 'pressure', v: 150 }], flavor: 'Gwizdek oznacza, że ktoś zaraz będzie miał zły dzień.' },
+  // Zestaw Chłodniczy (Mróz)
+  { id: 'kostka-lodu', name: 'Kostka Lodu', type: 'item', rarity: 0, set: 'chlodnicze', tags: ['lod'], text: '25% szans na Mróz przy ataku', fx: [{ k: 'frostHit', v: 25 }], flavor: 'Wyniesiona z Chłodni w dziobie. Szybko.' },
+  { id: 'termometr', name: 'Termometr', type: 'item', rarity: 1, set: 'chlodnicze', tags: ['lod'], text: '+30% obrażeń przeciw wrogom z Mrozem albo zamrożonym', fx: [{ k: 'vsCold', v: 30 }], flavor: 'Pokazuje minus. Wrogom też.' },
+  { id: 'zamrazarka', name: 'Zamrażarka', type: 'item', rarity: 1, set: 'chlodnicze', tags: ['lod'], text: 'Zamrożenie trwa 2 razy dłużej, wystarczą 4 stosy Mrozu', fx: [{ k: 'freezePct', v: 100 }, { k: 'frostNeed', v: 1 }], flavor: 'Kurczak wie najlepiej, jak się w niej siedzi.' },
+  { id: 'szron', name: 'Szron na Piórach', type: 'item', rarity: 2, set: 'chlodnicze', tags: ['lod'], lock: 'u-szron', text: '+10 Pancerza; każdy wróg, który cię trafi, dostaje stos Mrozu', fx: [{ k: 'armor', v: 10 }, { k: 'frostThorns', v: 1 }], flavor: 'Zimny jak spojrzenie kadrowej.' },
+  // Zestaw Korporacyjny (ekonomia)
+  { id: 'teczka', name: 'Teczka', type: 'item', rarity: 0, set: 'korpo', tags: ['korpo'], text: '+2 Ziarna po każdej wygranej rundzie', fx: [{ k: 'coinFlat', v: 2 }], flavor: 'W środku drugie śniadanie i raport kwartalny.' },
+  { id: 'krawat', name: 'Krawat', type: 'item', rarity: 1, set: 'korpo', tags: ['korpo'], text: '+1 darmowy reroll w każdej rundzie, +5% obrażeń', fx: [{ k: 'freeReroll', v: 1 }, { k: 'dmg', v: 5 }], flavor: 'Zawiązany na węzeł windsorski. Albo na szyi wroga.' },
+  { id: 'polisa', name: 'Polisa Ubezpieczeniowa', type: 'item', rarity: 1, set: 'korpo', tags: ['korpo'], text: 'Nikt nie kradnie ci Ziaren; +5 Pancerza', fx: [{ k: 'noSteal', v: 1 }, { k: 'armor', v: 5 }], flavor: 'Obejmuje lisy, kanarki i inne zdarzenia losowe.' },
+  { id: 'premia-kwartalna', name: 'Premia Kwartalna', type: 'item', rarity: 2, set: 'korpo', tags: ['korpo'], lock: 'u-premiakw', text: '+12 Ziaren za każdego pokonanego bossa, +10% Ataku', fx: [{ k: 'bossCoins', v: 12 }, { k: 'atkPct', v: 10 }], flavor: 'Wypłacana w ziarnie. Zarząd mówi, że to benefit.' },
   // Ryzyko i wydarzenia
   { id: 'pakt-z-lisem', name: 'Pakt z Lisem', type: 'risk', rarity: 1, text: '+50% Ataku, -30% maks. Życia do końca runu', fx: [{ k: 'atkPct', v: 50 }, { k: 'hpPct', v: -30 }], flavor: 'Lis ma drobny druk. Bardzo drobny.' },
   { id: 'szklane-skrzydlo', name: 'Szklane Skrzydło', type: 'risk', rarity: 2, lock: 'u-szklane', text: '+80% Ataku, -50% maks. Życia', fx: [{ k: 'atkPct', v: 80 }, { k: 'hpPct', v: -50 }], flavor: 'Piękne, kruche i bardzo, bardzo groźne.' },
@@ -183,6 +204,9 @@ export const UNLOCKS = [
   { id: 'u-kontra', kind: 'tile', target: 'kogucia-kontra', text: 'Wygraj walkę, w której wrogowie zadali ci łącznie więcej niż twoje maks. Życie' },
   { id: 'u-premia', kind: 'tile', target: 'dziobanie-premii', text: 'Miej 40 Ziaren naraz' },
   { id: 'u-egzekucja', kind: 'tile', target: 'egzekucja-ostroga', text: 'Zmutuj dowolną umiejętność' },
+  { id: 'u-garnek', kind: 'tile', target: 'garnek-cisnieniowy', text: 'Zadaj 250 obrażeń Oparzeniem w jednej walce' },
+  { id: 'u-szron', kind: 'tile', target: 'szron', text: 'Zamroź 8 wrogów w jednym runie' },
+  { id: 'u-premiakw', kind: 'tile', target: 'premia-kwartalna', text: 'Pokonaj bossa, mając co najmniej 30 Ziaren' },
   { id: 'u-hazard', kind: 'tile', target: 'hazard-w-kurniku', text: 'Przegraj run z ponad 30 Ziarnami w kieszeni' },
 ];
 export const UNLOCK_BY_ID = Object.fromEntries(UNLOCKS.map(u => [u.id, u]));

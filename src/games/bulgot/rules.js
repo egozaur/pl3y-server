@@ -82,7 +82,9 @@ export function makeOffer(run, salt, opt = {}) {
   return out;
 }
 
-export const shopPrice = t => RULES.prices[t.rarity];
+export const shopPrice = (t, run) => { const p = RULES.prices[t.rarity]; const d = run ? statsOf(run).buyDisc : 0; return d ? Math.max(1, fl(p * (100 - d) / 100)) : p; };
+export const restCost = run => Math.max(0, RULES.restCost - statsOf(run).restDisc);
+const freeRerolls = run => CHARS[run.char].freeRerolls + statsOf(run).freeReroll;
 export function rerollCost(run) {
   if (run.freeLeft > 0) return 0;
   return RULES.rerollBase + garnekMods(run.garnek).rerollExtra + run.paid;
@@ -124,7 +126,7 @@ function nextRound(run) {
   const M = MODES[run.mode];
   if (run.round > M.rounds) return endRun(run, 'win');
   run.stats.maxRound = Math.max(run.stats.maxRound, run.round);
-  run.phase = 'offer'; run.pending = null; run.rested = false; run.rerolls = 0; run.paid = 0; run.freeLeft = CHARS[run.char].freeRerolls;
+  run.phase = 'offer'; run.pending = null; run.rested = false; run.rerolls = 0; run.paid = 0; run.freeLeft = freeRerolls(run);
   run.offer = makeOffer(run, 0);
   run.cur = freshCur(run);
   return { ok: true };
@@ -191,7 +193,7 @@ export function buyOffer(run, i, slot, mut) {
   if (!t) return fail('Tego kafelka już nie ma w ofercie.', 'index');
   if (t.event) return fail('Wydarzeń nie da się kupić. Możesz je tylko wybrać.', 'event');
   if (run.offer.filter(x => x).length < 2) return fail('Musisz zostawić jeden kafelek do darmowego wyboru.', 'last');
-  const price = shopPrice(t);
+  const price = shopPrice(t, run);
   if (run.coins < price) return fail('Za mało Ziaren: ten kafelek kosztuje ' + price + '.', 'coins');
   const e = applyTile(run, t, slot, mut);
   if (e) return e;
@@ -207,12 +209,13 @@ export function rest(run) {
   if (run.rested) return fail('W tej rundzie już odpoczywałeś.', 'rested');
   const S = statsOf(run);
   if (run.hp >= S.maxHp) return fail('Masz pełne życie.', 'full');
-  if (run.coins < RULES.restCost) return fail('Odpoczynek kosztuje ' + RULES.restCost + ' Ziarna.', 'coins');
-  setCoins(run, run.coins - RULES.restCost);
+  const rc = restCost(run);
+  if (run.coins < rc) return fail('Odpoczynek kosztuje ' + rc + ' Ziarna.', 'coins');
+  setCoins(run, run.coins - rc);
   const before = run.hp;
   run.hp = Math.min(S.maxHp, run.hp + Math.max(1, fl(S.maxHp * RULES.restPct / 100)));
   run.rested = true; cur(run).rested = (cur(run).rested || 0) + (run.hp - before);
-  return { ok: true, healed: run.hp - before, cost: RULES.restCost };
+  return { ok: true, healed: run.hp - before, cost: rc };
 }
 
 export function shopBuy(run, i, slot, mut) {
@@ -220,7 +223,7 @@ export function shopBuy(run, i, slot, mut) {
   if (i === -1) { enterFight(run); return { ok: true, left: true }; }
   const t = TILE_BY_ID[run.pending.offer[i]];
   if (!t) return fail('Nie ma takiego towaru.', 'index');
-  const price = shopPrice(t);
+  const price = shopPrice(t, run);
   if (run.coins < price) return fail('Babcia mówi: bez ziarna nie ma rozmowy.', 'coins');
   const e = applyTile(run, t, slot, mut);
   if (e) return e;
@@ -342,8 +345,12 @@ export function fightFinish(run, inputs) {
   if (!res.win) { run.log.push(entry()); endRun(run, 'lose'); out.ended = 'lose'; return out; }
 
   // Wygrana: nagrody, leczenie, rozliczenie wyniku.
-  let coins = (setup.boss ? RULES.coinsBoss : RULES.coinsRound) + S.coinFlat;
+  let coins = (setup.boss ? RULES.coinsBoss + S.bossCoins : RULES.coinsRound) + S.coinFlat;
   coins = fl(coins * (100 + S.coinPct + (setup.elite ? RULES.eliteCoinsPct : 0)) / 100);
+  if (S.interest) coins += Math.min(5, fl(run.coins * S.interest / 100));
+  if (setup.boss && run.coins >= 30) run.stats.richBoss = true;
+  run.stats.maxBurn = Math.max(run.stats.maxBurn || 0, res.burnDealt || 0);
+  run.stats.freezes = (run.stats.freezes || 0) + (res.freezes || 0);
   setCoins(run, run.coins + coins); out.reward = coins;
   run.hp = Math.min(S.maxHp, run.hp + fl(S.maxHp * gm.healPct / 100));
   if (res.hp * 10 < S.maxHp) run.stats.lowWin = true;
@@ -377,7 +384,7 @@ export function view(run) {
   const v = {
     id: run.id, mode: run.mode, char: run.char, garnek: run.garnek, round: run.round, rounds: M.rounds, phase: run.phase,
     hp: run.hp, maxHp: S.maxHp, coins: run.coins, tiles: run.tiles, skills: run.skills, offer: run.offer, pending: run.pending,
-    rerollCost: run.phase === 'offer' ? rerollCost(run) : null, freeLeft: run.freeLeft, rested: run.rested, restCost: RULES.restCost, restPct: RULES.restPct, stats: run.stats, flags: { bossHpBonus: run.flags.bossHpBonus, revived: run.flags.revived, bonusAtk: run.flags.bonusAtk },
+    rerollCost: run.phase === 'offer' ? rerollCost(run) : null, freeLeft: run.freeLeft, rested: run.rested, restCost: restCost(run), restPct: RULES.restPct, buyDisc: S.buyDisc, stats: run.stats, flags: { bossHpBonus: run.flags.bossHpBonus, revived: run.flags.revived, bonusAtk: run.flags.bonusAtk },
     score: over ? run.score : liveScore(run), done: run.done, timeBonus: run.timeBonus, ended: run.ended, form: formFor(run.mode, run.round).id, zone: zoneOf(run.mode, run.round),
     boss: M.bosses[run.round] || null, elite: !over && isElite(run), hero: S,
   };
