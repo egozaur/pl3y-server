@@ -24,6 +24,8 @@ export class Fight {
     this.hp = Math.min(h.hp, this.S.maxHp);
     this.acc = 0;                                         // naładowanie ataku bohatera (1000 = cios)
     this.skills = this.loadout.skills.map(s => ({ id: s.id, lvl: s.lvl, mut: s.mut || 0, cd: fl(SKILLS[s.id].cd * 15 / 100), blockedUntil: 0 }));   // start z 15% cooldownu (nie zabija w 1. ticku, a umiejętność jest gotowa po ok. 1 s)
+    if (this.S.firstReady && this.skills[0]) this.skills[0].cd = 0;
+    this.parasol = this.S.parasol; this.hburn = 0; this.hburnT = 0; this.hburnPer = 0;
     this.hasteUntil = 0; this.invulnUntil = 0; this.slowUntil = 0; this.critUntil = 0; this.kontraUntil = 0; this.blindUntil = 0; this.coinsWon = 0; this.bleedExtra = 0;
     this.nextEgg = this.S.egg || 0;
     this.revive = !!h.revive; this.revived = false; this.okUsed = false;
@@ -37,6 +39,7 @@ export class Fight {
   mk(e) {
     const o = { ...e, uid: ++this.uid, idleUntil: e.idle || 0, maxHp: e.hp, baseArmor: e.armor, acc: 0, stunUntil: 0, windup: null, nextSpec: e.spec ? e.spec.every : 0,
       dead: false, aspdPct: 100, burn: 0, burnT: 0, frost: 0, frostT: 0, poison: 0, poisonT: 0, bleed: 0, bleedT: 0, frozenUntil: 0, resist: e.resist || null, p2: false, p3: false, shield: e.shield ? fl(e.hp * e.shield / 100) : 0, shieldHits: e.shieldHits || 0 };
+    if (o.audit) o.nextAudit = o.audit;
     if (o.boss === 'brojler') o.nextSummon = 100;
     if (o.boss === 'skubarka') o.nextSkub = 1e9;
     if (o.boss === 'prezes') o.nextBlock = 1e9;
@@ -68,7 +71,7 @@ export class Fight {
     if (t.immune) { this.push({ k: 'immune', to: t.uid }); return 0; }
     if (t.evade && this.rng.int(100) < t.evade) { this.push({ k: 'miss', to: t.uid }); return 0; }
     let raw = fl(this.S.atk * pct / 100);
-    raw = fl(raw * (100 + this.S.dmg + (this.S.vsCold && (t.frost > 0 || this.tick < t.frozenUntil) ? this.S.vsCold : 0)) / 100);
+    raw = fl(raw * (100 + this.S.dmg + (this.S.overtime && this.tick >= 200 ? this.S.overtime : 0) + (this.S.vsCold && (t.frost > 0 || this.tick < t.frozenUntil) ? this.S.vsCold : 0)) / 100);
     let crit = false;
     if (canCrit && (this.tick < this.critUntil || this.rng.int(100) < this.S.crit)) { crit = true; raw = fl(raw * this.S.critMult / 100); }
     let d = Math.max(1, fl(raw * 100 / (100 + Math.max(0, t.armor))));
@@ -76,6 +79,7 @@ export class Fight {
     if (t.shield > 0) { const a = Math.min(t.shield, d); t.shield -= a; d -= a; this.push({ k: 'shieldhit', to: t.uid, d: a }); if (d <= 0) return a; }
     t.hp -= d; this.dealt += d; if (d > this.maxHit) this.maxHit = d;
     this.push({ k: 'hit', to: t.uid, d, crit, kind });
+    if (crit && this.S.critBleed) this.applyStatus(t, 'bleed', this.S.critBleed);
     if (this.S.shred && kind === 'atk' && this.rng.int(100) < this.S.shred && t.armor > 0) t.armor = Math.max(0, t.armor - Math.max(1, Math.ceil(t.baseArmor / 10)));
     if (kind === 'atk') {
       if (this.S.bleed) this.applyStatus(t, 'bleed', this.S.bleedStacks);
@@ -145,9 +149,12 @@ export class Fight {
 
   kill(t) {
     if (t.dead) return;
+    // Kurczak z Zamrażarki wstaje raz, chyba że płonie
+    if (t.rise && !t.risen && !(t.burn > 0)) { t.risen = true; t.hp = Math.max(1, fl(t.maxHp * t.rise / 100)); t.frost = 0; this.push({ k: 'rise', uid: t.uid }); return; }
     t.dead = true; t.hp = 0; this.kills++;
     this.push({ k: 'kill', uid: t.uid });
     if (t.poison > 0) { const nx = this.enemies.find(e => !e.dead && !e.immune); if (nx) this.applyStatus(nx, 'poison', Math.max(1, fl(t.poison * (STATUS.poison.spread + (this.S.spreadPct || 0)) / 100))); }
+    if (t.explode && this.hp > 0 && !this.over) { this.push({ k: 'boom', uid: t.uid }); this.enemyHit(t, t.explode); }
     if (t.boss === 'brojler') for (const m of this.enemies) if (m.minion && !m.dead) { m.dead = true; m.hp = 0; this.push({ k: 'kill', uid: m.uid }); }
   }
 
@@ -243,6 +250,7 @@ export class Fight {
   enemyHit(e, mult) {
     if (this.hp <= 0 || this.over) return;
     if (this.tick < this.invulnUntil) { this.push({ k: 'block', from: e.uid }); if (this.unikKontra) this.heroHit(e, 100, false, 'kontra'); return; }
+    if (this.parasol > 0) { this.parasol--; this.push({ k: 'block', from: e.uid }); return; }
     if (this.tick < this.blindUntil && this.rng.int(100) < this.blindPct) { this.push({ k: 'dodge', from: e.uid }); return; }
     if (this.S.evade && this.rng.int(100) < this.S.evade) { this.push({ k: 'dodge', from: e.uid }); return; }
     let pct = 100 + this.furyExtra();
@@ -260,6 +268,8 @@ export class Fight {
     if (e.steal && !this.S.noSteal && this.stolenBy(e) < e.steal.max) { this.stolen += e.steal.n; e.stole = (e.stole || 0) + e.steal.n; this.push({ k: 'steal', from: e.uid }); }
     if (e.slow) { this.slowUntil = this.tick + e.slow.ticks; }
     if (kontra && this.hp > 0) this.heroHit(e, this.kontraPct, false, 'kontra');
+    if (e.vamp && !e.dead) e.hp = Math.min(e.maxHp, e.hp + fl(d * e.vamp / 100));
+    if (e.ignite) { this.hburn = Math.min(10, this.hburn + 1); this.hburnT = this.tick + 40; this.hburnPer = Math.max(1, fl(e.atk * e.ignite / 100)); }
     if (this.hp > 0 && this.S.okrzyk && !this.okUsed && this.hp * 100 < this.S.maxHp * 20) { this.okUsed = true; this.invulnUntil = this.tick + 30; this.push({ k: 'okrzyk' }); }
     if (this.hp <= 0) this.heroDown();
   }
@@ -328,6 +338,11 @@ export class Fight {
     if (this.tick < e.idleUntil) return;           // wróg jeszcze „wchodzi do walki” (Zebranie Zarządu: pierwsze 3 s Prezesa)
     if (this.tick < e.stunUntil) return;
     if (e.boss) this.bossAct(e);
+    if (e.audit && this.tick >= e.nextAudit) {
+      e.nextAudit = this.tick + e.audit; e.shieldHits += 2;
+      for (const x of this.alive()) { x.burn = 0; x.frost = 0; x.poison = 0; x.bleed = 0; }
+      this.push({ k: 'audit', uid: e.uid });
+    }
     if (e.windup) {
       if (this.tick >= e.windup.end) { e.windup = null; e.nextSpec = this.tick + e.spec.every; this.enemyHit(e, e.spec.mult); }
       return;
@@ -350,6 +365,11 @@ export class Fight {
     if (t % 10 === 9) {
       this.heal(this.S.regen);
       this.dots();
+      for (const e of this.enemies) if (!e.dead && e.regenPct && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + Math.max(1, fl(e.maxHp * e.regenPct / 100)));
+      if (this.hburn) {
+        if (t > this.hburnT) this.hburn = 0;
+        else { const d = this.hburn * this.hburnPer; this.hp -= d; this.taken += d; if (this.hp < this.lowest) this.lowest = Math.max(0, this.hp); this.push({ k: 'hurt', d, crit: false, kind: 'burn' }); if (this.hp <= 0) this.heroDown(); }
+      }
     }
     if (this.S.egg && this.nextEgg && t >= this.nextEgg) {
       this.nextEgg = t + this.S.egg;

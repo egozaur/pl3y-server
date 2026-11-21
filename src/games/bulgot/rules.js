@@ -2,7 +2,7 @@
 // Wszystkie losowania biorą ziarno z run.seed, więc ten sam run daje te same oferty i spotkania.
 // Każda funkcja zwraca { ok: true, ... } albo { err, code }. Stan zapisuje i autoryzuje BgPlayer (player.js).
 import { mix, hash, makeRng } from './rng.js';
-import { RECIPES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, RARITY_WEIGHTS, TYPE_WEIGHTS, garnekMods, formFor } from './data.js';
+import { RECIPES, BADGES, BADGE_OFFER, AFFIXES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, RARITY_WEIGHTS, TYPE_WEIGHTS, garnekMods, formFor } from './data.js';
 import { heroStats } from './stats.js';
 import { runFight } from './sim.js';
 
@@ -11,7 +11,7 @@ const fail = (err, code) => ({ err, code });
 
 export const loadoutOf = run => ({
   char: run.char, tiles: run.tiles, skills: run.skills, coins: run.coins,
-  bonusAtk: run.flags.bonusAtk, noRegen: garnekMods(run.garnek).noRegen,
+  bonusAtk: run.flags.bonusAtk, noRegen: garnekMods(run.garnek).noRegen, badges: run.badges || [],
 });
 export const statsOf = run => heroStats(loadoutOf(run));
 
@@ -27,7 +27,7 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0 }) {
   const run = {
     v: 1, id: String(seed), mode, char, garnek: garnek | 0, seed: seed >>> 0, round: 1, phase: 'offer',
     hp: 1, coins: ch.coins, tiles: [], skills: ch.startSkills.map(([id, lvl]) => ({ id, lvl })), offer: [], rerolls: 0, paid: 0, freeLeft: ch.freeRerolls,
-    pending: null, rested: false, pool: pool.slice(), started: now, ended: null, score: 0, timeBonus: 0, done: 0,
+    pending: null, rested: false, pool: pool.slice(), badges: [], started: now, ended: null, score: 0, timeBonus: 0, done: 0,
     flags: { bonusAtk: 0, bossHpBonus: 0, revived: false },
     stats: { riskPicks: 0, fox: 0, maxCoins: ch.coins, maxHit: 0, lowWin: false, maxRound: 1, bossKills: [], picks: 0, rerolls: 0 },
     log: [],
@@ -170,6 +170,24 @@ export function pickTile(run, i, slot, mut) {
     run.phase = 'event'; run.offer = [];
     return { ok: true, event: 'shop' };
   }
+  if (t.event === 'automat') {
+    if (run.coins < 5) return fail('Automat chce 5 Ziaren.', 'coins');
+    setCoins(run, run.coins - 5);
+    const rr = makeRng(mix(run.seed, run.round, hash('automat')));
+    const stats = run.pool.map(x => TILE_BY_ID[x]).filter(x => x && x.type === 'stat' && tileAvailable(run, x));
+    const got = [];
+    for (let k = 0; k < 2 && stats.length; k++) { const x = rr.pick(stats); applyTile(run, x); got.push(x.id); }
+    run.stats.riskPicks++;
+    enterFight(run);
+    return { ok: true, automat: got };
+  }
+  if (t.event === 'kontrakt') { run.pending = { kind: 'contract' }; run.phase = 'event'; run.offer = []; run.stats.riskPicks++; return { ok: true, event: 'contract' }; }
+  if (t.event === 'kapliczka') {
+    const rr = makeRng(mix(run.seed, run.round, hash('shrine')));
+    const av = Object.keys(BADGES).filter(b => !(run.badges || []).includes(b));
+    run.pending = { kind: 'shrine', badge: av.length ? rr.pick(av) : null }; run.phase = 'event'; run.offer = [];
+    return { ok: true, event: 'shrine' };
+  }
   if (t.event === 'hazard') { run.pending = { kind: 'gamble' }; run.phase = 'event'; run.offer = []; return { ok: true, event: 'gamble' }; }
   if (t.event === 'skrzynka') {
     const rr = makeRng(mix(run.seed, run.round, hash('crate')));
@@ -227,7 +245,7 @@ export function rest(run) {
   if (run.coins < rc) return fail('Odpoczynek kosztuje ' + rc + ' Ziarna.', 'coins');
   setCoins(run, run.coins - rc);
   const before = run.hp;
-  run.hp = Math.min(S.maxHp, run.hp + Math.max(1, fl(S.maxHp * RULES.restPct / 100)));
+  run.hp = Math.min(S.maxHp, run.hp + Math.max(1, fl(S.maxHp * (RULES.restPct + S.restBonus) / 100)));
   run.rested = true; cur(run).rested = (cur(run).rested || 0) + (run.hp - before);
   return { ok: true, healed: run.hp - before, cost: rc };
 }
@@ -258,6 +276,44 @@ export function bet(run, amount) {
   cur(run).bet = a ? { amount: a, won } : null;
   enterFight(run);
   return { ok: true, bet: a, won };
+}
+
+// Wybór w oknie decyzji: Odznaka po bossie/elicie (faza badge), Kontrakt z HR i Kapliczka (faza event).
+export function choose(run, i) {
+  const P = run.pending;
+  if (run.phase === 'badge' && P && P.kind === 'badge') {
+    const b = P.offer[i];
+    if (!b || !BADGES[b]) return fail('Nie ma takiej Odznaki.', 'index');
+    addBadge(run, b);
+    run.pending = null;
+    return afterFight(run, P.bonus);
+  }
+  if (run.phase !== 'event' || !P || (P.kind !== 'contract' && P.kind !== 'shrine')) return fail('Teraz nie ma wyboru.', 'phase');
+  if (!(i >= 0 && i <= 2)) return fail('Nie ma takiej opcji.', 'index');
+  const S0 = statsOf(run);
+  if (P.kind === 'contract') {
+    if (i === 0) applyTile(run, TILE_BY_ID['umowa-etat']);
+    if (i === 1) { applyTile(run, TILE_BY_ID['umowa-b2b']); setCoins(run, run.coins + 15); }
+    cur(run).contract = i;
+  } else {
+    if (i === 0) run.hp = S0.maxHp;
+    if (i === 1) { if (!P.badge) return fail('Kapliczka nie ma Odznaki.', 'index'); addBadge(run, P.badge); }
+    cur(run).shrine = i;
+  }
+  enterFight(run);
+  return { ok: true, chose: i };
+}
+function addBadge(run, b) {
+  const before = statsOf(run).maxHp;
+  run.badges = run.badges || []; run.badges.push(b);
+  const after = statsOf(run).maxHp; if (after > before) run.hp += after - before;
+  run.stats.badges = run.badges.length;
+  if (run.log.length) (run.log[run.log.length - 1].badges = run.log[run.log.length - 1].badges || []).push(b);
+}
+// Po wygranej walce (i ewentualnej Odznace): oferta bonusowa po bossie albo następna runda.
+function afterFight(run, bonus) {
+  if (bonus) { run.phase = 'bonus'; run.offer = makeOffer(run, 300, { size: RULES.bonusSize, minRarity: 1, noEvents: true }); run.fight = null; return { ok: true, bonus: true }; }
+  return nextRound(run);
 }
 
 export function bonusPick(run, i, slot, mut) {
@@ -295,6 +351,22 @@ export function encounterIds(run) {
   return sw ? Array(ENEMIES[sw].swarm).fill(sw) : ids;
 }
 
+// Cechy elity: losowane z ziarna runu (widoczne w podglądzie piętra, bo dotyczą bieżącego spotkania).
+export function eliteAffixes(run) {
+  const rr = makeRng(mix(run.seed, run.round, hash('affix'))), keys = Object.keys(AFFIXES), out = [];
+  const n = garnekMods(run.garnek).eliteAffixes;
+  while (out.length < n) { const a = rr.pick(keys); if (!out.includes(a)) out.push(a); }
+  return out;
+}
+function applyAffix(e, a) {
+  if (a === 'opancerzony') { e.armor += 15; e.shieldHits = (e.shieldHits || 0) + 2; }
+  if (a === 'wampiryczny') e.vamp = 50;
+  if (a === 'wybuchowy') e.explode = 200;
+  if (a === 'ognioodporny') e.resist = [...(e.resist || []), 'burn', 'poison'];
+  if (a === 'mrozny') { e.resist = [...(e.resist || []), 'frost']; e.slow = { pct: 20, ticks: 30 }; }
+  if (a === 'szybki') e.aspd = fl(e.aspd * 140 / 100);
+  if (a === 'regenerujacy') e.regenPct = 2;
+}
 const isElite = run => garnekMods(run.garnek).elites && MODES[run.mode].elite.includes(run.round) && !MODES[run.mode].bosses[run.round];
 
 function concrete(def, s, gm, extra = {}, early = null) {
@@ -302,7 +374,7 @@ function concrete(def, s, gm, extra = {}, early = null) {
   let atk = Math.max(1, Math.round(def.atk * s.a * (100 + gm.enemyAtk) / 100));
   if (early) { hp = Math.max(1, Math.round(hp * early.hp / 100)); atk = Math.max(1, Math.round(atk * early.atk / 100)); }
   const e = { id: def.id, name: def.name, hp, atk, aspd: def.aspd, armor: def.armor, evade: def.evade, crit: def.crit, art: def.art };
-  for (const k of ['steal', 'slow', 'spec', 'shieldHits', 'shield', 'minion']) if (def[k]) e[k] = def[k];
+  for (const k of ['steal', 'slow', 'spec', 'shieldHits', 'shield', 'minion', 'ignite', 'rise', 'resist', 'audit']) if (def[k]) e[k] = def[k];
   return Object.assign(e, extra);
 }
 
@@ -326,7 +398,7 @@ export function buildSetup(run) {
   } else {
     const early = run.round <= M.early.rounds ? M.early : null;
     enemies = ids.map(id => concrete(ENEMIES[id], s, gm, {}, early));
-    if (elite) { const e0 = enemies[0]; e0.hp = fl(e0.hp * 150 / 100); e0.atk = fl(e0.atk * 125 / 100); e0.elite = true; e0.name = 'Elitarny ' + e0.name; }
+    if (elite) { const e0 = enemies[0]; e0.hp = fl(e0.hp * 150 / 100); e0.atk = fl(e0.atk * 125 / 100); e0.elite = true; e0.name = 'Elitarny ' + e0.name; e0.affixes = eliteAffixes(run); for (const a of e0.affixes) applyAffix(e0, a); }
   }
   const S = statsOf(run);
   return {
@@ -366,7 +438,7 @@ export function fightFinish(run, inputs) {
   run.stats.maxBurn = Math.max(run.stats.maxBurn || 0, res.burnDealt || 0);
   run.stats.freezes = (run.stats.freezes || 0) + (res.freezes || 0);
   setCoins(run, run.coins + coins); out.reward = coins;
-  run.hp = Math.min(S.maxHp, run.hp + fl(S.maxHp * gm.healPct / 100));
+  run.hp = Math.min(S.maxHp, run.hp + fl(S.maxHp * (gm.healPct + S.healBonus) / 100));
   if (res.hp * 10 < S.maxHp) run.stats.lowWin = true;
   if (res.taken > S.maxHp) run.stats.tankWin = true;
   if (run.tiles.includes('siewnik')) run.flags.bonusAtk++;
@@ -376,11 +448,18 @@ export function fightFinish(run, inputs) {
   run.log.push({ ...entry(), reward: coins, hpHealed: run.hp, coinsAfter: run.coins });
 
   if (run.round >= MODES[run.mode].rounds) { endRun(run, 'win'); out.ended = 'win'; return out; }
-  if (MODES[run.mode].bonusAfter.includes(run.round)) {
-    run.phase = 'bonus'; run.offer = makeOffer(run, 300, { size: RULES.bonusSize, minRarity: 1, noEvents: true }); run.fight = null;
-    out.bonus = true;
-  } else { nextRound(run); }
+  const bonus = MODES[run.mode].bonusAfter.includes(run.round);
+  const avail = Object.keys(BADGES).filter(b => !(run.badges || []).includes(b));
   run.fight = null;
+  if ((setup.boss || setup.elite) && avail.length) {
+    const rr = makeRng(mix(run.seed, run.round, hash('badge')));
+    const offer = []; while (offer.length < Math.min(BADGE_OFFER, avail.length)) { const b = rr.pick(avail); if (!offer.includes(b)) offer.push(b); }
+    run.phase = 'badge'; run.pending = { kind: 'badge', offer, bonus }; run.offer = [];
+    out.badge = true;
+    return out;
+  }
+  const r2 = afterFight(run, bonus);
+  if (r2.bonus) out.bonus = true;
   return out;
 }
 
@@ -398,7 +477,7 @@ export function view(run) {
   const v = {
     id: run.id, mode: run.mode, char: run.char, garnek: run.garnek, round: run.round, rounds: M.rounds, phase: run.phase,
     hp: run.hp, maxHp: S.maxHp, coins: run.coins, tiles: run.tiles, skills: run.skills, offer: run.offer, pending: run.pending,
-    rerollCost: run.phase === 'offer' ? rerollCost(run) : null, freeLeft: run.freeLeft, rested: run.rested, restCost: restCost(run), restPct: RULES.restPct, buyDisc: S.buyDisc, stats: run.stats, flags: { bossHpBonus: run.flags.bossHpBonus, revived: run.flags.revived, bonusAtk: run.flags.bonusAtk },
+    rerollCost: run.phase === 'offer' ? rerollCost(run) : null, freeLeft: run.freeLeft, rested: run.rested, restCost: restCost(run), restPct: RULES.restPct + S.restBonus, badges: run.badges || [], affixes: !over && isElite(run) ? eliteAffixes(run) : null, buyDisc: S.buyDisc, stats: run.stats, flags: { bossHpBonus: run.flags.bossHpBonus, revived: run.flags.revived, bonusAtk: run.flags.bonusAtk },
     score: over ? run.score : liveScore(run), done: run.done, timeBonus: run.timeBonus, ended: run.ended, form: formFor(run.mode, run.round).id, zone: zoneOf(run.mode, run.round),
     boss: M.bosses[run.round] || null, elite: !over && isElite(run), hero: S,
   };

@@ -5,7 +5,7 @@
 // Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /reroll /shop /bet /bonus /fightstart /fightfinish /abandon.
 // Odpowiedź: { ok, profile, run, ...wynik akcji } albo { err, code } z kodem 400/409.
 import { mix, hash } from './rng.js';
-import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, fightSetup, fightFinish, abandon, view, statsOf } from './rules.js';
+import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, view, statsOf } from './rules.js';
 import { newProfile, poolFor, evaluate, onBossKill, onRunEnd, markSeen, publicProfile } from './profile.js';
 import { MODES, CHARS } from './data.js';
 
@@ -55,6 +55,7 @@ export class BgPlayer {
       case 'shop': r = need(run) || shopBuy(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot), b.mut === undefined ? undefined : Number(b.mut)); break;
       case 'bet': r = need(run) || bet(run, Number(b.amount)); break;
       case 'bonus': r = need(run) || bonusPick(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot), b.mut === undefined ? undefined : Number(b.mut)); break;
+      case 'choose': r = need(run) || choose(run, Number(b.i)); break;
       case 'fightstart': r = need(run) || fightSetup(run); break;
       case 'fightfinish': r = need(run) || fightFinish(run, Array.isArray(b.inputs) ? b.inputs : []); break;
       case 'abandon': r = need(run) || abandon(run); break;
@@ -89,7 +90,7 @@ export class BgPlayer {
     const o = this.out(profile, run);
     const body = { ok: true, ...o, ...extra };
     if (r.setup) body.setup = r.setup;
-    for (const k of ['healed', 'result', 'reward', 'boss', 'bonus', 'event', 'crate', 'bought', 'price', 'bet', 'won', 'tile', 'cost', 'left']) if (r[k] !== undefined) body[k] = r[k];
+    for (const k of ['healed', 'result', 'reward', 'boss', 'bonus', 'event', 'crate', 'bought', 'price', 'bet', 'won', 'tile', 'cost', 'left', 'badge', 'automat', 'chose']) if (r[k] !== undefined) body[k] = r[k];
     return json(body);
   }
 

@@ -73,7 +73,7 @@ test('rng: ten sam seed daje ten sam ciąg, mix i hash są stabilne', () => {
 // ---------- dane ----------
 test('dane: kafelki, umiejętności z Mutacjami, odblokowania, spójne odwołania', () => {
   assert(D.TILES.length >= 39, 'co najmniej 39 kafelków, jest ' + D.TILES.length);
-  eq(D.STARTER_TILES.length, D.TILES.filter(t => !t.lock && !t.hatched).length, 'na start = bez blokady (bez wyklutych)');
+  eq(D.STARTER_TILES.length, D.TILES.filter(t => !t.lock && !t.hatched && !t.hidden).length, 'na start = bez blokady (bez wyklutych)');
   for (const r of D.RECIPES) { const o = D.TILE_BY_ID[r.out]; assert(o && o.hatched && o.rarity === 3 && r.of.length === 2 && r.of.every(id => D.TILE_BY_ID[id] && D.TILE_BY_ID[id].type === 'item'), 'przepis ' + r.out); for (const st of o.sets) assert(D.SETS[st], 'zestaw ' + r.out); }
   eq(new Set(D.RECIPES.flatMap(r => r.of)).size, D.RECIPES.length * 2, 'każdy składnik w jednym przepisie');
   for (const id of Object.keys(D.MILESTONES)) assert(D.TILE_BY_ID[id] && D.TILE_BY_ID[id].type === 'stat' && D.TILE_BY_ID[id].repeat, 'próg ' + id);
@@ -379,6 +379,63 @@ test('progi statystyk: co 3 kopie premia (Kolba Mocy, Koguci Hełm), dwa progi p
   const h = S(['twardy-grzebien', 'twardy-grzebien', 'twardy-grzebien']); eq([h.maxHp, h.armor], [Math.floor(130 * 110 / 100), 4], 'Koguci Hełm');
 });
 
+test('nowi wrogowie: Kaczka podpala bohatera, Kurczak z Zamrażarki wstaje (chyba że płonie), Sęp Audytor czyści efekty', () => {
+  const k = new Fight(setup({ enemies: [foe({ hp: 100000, atk: 10, aspd: 200, ignite: 40 })] }));
+  const ev = []; for (let i = 0; i < 30; i++) { k.step(); ev.push(...k.ev); }
+  assert(k.hburn > 0 && evs(ev, 'hurt').some(e => e.kind === 'burn' && e.d >= 4), 'Oparzenie na bohaterze');
+  const z = new Fight(setup({ enemies: [foe({ hp: 100, rise: 50 }), foe({ hp: 100000 })] }));
+  z.enemies[0].hp = 0; z.kill(z.enemies[0]);
+  assert(!z.enemies[0].dead && z.enemies[0].hp === 50 && z.enemies[0].risen, 'wstaje z połową');
+  z.enemies[0].hp = 0; z.kill(z.enemies[0]); assert(z.enemies[0].dead, 'drugi raz już nie');
+  const zb = new Fight(setup({ enemies: [foe({ hp: 100, rise: 50 })] })); zb.applyStatus(zb.enemies[0], 'burn', 2); zb.kill(zb.enemies[0]);
+  assert(zb.enemies[0].dead, 'płonący nie wstaje');
+  const a = new Fight(setup({ enemies: [foe({ hp: 100000, audit: 60 }), foe({ hp: 100000 })] }));
+  for (const e of a.enemies) { a.applyStatus(e, 'burn', 5); a.applyStatus(e, 'poison', 5); e.burnT = e.poisonT = 1e9; }
+  for (let i = 0; i <= 60; i++) a.step();
+  assert(a.enemies.every(e => e.burn === 0 && e.poison === 0) && a.enemies[0].shieldHits >= 1, 'Audyt czyści i daje tarczę');
+});
+
+test('cechy elit: wampiryzm, wybuch po śmierci, regeneracja, odporność, szybkość', () => {
+  const run = fresh({ mode: 'full' }); run.round = 3;
+  for (const a of Object.keys(D.AFFIXES)) assert(D.AFFIXES[a].name && D.AFFIXES[a].text, 'opis ' + a);
+  const v = new Fight(setup({ hp: 1000, enemies: [foe({ hp: 1000, atk: 20, aspd: 100, vamp: 50 })] })); v.enemies[0].hp = 500;
+  for (let i = 0; i < 12; i++) v.step(); assert(v.enemies[0].hp > 500 - v.dealt + 5, 'wampir się leczy');
+  const x = new Fight(setup({ enemies: [foe({ hp: 10, atk: 10, explode: 200 })] })); const hp0 = x.hp; x.enemies[0].hp = 0; x.kill(x.enemies[0]);
+  assert(x.hp < hp0 - 10, 'wybuch po śmierci rani bohatera');
+  const g = new Fight(setup({ enemies: [foe({ hp: 1000, atk: 1, aspd: 10, regenPct: 2 })] })); g.enemies[0].hp = 100;
+  for (let i = 0; i < 10; i++) g.step(); assert(g.enemies[0].hp > 100 - g.dealt, 'regeneracja');
+  const e = R.buildSetup(run).enemies[0]; assert(e.elite && e.affixes.length === 1, 'elita na Garnku 0 ma 1 cechę');
+});
+
+test('Odznaki: Pracownik Miesiąca, Parasol, Nadgodziny, Nagana, BHP, Fundusz; wydarzenia Automat, Kontrakt, Kapliczka', () => {
+  const lo = badges => ({ badges, skills: [sk('granat')] });
+  const f = new Fight(setup({ lo: lo(['pracownik-miesiaca']) })); eq(f.skills[0].cd, 0, 'gotowa od startu');
+  const p = new Fight(setup({ lo: lo(['parasol-ochronny']), enemies: [foe({ hp: 100000, atk: 5, aspd: 300 })] }));
+  for (let i = 0; i < 25; i++) p.step(); assert(p.taken > 0 && p.parasol === 0, 'Parasol zużyty');
+  const p2 = new Fight(setup({ enemies: [foe({ hp: 100000, atk: 5, aspd: 300 })] })); for (let i = 0; i < 25; i++) p2.step(); assert(p2.taken > p.taken, 'Parasol blokuje 3 ciosy');
+  const o = new Fight(setup({ lo: lo(['nadgodziny']), enemies: [foe({ hp: 100000, atk: 0, aspd: 1 })] })); o.tick = 200; const d1 = o.heroHit(o.enemies[0], 100, false, 'atk'); o.tick = 10; const d0 = o.heroHit(o.enemies[0], 100, false, 'atk');
+  assert(d1 > d0, 'Nadgodziny po 20 s');
+  const S = heroStats(loadout({ badges: ['bhp', 'nagana-z-wpisem', 'fundusz-socjalny', 'awans'] }));
+  eq([S.healBonus, S.critBleed, S.restBonus, S.restDisc, S.maxHp, S.atk], [10, 2, 20, 1, 77, 9], 'statystyki Odznak');
+  // Automat
+  const a = fresh(); a.coins = 5; a.offer = ['automat-z-pasza', 'ziarno-mocy', 'twardy-grzebien', 'szybki-dziob'];
+  const ra = R.pickTile(a, 0); assert(ra.ok && ra.automat.length === 2 && a.coins === 0 && ra.automat.every(id => D.TILE_BY_ID[id].type === 'stat' && a.tiles.includes(id)), 'Automat: 2 statystyki za 5 Ziaren');
+  const a2 = fresh(); a2.coins = 4; a2.offer = ['automat-z-pasza', 'ziarno-mocy', 'twardy-grzebien', 'szybki-dziob']; eq(R.pickTile(a2, 0).code, 'coins', 'Automat bez Ziaren');
+  // Kontrakt
+  const c = fresh(); c.offer = ['kontrakt-hr', 'ziarno-mocy', 'twardy-grzebien', 'szybki-dziob']; R.pickTile(c, 0);
+  assert(c.phase === 'event' && c.pending.kind === 'contract', 'okno kontraktu');
+  const atk0 = R.statsOf(c).atk; assert(R.choose(c, 0).ok && R.statsOf(c).atk > atk0 && R.statsOf(c).coinFlat === -2 && c.phase === 'fight', 'etat');
+  const c2 = fresh(); c2.offer = ['kontrakt-hr', 'ziarno-mocy', 'twardy-grzebien', 'szybki-dziob']; R.pickTile(c2, 0); R.choose(c2, 1);
+  assert(c2.coins === 15 && R.statsOf(c2).maxHp < 70, 'B2B');
+  // Kapliczka
+  const k = fresh(); k.hp = 10; k.offer = ['kapliczka', 'ziarno-mocy', 'twardy-grzebien', 'szybki-dziob']; R.pickTile(k, 0);
+  assert(k.phase === 'event' && k.pending.kind === 'shrine' && D.BADGES[k.pending.badge], 'Kapliczka z Odznaką');
+  assert(R.view(k).pending.badge === k.pending.badge, 'widok pokazuje Odznakę');
+  R.choose(k, 0); eq(k.hp, R.statsOf(k).maxHp, 'pełne leczenie');
+  const k2 = fresh(); k2.offer = ['kapliczka', 'ziarno-mocy', 'twardy-grzebien', 'szybki-dziob']; R.pickTile(k2, 0); const bb = k2.pending.badge; R.choose(k2, 1); eq(k2.badges, [bb], 'Odznaka z Kapliczki');
+  eq(R.choose(k2, 0).code, 'phase', 'tylko raz');
+});
+
 test('walka: tarcza Sortownika, szarża Wózka (telegraf, przerwanie ogłuszeniem), Mysz w roju', () => {
   let a = play(setup({ enemies: [foe({ hp: 60, atk: 1, aspd: 20, shieldHits: 3 })] }));
   assert(evs(a.ev, 'shield').length === 3, 'pochłania 3 ciosy');
@@ -491,7 +548,10 @@ test('run: walka → nagrody, leczenie, następna runda; bonus po bossie; zwyci�
   const b = fresh(); b.round = 6; b.tiles = Array(8).fill('twardy-grzebien'); b.hp = R.statsOf(b).maxHp;
   for (const t of ['ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy']) b.tiles.push(t);
   b.hp = R.statsOf(b).maxHp; b.phase = 'fight'; b.fight = {}; const bo = R.fightFinish(b, []);
-  assert(bo.ok && bo.result.win && bo.boss === 'brojler' && bo.bonus && b.phase === 'bonus' && b.offer.length === 3, 'bonus po bossie: 3 kafelki');
+  assert(bo.ok && bo.result.win && bo.boss === 'brojler' && bo.badge && b.phase === 'badge' && b.pending.offer.length === 3 && b.pending.bonus, 'po bossie najpierw Odznaka');
+  assert(R.choose(b, 7).code === 'index', 'zła Odznaka');
+  const bdg = b.pending.offer[1]; assert(R.choose(b, 1).ok && b.badges[0] === bdg && b.stats.badges === 1, 'Odznaka zapisana');
+  assert(b.phase === 'bonus' && b.offer.length === 3, 'bonus po bossie: 3 kafelki');
   assert(b.offer.every(id => D.TILE_BY_ID[id].rarity >= 1 && !D.TILE_BY_ID[id].event), 'rzadkie lub lepsze, bez wydarzeń');
   assert(b.coins === 6 && b.stats.bossKills.includes('brojler'), 'boss daje 6 Ziaren');
   assert(R.bonusPick(b, 0, 0).ok && b.phase === 'offer' && b.round === 7, 'po bonusie runda 7');
@@ -506,8 +566,9 @@ test('run: pełna partia botem (zawsze 1. kafelek, bez umiejętności) kończy s
     const run = fresh({ mode, garnek, seed: 99 + garnek });
     let guard = 0;
     while (run.phase !== 'over' && guard++ < 300) {
-      if (run.phase === 'offer') { const r = R.pickTile(run, 0, 0); if (r.err) R.pickTile(run, 0, 0); if (run.phase === 'offer' && run.pending == null) { const k = tileIdx(run, t => t.type === 'stat'); R.pickTile(run, k < 0 ? 0 : k); } }
-      else if (run.phase === 'event') { run.pending.kind === 'shop' ? R.shopBuy(run, -1) : R.bet(run, 0); }
+      if (run.phase === 'offer') { const r = R.pickTile(run, 0, 0, 1); if (r.err) R.pickTile(run, 1, 0, 1); if (run.phase === 'offer' && run.pending == null) { const k = tileIdx(run, t => t.type === 'stat'); R.pickTile(run, k < 0 ? 0 : k); } }
+      else if (run.phase === 'event') { const k = run.pending.kind; k === 'shop' ? R.shopBuy(run, -1) : k === 'gamble' ? R.bet(run, 0) : R.choose(run, 2); }
+      else if (run.phase === 'badge') R.choose(run, 0);
       else if (run.phase === 'bonus') { if (R.bonusPick(run, 0, 0).err) R.bonusPick(run, 0, 0); }
       else if (run.phase === 'fight') { R.fightSetup(run); R.fightFinish(run, []); }
       assert(run.coins >= 0 && run.hp >= 0, 'liczby nieujemne');
@@ -520,9 +581,11 @@ test('run: pełna partia botem (zawsze 1. kafelek, bez umiejętności) kończy s
 });
 test('run: poziomy Garnka (elitarni wrogowie, premie bossów, brak regeneracji), Zakazana Pasza wzmacnia następnego bossa raz', () => {
   const r0 = fresh({ mode: 'full' }), r2 = fresh({ mode: 'full', garnek: 2 });
-  r0.round = r2.round = 3; assert(!R.view(r0).elite && R.view(r2).elite, 'elitarny wróg w rundzie 3 od Garnka 2');
-  const e0 = R.buildSetup(r0).enemies[0], e2 = R.buildSetup(r2).enemies[0];
-  assert(e2.elite && e2.name.startsWith('Elitarny ') && e2.hp > e0.hp, 'elita ma więcej życia');
+  r0.round = r2.round = 3; assert(R.view(r0).elite && R.view(r2).elite, 'elitarny wróg w rundzie 3 od Garnka 0');
+  eq([R.view(r0).affixes.length, R.view(r2).affixes.length], [1, 2], 'Garnek 2: elita ma 2 cechy');
+  const e2 = R.buildSetup(r2).enemies[0], r4 = fresh({ mode: 'full' }); r4.round = 4; const e0 = R.buildSetup(r4).enemies[0];
+  assert(e2.elite && e2.name.startsWith('Elitarny ') && e2.affixes.length === 2, 'elita z cechami');
+  eq(JSON.stringify(R.buildSetup(r2).enemies[0]), JSON.stringify(e2), 'cechy elity deterministyczne');
   const g4 = fresh({ garnek: 4 }), g0 = fresh(); g4.round = g0.round = 6;
   assert(R.buildSetup(g4).enemies[0].aspd === Math.floor(D.BOSSES.brojler.aspd * 120 / 100) && R.buildSetup(g0).enemies[0].aspd === D.BOSSES.brojler.aspd, 'Garnek 4: boss +20% tempa');
   const g5 = fresh({ garnek: 5 }); assert(R.loadoutOf(g5).noRegen === true && heroStats(R.loadoutOf(g5)).regen === 0, 'Garnek 5: bez regeneracji');
@@ -600,8 +663,10 @@ test('historia gier: pełny dziennik rund i podsumowanie, ostatnie 30, trasa his
   let guard = 0;
   while (r.run.phase !== 'over' && guard++ < 100) {
     const ph = r.run.phase;
-    if (ph === 'offer') r = (await post(o, 'pick', { pl: PL, i: 0, slot: 0 })).j;
-    else if (ph === 'event') r = (await post(o, r.run.pending.kind === 'shop' ? 'shop' : 'bet', { pl: PL, i: -1, amount: 0 })).j;
+    const pi = Math.max(0, r.run.offer.findIndex(id => id && id !== 'automat-z-pasza'));
+    if (ph === 'offer') r = (await post(o, 'pick', { pl: PL, i: pi, slot: 0, mut: 1 })).j;
+    else if (ph === 'badge') r = (await post(o, 'choose', { pl: PL, i: 0 })).j;
+    else if (ph === 'event') { const kd = r.run.pending.kind; r = (await post(o, kd === 'shop' ? 'shop' : kd === 'gamble' ? 'bet' : 'choose', { pl: PL, i: kd === 'shop' ? -1 : 2, amount: 0 })).j; }
     else if (ph === 'bonus') r = (await post(o, 'bonus', { pl: PL, i: 0, slot: 0 })).j;
     else { await post(o, 'fightstart', { pl: PL }); r = (await post(o, 'fightfinish', { pl: PL, inputs: [] })).j; }
   }
@@ -673,7 +738,7 @@ test('profil: odblokowania postaci i kafelków, liczniki, najlepszy wynik, kolej
   const rich = fresh(); rich.ended = 'lose'; rich.coins = 31; rich.phase = 'over'; onRunEnd(p, rich); onRunEnd(p, rich); evaluate(p, null); assert(p.tiles.includes('hazard-w-kurniku'), 'Hazard: porażka z >30 Ziarnami');
   p.counters.fox = 3; evaluate(p, null); assert(p.tiles.includes('szklane-skrzydlo'), 'Szklane Skrzydło: 3 runy z Paktem');
   assert(p.tiles.includes('tajemnicza-skrzynka'), 'Skrzynka: 5 zakończonych runów');
-  const nr = fresh(); nr.stats.tankWin = true; nr.stats.maxCoins = 40; nr.stats.muts = 1; nr.stats.maxBurn = 250; nr.stats.freezes = 8; nr.stats.richBoss = true; evaluate(p, nr);
+  const nr = fresh(); nr.stats.tankWin = true; nr.stats.maxCoins = 40; nr.stats.muts = 1; nr.stats.maxBurn = 250; nr.stats.freezes = 8; nr.stats.richBoss = true; nr.stats.badges = 3; evaluate(p, nr);
   assert(['garnek-cisnieniowy', 'szron', 'premia-kwartalna'].every(id => p.tiles.includes(id)), 'Garnek, Szron, Premia Kwartalna');
   assert(['kogucia-kontra', 'dziobanie-premii', 'egzekucja-ostroga'].every(id => p.tiles.includes(id)), 'Kontra, Premia, Egzekucja');
   assert(p.unlocked.length === D.UNLOCKS.length, 'wszystkie odblokowania sprawdzalne');
@@ -703,8 +768,10 @@ test('BgPlayer: start, wybór, walka, koniec runu, odblokowania, ranking; błęd
   let guard = 0;
   while (r.j.run.phase !== 'over' && guard++ < 100) {
     const ph = r.j.run.phase;
-    if (ph === 'offer') r = await post(o, 'pick', { pl: PL, i: 0, slot: 0 });
-    else if (ph === 'event') r = await post(o, r.j.run.pending.kind === 'shop' ? 'shop' : 'bet', { pl: PL, i: -1, amount: 0 });
+    const pi = Math.max(0, r.j.run.offer.findIndex(id => id && id !== 'automat-z-pasza'));
+    if (ph === 'offer') r = await post(o, 'pick', { pl: PL, i: pi, slot: 0, mut: 1 });
+    else if (ph === 'badge') r = await post(o, 'choose', { pl: PL, i: 0 });
+    else if (ph === 'event') { const kd = r.j.run.pending.kind; r = await post(o, kd === 'shop' ? 'shop' : kd === 'gamble' ? 'bet' : 'choose', { pl: PL, i: kd === 'shop' ? -1 : 2, amount: 0 }); }
     else if (ph === 'bonus') r = await post(o, 'bonus', { pl: PL, i: 0, slot: 0 });
     else { const fs = await post(o, 'fightstart', { pl: PL }); assert(fs.j.setup && fs.j.setup.seed, 'setup z ziarnem walki'); r = await post(o, 'fightfinish', { pl: PL, inputs: [] }); assert(r.j.result, 'wynik walki'); }
     assert(r.status === 200 || r.status === 409, 'status ' + r.status);
@@ -733,10 +800,11 @@ test('BgPlayer: pokonanie bossa zwraca jego id, zapisuje w profilu i odblokowuje
   await st.put('run', run);
   const fs = await post(o, 'fightstart', { pl: PL }); assert(fs.j.setup.boss === 'brojler', 'boss w rundzie 6');
   const r = await post(o, 'fightfinish', { pl: PL, inputs: [[40, 0]] });
-  assert(r.j.ok && r.j.result.win && r.j.boss === 'brojler' && r.j.bonus, 'odpowiedź zawiera boss i bonus');
+  assert(r.j.ok && r.j.result.win && r.j.boss === 'brojler' && r.j.badge && r.j.run.phase === 'badge' && r.j.run.pending.offer.length === 3, 'odpowiedź zawiera bossa i Odznakę');
   assert(r.j.profile.bosses.brojler === 1, 'licznik pokonanych bossów w profilu');
   assert(r.j.unlocks && r.j.unlocks.some(u => u.target === 'unik-skrzydlem') && r.j.profile.tiles.includes('unik-skrzydlem'), 'odblokowanie Uniku Skrzydłem');
-  assert(r.j.run.phase === 'bonus' && r.j.run.offer.length === 3, 'faza bonusowa');
+  const cb = await post(o, 'choose', { pl: PL, i: 0 });
+  assert(cb.j.ok && cb.j.run.badges.length === 1 && cb.j.run.phase === 'bonus' && cb.j.run.offer.length === 3, 'Odznaka, potem faza bonusowa');
 });
 test('BgPlayer: żądania jednego gracza wykonują się po kolei (bez zgubionych zapisów)', async () => {
   const env = mkEnv(), o = new BgPlayer({ storage: mkStorage() }, env);
@@ -780,8 +848,10 @@ test('Worker: Bulgot wymaga sesji PL3Y i nicka gracza, cały przebieg przez /api
   let guard = 0;
   while (r.j.run.phase !== 'over' && guard++ < 100) {
     const ph = r.j.run.phase;
-    if (ph === 'offer') r = await api(env, '/api/bg/pick', { pt, i: 0, slot: 0 }, o);
-    else if (ph === 'event') r = await api(env, r.j.run.pending.kind === 'shop' ? '/api/bg/shop' : '/api/bg/bet', { pt, i: -1, amount: 0 }, o);
+    const pi = Math.max(0, r.j.run.offer.findIndex(id => id && id !== 'automat-z-pasza'));
+    if (ph === 'offer') r = await api(env, '/api/bg/pick', { pt, i: pi, slot: 0, mut: 1 }, o);
+    else if (ph === 'badge') r = await api(env, '/api/bg/choose', { pt, i: 0 }, o);
+    else if (ph === 'event') { const kd = r.j.run.pending.kind; r = await api(env, kd === 'shop' ? '/api/bg/shop' : kd === 'gamble' ? '/api/bg/bet' : '/api/bg/choose', { pt, i: kd === 'shop' ? -1 : 2, amount: 0 }, o); }
     else if (ph === 'bonus') r = await api(env, '/api/bg/bonus', { pt, i: 0, slot: 0 }, o);
     else { await api(env, '/api/bg/fightstart', { pt }, o); r = await api(env, '/api/bg/fightfinish', { pt, inputs: [] }, o); }
   }

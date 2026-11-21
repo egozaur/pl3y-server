@@ -27,6 +27,7 @@ const CHECKS = {
   'u-garnek': (p, r) => !!r && (r.stats.maxBurn || 0) >= 250,
   'u-szron': (p, r) => !!r && (r.stats.freezes || 0) >= 8,
   'u-premiakw': (p, r) => !!r && !!r.stats.richBoss,
+  'u-kontrakt': (p, r) => !!r && (r.stats.badges || 0) >= 3,
   'u-kontra': (p, r) => !!r && !!r.stats.tankWin,
   'u-premia': (p, r) => !!r && r.stats.maxCoins >= 40,
   'u-egzekucja': (p, r) => !!r && (r.stats.muts || 0) > 0,

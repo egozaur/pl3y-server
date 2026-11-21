@@ -1,6 +1,6 @@
 // Bulgot: liczenie statystyk bohatera z postaci i kafelków. Czysta funkcja, bez losowości.
 // loadout = { char, tiles: [id...], skills: [{id,lvl}], coins, bonusAtk, noRegen }; opt.off = indeks kafelka wyłączonego (Skubanie).
-import { CHARS, TILE_BY_ID, MILESTONES, MILESTONE_EVERY } from './data.js';
+import { CHARS, TILE_BY_ID, MILESTONES, MILESTONE_EVERY, BADGES } from './data.js';
 
 export function setCounts(tileIds) {
   const c = {};
@@ -16,6 +16,7 @@ export function heroStats(loadout, opt = {}) {
   const ids = loadout.tiles.filter((_, i) => i !== opt.off);
   const has = id => ids.includes(id);
   for (const id of ids) { const t = TILE_BY_ID[id]; if (t && t.fx) for (const f of t.fx) add(f.k, f.v); }
+  for (const b of (loadout.badges || [])) { const d = BADGES[b]; if (d) for (const f of d.fx) add(f.k, f.v); }
   const sc = setCounts(ids);
   // progi statystyk (co 3 kopie)
   const cnt = {}; for (const id of ids) cnt[id] = (cnt[id] || 0) + 1;
@@ -63,6 +64,7 @@ export function heroStats(loadout, opt = {}) {
     burnPct: acc.burnPct || 0, poisonPct: acc.poisonPct || 0, burnMax: acc.burnMax || 0, stDur: acc.stDur || 0, freezePct: acc.freezePct || 0,
     frostNeed: acc.frostNeed || 0, shatter: acc.shatter || 0, spreadPct: acc.spreadPct || 0, burnHeal: acc.burnHeal || 0,
     pressure: acc.pressure || 0, vsCold: acc.vsCold || 0, frostThorns: acc.frostThorns || 0, frostSlow: acc.frostSlow || 0, eggPoison: acc.eggPoison || 0,
+    firstReady: !!acc.firstReady, overtime: acc.overtime || 0, healBonus: acc.healBonus || 0, critBleed: acc.critBleed || 0, restBonus: acc.restBonus || 0, parasol: acc.parasol || 0,
     startBurn: acc.startBurn || 0, startFrost: acc.startFrost || 0, cdPct: Math.min(50, acc.cdPct || 0),
     // ekonomia (liczona w rules.js)
     freeReroll: acc.freeReroll || 0, noSteal: !!acc.noSteal, bossCoins: acc.bossCoins || 0, restDisc: acc.restDisc || 0, buyDisc: acc.buyDisc || 0, interest: acc.interest || 0,

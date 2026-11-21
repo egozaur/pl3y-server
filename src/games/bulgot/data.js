@@ -182,6 +182,11 @@ export const TILES = [
   { id: 'tajemnicza-skrzynka', name: 'Tajemnicza Skrzynka', type: 'risk', rarity: 1, repeat: true, event: 'skrzynka', lock: 'u-skrzynka', text: 'Losowy kafelek epicki, ale 25% szans na pułapkę (-15% Życia)', flavor: 'Kto otwiera nieznane skrzynki, ten kończy w rosole albo w legendach.' },
   { id: 'sklepik-babci-kwoki', name: 'Sklepik Babci Kwoki', type: 'risk', rarity: 0, repeat: true, event: 'sklepik', text: 'Wydarzenie: kupujesz 1 z 3 kafelków za Ziarna', flavor: 'Babcia nie bierze kart. Babcia bierze ziarno.' },
   { id: 'hazard-w-kurniku', name: 'Hazard w Kurniku', type: 'risk', rarity: 0, repeat: true, event: 'hazard', lock: 'u-hazard', text: 'Wydarzenie: stawiasz Ziarna, 50% podwajasz, 50% tracisz', flavor: 'Zasady proste: dom zawsze wygrywa. Dom to kurnik.' },
+  { id: 'automat-z-pasza', name: 'Automat z Paszą', type: 'risk', rarity: 0, repeat: true, event: 'automat', text: 'Wydarzenie: wrzucasz 5 Ziaren, wypadają 2 losowe kafelki statystyk', flavor: 'Czasem zwraca resztę. Czasem nie.' },
+  { id: 'kontrakt-hr', name: 'Kontrakt z Działem HR', type: 'risk', rarity: 1, repeat: true, event: 'kontrakt', lock: 'u-kontrakt', text: 'Wydarzenie: podpisujesz etat (+Atak, mniej Ziaren) albo B2B (Ziarna teraz, mniej Życia)', flavor: 'Drobnym drukiem: „dusza w cenie”.' },
+  { id: 'kapliczka', name: 'Kapliczka Świętego Rosołu', type: 'risk', rarity: 1, repeat: true, event: 'kapliczka', text: 'Wydarzenie: pełne uleczenie albo Odznaka do wyboru', flavor: 'Ktoś zostawił tu marchewkę. I pietruszkę.' },
+  { id: 'umowa-etat', name: 'Umowa o Pracę', type: 'risk', rarity: 1, hidden: true, text: '+30% Ataku, -2 Ziarna po każdej rundzie', fx: [{ k: 'atkPct', v: 30 }, { k: 'coinFlat', v: -2 }], flavor: 'Etat, karta Multisport i wieczna lojalność.' },
+  { id: 'umowa-b2b', name: 'Umowa B2B', type: 'risk', rarity: 1, hidden: true, text: '-15% maks. Życia (w zamian za 15 Ziaren od ręki)', fx: [{ k: 'hpPct', v: -15 }], flavor: 'Sam sobie sterem, żeglarzem i ZUS-em.' },
   { id: 'zakazana-pasza', name: 'Zakazana Pasza', type: 'risk', rarity: 3, lock: 'u-pasza', text: '+25% wszystkich statystyk, ale następny boss ma +30% Życia', fx: [{ k: 'allPct', v: 25 }], flavor: 'Smakuje jak moc. Kosztuje jak rachunek.' },
 ];
 // ---------- Wylęgarnia: przedmioty wyklute z dwóch innych ----------
@@ -237,12 +242,13 @@ export const UNLOCKS = [
   { id: 'u-garnek', kind: 'tile', target: 'garnek-cisnieniowy', text: 'Zadaj 250 obrażeń Oparzeniem w jednej walce' },
   { id: 'u-szron', kind: 'tile', target: 'szron', text: 'Zamroź 8 wrogów w jednym runie' },
   { id: 'u-premiakw', kind: 'tile', target: 'premia-kwartalna', text: 'Pokonaj bossa, mając co najmniej 30 Ziaren' },
+  { id: 'u-kontrakt', kind: 'tile', target: 'kontrakt-hr', text: 'Zdobądź 3 Odznaki w jednym runie' },
   { id: 'u-hazard', kind: 'tile', target: 'hazard-w-kurniku', text: 'Przegraj run z ponad 30 Ziarnami w kieszeni' },
 ];
 export const UNLOCK_BY_ID = Object.fromEntries(UNLOCKS.map(u => [u.id, u]));
 
 // Kafelki dostępne od początku (bez blokady).
-export const STARTER_TILES = TILES.filter(t => !t.lock && !t.hatched).map(t => t.id);
+export const STARTER_TILES = TILES.filter(t => !t.lock && !t.hatched && !t.hidden).map(t => t.id);
 
 // ---------- Wrogowie ----------
 // hp/atk to wartości bazowe w rundzie 1; skalowane mnożnikiem rundy (rules.js). aspd w % (100 = 1 cios/s).
@@ -256,6 +262,9 @@ export const ENEMIES = {
   'jajo-sortownik': { id: 'jajo-sortownik', name: 'Jajo-Sortownik', zone: 2, hp: 60, atk: 5, aspd: 90, armor: 8, evade: 0, crit: 0, shieldHits: 3, art: 'robot', text: 'Tarcza pochłania pierwsze 3 ciosy.' },
   'kot-ochroniarz': { id: 'kot-ochroniarz', name: 'Kot Ochroniarz', zone: 2, hp: 39, atk: 6, aspd: 130, armor: 2, evade: 25, crit: 25, art: 'cat', text: 'Wysoki unik i krytyk.' },
   'ksiegowy-kanarek': { id: 'ksiegowy-kanarek', name: 'Księgowy Kanarek', zone: 2, hp: 37, atk: 5, aspd: 100, armor: 0, evade: 0, crit: 0, steal: { n: 1, max: 99 }, art: 'canary', text: 'Każdy cios zabiera Ziarno.' },
+  'kaczka-podpalaczka': { id: 'kaczka-podpalaczka', name: 'Kaczka Podpalaczka', zone: 0, hp: 22, atk: 2, aspd: 100, armor: 0, evade: 0, crit: 0, ignite: 40, art: 'duck', text: 'Jej ciosy cię podpalają: Oparzenie co sekundę.' },
+  'kurczak-z-zamrazarki': { id: 'kurczak-z-zamrazarki', name: 'Kurczak z Zamrażarki', zone: 1, hp: 52, atk: 6, aspd: 80, armor: 2, evade: 0, crit: 0, rise: 50, resist: ['frost'], art: 'zombie', text: 'Odporny na Mróz. Po śmierci wstaje z połową Życia, chyba że płonie.' },
+  'sep-audytor': { id: 'sep-audytor', name: 'Sęp Audytor', zone: 2, hp: 55, atk: 6, aspd: 90, armor: 4, evade: 0, crit: 0, audit: 60, art: 'vulture', text: 'Co 6 s Audyt: zdejmuje efekty z sojuszników i dostaje tarczę na 2 ciosy.' },
   'pisklak-stazysta': { id: 'pisklak-stazysta', name: 'Pisklak-stażysta', zone: 0, hp: 9, atk: 2, aspd: 100, armor: 0, evade: 0, crit: 0, minion: true, art: 'intern', text: 'Pracuje za darmo i za nic.' },
 };
 
@@ -268,11 +277,39 @@ export const BOSSES = {
     text: 'Nietykalny, dopóki żyją Ochroniarze. Potem Restrukturyzacja i Wrzący Garnek.', quote: 'Padł Prezes, a z nim upadł cały cennik.' },
 };
 
+// ---------- Cechy elitarnych wrogów ----------
+export const AFFIXES = {
+  opancerzony: { name: 'Opancerzony', text: '+15 Pancerza i tarcza na 2 ciosy' },
+  wampiryczny: { name: 'Wampiryczny', text: 'Leczy się o połowę zadanych obrażeń' },
+  wybuchowy: { name: 'Wybuchowy', text: 'Po śmierci wybucha za 200% swojego Ataku' },
+  ognioodporny: { name: 'Ognioodporny', text: 'Odporny na Oparzenie i Salmonellę' },
+  mrozny: { name: 'Mroźny', text: 'Odporny na Mróz, jego ciosy spowalniają' },
+  szybki: { name: 'Szybki', text: '+40% tempa ataku' },
+  regenerujacy: { name: 'Regenerujący', text: 'Odnawia 2% maks. Życia na sekundę' },
+};
+
+// ---------- Odznaki Pracownicze (nagroda za bossa i elitę; pasywne, nie zajmują miejsca) ----------
+export const BADGES = {
+  'pracownik-miesiaca': { name: 'Pracownik Miesiąca', text: 'Umiejętność w 1. slocie jest gotowa od początku walki', fx: [{ k: 'firstReady', v: 1 }] },
+  'nadgodziny': { name: 'Nadgodziny', text: 'Po 20 s walki +25% obrażeń', fx: [{ k: 'overtime', v: 25 }] },
+  'bhp': { name: 'Szkolenie BHP', text: '+10% maks. Życia, leczenie po rundzie +10 pkt proc.', fx: [{ k: 'hpPct', v: 10 }, { k: 'healBonus', v: 10 }] },
+  'delegacja': { name: 'Delegacja', text: '+1 darmowy reroll w każdej rundzie, +1 Ziarno po rundzie', fx: [{ k: 'freeReroll', v: 1 }, { k: 'coinFlat', v: 1 }] },
+  'team-building': { name: 'Team Building', text: 'Umiejętności mają o 15% krótszy cooldown', fx: [{ k: 'cdPct', v: 15 }] },
+  'karta-multisport': { name: 'Karta Multisport', text: '+3 Regeneracji / s, +5% uniku', fx: [{ k: 'regen', v: 3 }, { k: 'evade', v: 5 }] },
+  'awans': { name: 'Awans', text: '+20% Ataku', fx: [{ k: 'atkPct', v: 20 }] },
+  'kawa-z-ekspresu': { name: 'Kawa z Ekspresu', text: '+15% tempa ataku', fx: [{ k: 'aspdPct', v: 15 }] },
+  'nagana-z-wpisem': { name: 'Nagana z Wpisem', text: '+10% szansy na trafienie krytyczne; krytyki nakładają 2 stosy Krwawienia', fx: [{ k: 'crit', v: 10 }, { k: 'critBleed', v: 2 }] },
+  'fundusz-socjalny': { name: 'Fundusz Socjalny', text: 'Odpoczynek leczy 2 razy więcej i kosztuje 1 Ziarno mniej', fx: [{ k: 'restBonus', v: 20 }, { k: 'restDisc', v: 1 }] },
+  'klucz-do-serwerowni': { name: 'Klucz do Serwerowni', text: 'Efekty statusowe trwają 50% dłużej, Oparzenie i Salmonella +15% obrażeń', fx: [{ k: 'stDur', v: 50 }, { k: 'burnPct', v: 15 }, { k: 'poisonPct', v: 15 }] },
+  'parasol-ochronny': { name: 'Parasol Ochronny', text: 'Pierwsze 3 ciosy wrogów w każdej walce są zablokowane', fx: [{ k: 'parasol', v: 3 }] },
+};
+export const BADGE_OFFER = 3;
+
 // ---------- Temperatura Garnka (poziomy trudności) ----------
 export const GARNEK = [
   { name: 'Letni', text: 'Brak modyfikatorów.' },
   { name: 'Ciepły', text: 'Wrogowie mają +10% Życia.' },
-  { name: 'Gorący', text: 'Reroll droższy o 1 Ziarno, pojawiają się elitarni wrogowie.' },
+  { name: 'Gorący', text: 'Reroll droższy o 1 Ziarno, elitarni wrogowie mają 2 cechy.' },
   { name: 'Wrzący', text: 'Leczenie po rundzie spada z 35% do 20%.' },
   { name: 'Kipiący', text: 'Bossowie mają +20% tempa ataku.' },
   { name: 'Wulkan Rosołu', text: 'Wrogowie mają +15% Ataku, a regeneracja w walce jest wyłączona.' },
@@ -283,7 +320,7 @@ export function garnekMods(level) {
   return {
     enemyHp: L >= 1 ? 10 : 0,
     rerollExtra: L >= 2 ? 1 : 0,
-    elites: L >= 2,
+    elites: true, eliteAffixes: L >= 2 ? 2 : 1,
     healPct: L >= 3 ? 20 : RULES.healPct,
     bossAspd: L >= 4 ? 20 : 0,
     enemyAtk: L >= 5 ? 15 : 0,
