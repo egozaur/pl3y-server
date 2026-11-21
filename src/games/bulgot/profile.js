@@ -24,6 +24,9 @@ const CHECKS = {
   'u-skrzynka': p => p.counters.runs >= 5,
   'u-pasza': p => (p.bosses.skubarka || 0) > 0,
   'u-hazard': p => !!p.flags.loseRich,
+  'u-kontra': (p, r) => !!r && !!r.stats.tankWin,
+  'u-premia': (p, r) => !!r && r.stats.maxCoins >= 40,
+  'u-egzekucja': (p, r) => !!r && (r.stats.muts || 0) > 0,
 };
 
 // Sprawdza wszystkie odblokowania; zwraca listę świeżo odblokowanych wpisów UNLOCKS.

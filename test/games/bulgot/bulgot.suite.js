@@ -71,19 +71,21 @@ test('rng: ten sam seed daje ten sam ciąg, mix i hash są stabilne', () => {
 });
 
 // ---------- dane ----------
-test('dane: 31 kafelków (21 na start, 10 zablokowanych), spójne odwołania', () => {
-  assert(D.TILES.length === 31, '31 kafelków, jest ' + D.TILES.length);
-  assert(D.STARTER_TILES.length === 21, '21 na start, jest ' + D.STARTER_TILES.length);
-  assert(new Set(ALL).size === 31, 'unikalne id');
+test('dane: kafelki, umiejętności z Mutacjami, odblokowania, spójne odwołania', () => {
+  assert(D.TILES.length >= 39, 'co najmniej 39 kafelków, jest ' + D.TILES.length);
+  eq(D.STARTER_TILES.length, D.TILES.filter(t => !t.lock).length, 'na start = bez blokady');
+  assert(new Set(ALL).size === D.TILES.length, 'unikalne id');
   const by = t => D.TILES.filter(x => x.type === t).length;
-  eq([by('stat'), by('skill'), by('item'), by('risk')], [9, 6, 10, 6], 'podział na typy');
+  assert(by('skill') === Object.keys(D.SKILLS).length && by('skill') === 14, '14 umiejętności, każda ma kafelek');
+  for (const sk of Object.values(D.SKILLS)) assert(sk.muts && sk.muts.length === 2 && sk.muts.every(m => m.name && m.text), 'Mutacje ' + sk.id);
+  for (const t of D.TILES) for (const tg of (t.tags || [])) assert(D.ELEMENTS[tg], 'żywioł ' + t.id);
   for (const t of D.TILES) {
     assert(t.name && t.text && t.rarity >= 0 && t.rarity <= 3 && D.TYPES[t.type], 'pola ' + t.id);
     if (t.type === 'skill') assert(D.SKILLS[t.skill], 'umiejętność ' + t.id);
     if (t.set) assert(D.SETS[t.set], 'zestaw ' + t.id);
     if (t.lock) assert(D.UNLOCK_BY_ID[t.lock] && D.UNLOCK_BY_ID[t.lock].target === t.id, 'odblokowanie ' + t.id);
   }
-  assert(D.UNLOCKS.filter(u => u.kind === 'tile').length === 10, '10 kafelków do odblokowania');
+  eq(D.UNLOCKS.filter(u => u.kind === 'tile').length, D.TILES.filter(t => t.lock).length, 'każdy zablokowany kafelek ma odblokowanie');
   for (const u of D.UNLOCKS) assert(u.kind === 'char' ? D.CHARS[u.target] : D.TILE_BY_ID[u.target], 'cel ' + u.id);
   for (const c of Object.values(D.CHARS)) for (const [id] of c.startSkills) assert(D.SKILLS[id], 'start ' + c.id);
   for (const [m, M] of Object.entries(D.MODES)) for (const id of Object.values(M.bosses)) assert(D.BOSSES[id], 'boss ' + m);
@@ -269,6 +271,43 @@ test('efekty: krwawienie kumuluje się do 3 stosów (+bleedMax), walka z efektam
   eq(JSON.stringify(playS(s1, p).ev), JSON.stringify(playS(s1, p).ev), 'determinizm');
 });
 
+test('umiejętności: nowe (Chlust, Lodowy Dziób, Zgniłe Jajo, Darcie, Egzekucja, Premia) nakładają efekty', () => {
+  const big = () => foe({ hp: 100000, atk: 1, aspd: 10 });
+  const first = (id, lvl = 1, mut = 0, enemies = [big(), big()]) => { const f = new Fight(setup({ lo: { skills: [{ id, lvl, mut }] }, enemies })); f.skills[0].cd = 0; f.step([0]); return f; };
+  let f = first('chlust'); assert(f.enemies.every(e => e.burn === 3), 'Chlust: 3 Oparzenia na wszystkich');
+  f = first('chlust', 3, 1); assert(f.enemies.every(e => e.burn === 6), 'Kocioł: 6');
+  f = first('chlust', 3, 2); assert(f.enemies.every(e => e.stunUntil > 0), 'Rosół z Kością ogłusza');
+  f = first('lodowy'); eq([f.enemies[0].frost, f.enemies[1].frost], [2, 0], 'Lodowy Dziób: 2 Mrozu na celu');
+  f = first('lodowy', 3, 1); assert(f.enemies[0].frozenUntil > 0, 'Sopel zamraża');
+  f = first('lodowy', 3, 2); assert(f.enemies.every(e => e.frost === 2), 'Szron na wszystkich');
+  f = first('zgnile'); eq([f.enemies[0].poison, f.enemies[1].poison], [5, 1], 'Zgniłe Jajo');
+  f = first('zgnile', 3, 2); eq(f.enemies[0].poison, 12, 'Wylęg Bakterii podwaja (do limitu)');
+  f = first('darcie'); assert(f.enemies.every(e => e.bleed === 2), 'Darcie: 2 Krwawienia');
+  f = first('darcie', 3, 1); assert(f.enemies.every(e => e.bleed === 3) && f.bleedExtra === 2, 'Pierzasta Burza');
+  f = first('egzekucja', 1, 0, [foe({ hp: 1000 })]); const d1 = 1000 - f.enemies[0].hp;
+  const g = new Fight(setup({ lo: { skills: [sk('egzekucja')] }, enemies: [foe({ hp: 1000 })] })); g.enemies[0].hp = 200; g.skills[0].cd = 0; g.step([0]);
+  assert(200 - g.enemies[0].hp > d1 * 2.5, 'egzekucja poniżej 30% bije mocniej');
+  f = first('premia', 1, 0, [foe({ hp: 5 }), big()]); eq(f.coinsWon, 1, 'Premia: +1 Ziarno za zabójstwo');
+  f = first('premia', 3, 1, [foe({ hp: 5 }), big()]); eq(f.coinsWon, 2, 'Premia Roczna: +2');
+  f = first('grad', 3, 1, [big()]); assert(f.enemies[0].burn >= 1, 'Ognisty Grad');
+  f = first('granat', 3, 1, [big(), big()]); assert(f.enemies[1].hp < 100000, 'Granat Kasetowy trafia resztę');
+});
+
+test('umiejętności: Kontra zmniejsza obrażenia i oddaje, Kąpiel oślepia, Unik z Kontrą, Wściekłe Siano, Szał Krwi', () => {
+  const hitter = () => foe({ hp: 100000, atk: 6, aspd: 200 });
+  const run = (skills, n = 25) => { const f = new Fight(setup({ hp: 70, lo: { skills }, enemies: [hitter()] })); f.skills[0].cd = 0; for (let i = 0; i < n; i++) f.step(i === 0 ? [0] : []); return f; };
+  const base = run([sk('grad')]), kon = run([sk('kontra')]);
+  assert(kon.taken * 2 <= base.taken + 2 && kon.enemies[0].hp < 100000, 'Kontra: połowa obrażeń i oddawanie');
+  const kap = run([{ id: 'kapiel', lvl: 3, mut: 1 }]);
+  assert(kap.taken < base.taken, 'Kąpiel: mniej trafień');
+  const uk = run([{ id: 'unik', lvl: 3, mut: 1 }], 15); assert(uk.taken === 0 && uk.enemies[0].hp < 100000, 'Unik z Kontrą oddaje');
+  const z = new Fight(setup({ lo: { skills: [{ id: 'zagrzebanie', lvl: 3, mut: 2 }] }, enemies: [foe({ hp: 100000, atk: 1, aspd: 10 })] })); z.skills[0].cd = 0;
+  const ev = []; for (let i = 0; i < 40; i++) { z.step(i === 0 ? [0] : []); ev.push(...z.ev); }
+  assert(evs(ev, 'hit').filter(e => e.kind === 'atk').every(e => e.crit), 'Wściekłe Siano: same krytyki');
+  const sz = new Fight(setup({ lo: { skills: [{ id: 'dziobniecie', lvl: 3, mut: 1 }] }, enemies: [foe({ hp: 100000, atk: 1, aspd: 10 })] })); sz.skills[0].cd = 0;
+  for (let i = 0; i < 12; i++) sz.step(i === 0 ? [0] : []); assert(sz.enemies[0].bleed >= 2, 'Szał Krwi nakłada krwawienie');
+});
+
 test('walka: tarcza Sortownika, szarża Wózka (telegraf, przerwanie ogłuszeniem), Mysz w roju', () => {
   let a = play(setup({ enemies: [foe({ hp: 60, atk: 1, aspd: 20, shieldHits: 3 })] }));
   assert(evs(a.ev, 'shield').length === 3, 'pochłania 3 ciosy');
@@ -346,7 +385,10 @@ test('run: wybór kafelka (statystyki rosną z życiem), umiejętności: sloty, 
   force(run, 'dziobniecie-szalu'); const e = R.pickTile(run, 0); assert(e.code === 'slot' && run.phase === 'offer', 'pełne sloty proszą o wybór');
   assert(R.pickTile(run, 0, 1).ok && run.skills[1].id === 'dziobniecie' && run.skills[1].lvl === 1, 'zastąpienie slotu 1');
   force(run, 'kukurydziany-grad'); assert(R.pickTile(run, 0).ok && run.skills[0].lvl === 2, 'ta sama umiejętność = poziom 2');
-  force(run, 'kukurydziany-grad'); assert(!R.makeOffer(run, 5, { size: 30 }).includes('kukurydziany-grad'), 'poziom 2 nie wraca do ofert');
+  force(run, 'kukurydziany-grad'); const m0 = R.pickTile(run, 0); assert(m0.code === 'mut' && run.phase === 'offer', 'trzecia kopia prosi o Mutację');
+  assert(R.pickTile(run, 0, undefined, 3).code === 'mut', 'zła gałąź');
+  assert(R.pickTile(run, 0, undefined, 2).ok && run.skills[0].lvl === 3 && run.skills[0].mut === 2 && run.stats.muts === 1, 'Mutacja: gałąź 2');
+  force(run, 'kukurydziany-grad'); assert(!R.makeOffer(run, 5, { size: 60 }).includes('kukurydziany-grad'), 'zmutowana nie wraca do ofert');
   assert(R.pickTile(fresh(), 9).code === 'index', 'zły indeks');
   const pakt = fresh(); force(pakt, 'pakt-z-lisem'); R.pickTile(pakt, 0); assert(pakt.hp === Math.floor(70 * 70 / 100) && pakt.stats.fox === 1, 'Pakt zmniejsza życie od razu');
 });
@@ -540,7 +582,7 @@ test('nowe kafelki ofensywne: Ziarno Mocy +6 Ataku, Ostry Dziób +12% obrażeń'
 });
 // ---------- profil ----------
 test('profil: odblokowania postaci i kafelków, liczniki, najlepszy wynik, kolejny poziom Garnka', () => {
-  const p = newProfile(); eq(p.chars, ['pyrtek'], 'start'); assert(poolFor(p).length === 21, '21 kafelków na start');
+  const p = newProfile(); eq(p.chars, ['pyrtek'], 'start'); assert(poolFor(p).length === D.STARTER_TILES.length, 'kafelki startowe');
   const run = fresh();
   run.stats.riskPicks = 5; assert(evaluate(p, run).some(u => u.target === 'kaczor') && p.chars.includes('kaczor'), 'Kaczor: 5 kafelków ryzyka');
   run.stats.maxCoins = 100; evaluate(p, run); assert(p.tiles.includes('czterolistna-koniczyna'), 'Koniczyna: 100 Ziaren');
@@ -560,6 +602,8 @@ test('profil: odblokowania postaci i kafelków, liczniki, najlepszy wynik, kolej
   const rich = fresh(); rich.ended = 'lose'; rich.coins = 31; rich.phase = 'over'; onRunEnd(p, rich); onRunEnd(p, rich); evaluate(p, null); assert(p.tiles.includes('hazard-w-kurniku'), 'Hazard: porażka z >30 Ziarnami');
   p.counters.fox = 3; evaluate(p, null); assert(p.tiles.includes('szklane-skrzydlo'), 'Szklane Skrzydło: 3 runy z Paktem');
   assert(p.tiles.includes('tajemnicza-skrzynka'), 'Skrzynka: 5 zakończonych runów');
+  const nr = fresh(); nr.stats.tankWin = true; nr.stats.maxCoins = 40; nr.stats.muts = 1; evaluate(p, nr);
+  assert(['kogucia-kontra', 'dziobanie-premii', 'egzekucja-ostroga'].every(id => p.tiles.includes(id)), 'Kontra, Premia, Egzekucja');
   assert(p.unlocked.length === D.UNLOCKS.length, 'wszystkie odblokowania sprawdzalne');
 });
 

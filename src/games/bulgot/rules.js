@@ -92,11 +92,16 @@ export function rerollCost(run) {
 function setCoins(run, v) { run.coins = Math.max(0, v); if (run.coins > run.stats.maxCoins) run.stats.maxCoins = run.coins; }
 
 // Stosuje kafelek do runu (wybór z oferty, bonusu albo zakup). Zwraca null albo błąd.
-function applyTile(run, t, slot) {
+// mut = wybrana gałąź Mutacji (1 lub 2), wymagana przy trzeciej kopii umiejętności.
+function applyTile(run, t, slot, mut) {
   const before = statsOf(run).maxHp;
   if (t.type === 'skill') {
     const own = run.skills.find(s => s.id === t.skill);
-    if (own) own.lvl = Math.min(RULES.maxSkillLvl, own.lvl + 1);
+    if (own && own.lvl >= 2) {
+      if (own.lvl >= RULES.maxSkillLvl) return fail('Ta umiejętność jest już zmutowana.', 'maxed');
+      if (mut !== 1 && mut !== 2) return fail('Wybierz gałąź Mutacji.', 'mut');
+      own.lvl = 3; own.mut = mut; run.stats.muts = (run.stats.muts || 0) + 1;
+    } else if (own) own.lvl++;
     else if (run.skills.length < RULES.maxSkills) run.skills.push({ id: t.skill, lvl: 1 });
     else if (Number.isInteger(slot) && slot >= 0 && slot < run.skills.length) run.skills[slot] = { id: t.skill, lvl: 1 };
     else return fail('Wszystkie 3 sloty są zajęte. Wybierz slot do zastąpienia.', 'slot');
@@ -138,7 +143,7 @@ export function endRun(run, outcome) {
 }
 
 // ---------- Akcje gracza ----------
-export function pickTile(run, i, slot) {
+export function pickTile(run, i, slot, mut) {
   if (run.phase !== 'offer') return fail('Teraz nie wybierasz kafelka.', 'phase');
   const id = run.offer[i];
   const t = id && TILE_BY_ID[id];
@@ -156,13 +161,13 @@ export function pickTile(run, i, slot) {
     const epics = run.pool.map(x => TILE_BY_ID[x]).filter(x => x && x.rarity >= 2 && !x.event && tileAvailable(run, x));
     const prize = epics.length ? rr.pick(epics) : null;
     const note = { crate: { tile: prize ? prize.id : null, trap } };
-    if (prize) { const e = applyTile(run, prize, undefined); if (e) { if (e.code === 'slot') { /* pełne sloty: umiejętność z skrzynki zastępuje pierwszy slot */ applyTile(run, prize, 0); } } }
+    if (prize) { const e = applyTile(run, prize, undefined, 1); if (e && e.code === 'slot') applyTile(run, prize, 0, 1); }   // pełne sloty: umiejętność ze skrzynki zastępuje pierwszy slot; Mutacja ze skrzynki to zawsze gałąź 1
     if (trap) run.hp = Math.max(1, run.hp - Math.max(1, fl(statsOf(run).maxHp * 15 / 100)));
     run.stats.riskPicks++;
     enterFight(run);
     return { ok: true, ...note };
   }
-  const e = applyTile(run, t, slot);
+  const e = applyTile(run, t, slot, mut);
   if (e) return e;
   enterFight(run);
   return { ok: true, tile: t.id };
@@ -180,7 +185,7 @@ export function reroll(run) {
 
 // Dokupienie kafelka z bieżącej oferty za Ziarna (cena wg rzadkości). Wolny wybór zostaje: nie da się kupić ostatniego kafelka,
 // a wydarzeń (Sklepik, Hazard, Skrzynka) nie kupuje się. Kupiony kafelek znika z oferty (null).
-export function buyOffer(run, i, slot) {
+export function buyOffer(run, i, slot, mut) {
   if (run.phase !== 'offer') return fail('Teraz nie można nic dokupić.', 'phase');
   const id = run.offer[i], t = id && TILE_BY_ID[id];
   if (!t) return fail('Tego kafelka już nie ma w ofercie.', 'index');
@@ -188,7 +193,7 @@ export function buyOffer(run, i, slot) {
   if (run.offer.filter(x => x).length < 2) return fail('Musisz zostawić jeden kafelek do darmowego wyboru.', 'last');
   const price = shopPrice(t);
   if (run.coins < price) return fail('Za mało Ziaren: ten kafelek kosztuje ' + price + '.', 'coins');
-  const e = applyTile(run, t, slot);
+  const e = applyTile(run, t, slot, mut);
   if (e) return e;
   setCoins(run, run.coins - price);
   run.offer[i] = null; run.stats.buys = (run.stats.buys || 0) + 1; cur(run).bought.push(t.id);
@@ -210,14 +215,14 @@ export function rest(run) {
   return { ok: true, healed: run.hp - before, cost: RULES.restCost };
 }
 
-export function shopBuy(run, i, slot) {
+export function shopBuy(run, i, slot, mut) {
   if (run.phase !== 'event' || !run.pending || run.pending.kind !== 'shop') return fail('Nie jesteś w sklepiku.', 'phase');
   if (i === -1) { enterFight(run); return { ok: true, left: true }; }
   const t = TILE_BY_ID[run.pending.offer[i]];
   if (!t) return fail('Nie ma takiego towaru.', 'index');
   const price = shopPrice(t);
   if (run.coins < price) return fail('Babcia mówi: bez ziarna nie ma rozmowy.', 'coins');
-  const e = applyTile(run, t, slot);
+  const e = applyTile(run, t, slot, mut);
   if (e) return e;
   setCoins(run, run.coins - price);
   cur(run).bought.push(t.id);
@@ -238,11 +243,11 @@ export function bet(run, amount) {
   return { ok: true, bet: a, won };
 }
 
-export function bonusPick(run, i, slot) {
+export function bonusPick(run, i, slot, mut) {
   if (run.phase !== 'bonus') return fail('Teraz nie ma oferty bonusowej.', 'phase');
   const t = TILE_BY_ID[run.offer[i]];
   if (!t) return fail('Nie ma takiego kafelka.', 'index');
-  const e = applyTile(run, t, slot);
+  const e = applyTile(run, t, slot, mut);
   if (e) return e;
   if (run.log.length) run.log[run.log.length - 1].bonus = t.id;
   return nextRound(run);
@@ -328,7 +333,7 @@ export function fightFinish(run, inputs) {
     offer: c.offer, picked: c.picked, bought: c.bought, rerolls: c.rerolls, rested: c.rested || 0, event: c.event, bet: c.bet || null,
     hero: { maxHp: S.maxHp, atk: S.atk, aspd: S.aspd, armor: S.armor, crit: S.crit, evade: S.evade, regen: S.regen }, tiles: run.tiles.length, skills: run.skills.map(s => s.id + (s.lvl > 1 ? '*' : '')),
     coinsBefore, coinsAfter: run.coins, hpBefore, hpAfter: res.hp, win: res.win, ticks: res.ticks, dealt: res.dealt, taken: res.taken, maxHit: res.maxHit, skillsUsed: res.skillsUsed, stolen: res.stolen, revived: res.usedRevive, timeout: res.timeout });
-  setCoins(run, run.coins - Math.min(run.coins, res.stolen));
+  setCoins(run, run.coins - Math.min(run.coins, res.stolen) + (res.coinsWon || 0));
   if (res.usedRevive) run.flags.revived = true;
   if (setup.boss && run.flags.bossHpBonus) run.flags.bossHpBonus = 0;
   if (res.maxHit > run.stats.maxHit) run.stats.maxHit = res.maxHit;
@@ -342,6 +347,7 @@ export function fightFinish(run, inputs) {
   setCoins(run, run.coins + coins); out.reward = coins;
   run.hp = Math.min(S.maxHp, run.hp + fl(S.maxHp * gm.healPct / 100));
   if (res.hp * 10 < S.maxHp) run.stats.lowWin = true;
+  if (res.taken > S.maxHp) run.stats.tankWin = true;
   if (run.tiles.includes('siewnik')) run.flags.bonusAtk++;
   run.done++;
   run.timeBonus += fl(RULES.scoreTimeMax * Math.max(0, 600 - res.ticks) / (MODES[run.mode].rounds * 600));

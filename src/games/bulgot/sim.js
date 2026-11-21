@@ -23,8 +23,8 @@ export class Fight {
     this.S = heroStats(this.loadout);
     this.hp = Math.min(h.hp, this.S.maxHp);
     this.acc = 0;                                         // naładowanie ataku bohatera (1000 = cios)
-    this.skills = this.loadout.skills.map(s => ({ id: s.id, lvl: s.lvl, cd: fl(SKILLS[s.id].cd * 15 / 100), blockedUntil: 0 }));   // start z 15% cooldownu (nie zabija w 1. ticku, a umiejętność jest gotowa po ok. 1 s)
-    this.hasteUntil = 0; this.invulnUntil = 0; this.slowUntil = 0;
+    this.skills = this.loadout.skills.map(s => ({ id: s.id, lvl: s.lvl, mut: s.mut || 0, cd: fl(SKILLS[s.id].cd * 15 / 100), blockedUntil: 0 }));   // start z 15% cooldownu (nie zabija w 1. ticku, a umiejętność jest gotowa po ok. 1 s)
+    this.hasteUntil = 0; this.invulnUntil = 0; this.slowUntil = 0; this.critUntil = 0; this.kontraUntil = 0; this.blindUntil = 0; this.coinsWon = 0; this.bleedExtra = 0;
     this.nextEgg = this.S.egg || 0;
     this.revive = !!h.revive; this.revived = false; this.okUsed = false;
     this.uid = 0;
@@ -68,7 +68,7 @@ export class Fight {
     let raw = fl(this.S.atk * pct / 100);
     raw = fl(raw * (100 + this.S.dmg) / 100);
     let crit = false;
-    if (canCrit && this.rng.int(100) < this.S.crit) { crit = true; raw = fl(raw * this.S.critMult / 100); }
+    if (canCrit && (this.tick < this.critUntil || this.rng.int(100) < this.S.crit)) { crit = true; raw = fl(raw * this.S.critMult / 100); }
     let d = Math.max(1, fl(raw * 100 / (100 + Math.max(0, t.armor))));
     if (t.shieldHits > 0) { t.shieldHits--; this.push({ k: 'shield', to: t.uid }); return 0; }
     if (t.shield > 0) { const a = Math.min(t.shield, d); t.shield -= a; d -= a; this.push({ k: 'shieldhit', to: t.uid, d: a }); if (d <= 0) return a; }
@@ -77,6 +77,7 @@ export class Fight {
     if (this.S.shred && kind === 'atk' && this.rng.int(100) < this.S.shred && t.armor > 0) t.armor = Math.max(0, t.armor - Math.max(1, Math.ceil(t.baseArmor / 10)));
     if (kind === 'atk') {
       if (this.S.bleed) this.applyStatus(t, 'bleed', 1);
+      if (this.frenzyBleed && this.tick < this.hasteUntil) this.applyStatus(t, 'bleed', 2);
       if (this.S.burnHit && this.rng.int(100) < this.S.burnHit) this.applyStatus(t, 'burn', 1);
       if (this.S.frostHit && this.rng.int(100) < this.S.frostHit) this.applyStatus(t, 'frost', 1);
       if (this.S.poisonHit && this.rng.int(100) < this.S.poisonHit) this.applyStatus(t, 'poison', 1);
@@ -107,7 +108,7 @@ export class Fight {
       }
       return true;
     }
-    const max = def.max + (kind === 'bleed' ? (S.bleedMax || 0) : kind === 'burn' ? (S.burnMax || 0) : 0);
+    const max = def.max + (kind === 'bleed' ? (S.bleedMax || 0) + this.bleedExtra : kind === 'burn' ? (S.burnMax || 0) : 0);
     t[kind] = Math.min(max, t[kind] + n); t[kind + 'T'] = until;
     return true;
   }
@@ -147,25 +148,85 @@ export class Fight {
   useSkill(slot) {
     const s = this.skills[slot];
     if (!s || this.over || this.tick < s.cd || this.tick < s.blockedUntil) return false;
-    const def = SKILLS[s.id], pw = s.lvl >= 2 ? 130 : 100;
-    s.cd = this.tick + (s.lvl >= 2 ? fl(def.cd * 80 / 100) : def.cd);
+    const def = SKILLS[s.id], pw = s.lvl >= 2 ? 130 : 100, m = s.lvl >= 3 ? (s.mut || 1) : 0;
+    s.cd = this.tick + fl((s.lvl >= 2 ? fl(def.cd * 80 / 100) : def.cd) * (100 - (this.S.cdPct || 0)) / 100);
     this.used++;
-    this.push({ k: 'skill', slot, id: s.id });
-    const alive = this.alive();
+    this.push({ k: 'skill', slot, id: s.id, mut: m });
+    const alive = this.alive(), P = x => fl(x * pw / 100), tick = this.tick;
+    const stunAll = d => { for (const e of this.alive()) { e.stunUntil = Math.max(e.stunUntil, tick + d); if (e.windup) { e.windup = null; e.nextSpec = e.stunUntil + (e.spec ? e.spec.every : 0); this.push({ k: 'break', uid: e.uid }); } this.push({ k: 'stun', uid: e.uid }); } };
     switch (s.id) {
-      case 'grad':
-        for (let i = 0; i < def.hits && alive.length; i++) {
-          const t = alive[this.rng.int(alive.length)];
-          this.heroHit(t, fl(def.pct * pw / 100), false, 'grad');
+      case 'grad': {
+        const n = m === 2 ? 9 : def.hits;
+        for (let i = 0; i < n; i++) {
+          const al = this.alive(); if (!al.length) break;
+          const t = al[this.rng.int(al.length)];
+          this.heroHit(t, P(def.pct), false, 'grad');
+          if (m === 1) this.applyStatus(t, 'burn', 1);
         }
         break;
+      }
       case 'pianie':
-        for (const e of alive) { e.stunUntil = this.tick + fl(def.dur * pw / 100); if (e.windup) { e.windup = null; e.nextSpec = e.stunUntil + (e.spec ? e.spec.every : 0); this.push({ k: 'break', uid: e.uid }); } this.push({ k: 'stun', uid: e.uid }); }
+        stunAll(fl(P(def.dur) * (m === 2 ? 175 : 100) / 100));
+        if (m === 1) for (const e of this.alive()) this.applyStatus(e, 'frost', 3);
         break;
-      case 'granat': { const t = this.target(); if (t) this.heroHit(t, fl(def.pct * pw / 100), false, 'granat'); break; }
-      case 'dziobniecie': this.hasteUntil = this.tick + fl(def.dur * pw / 100); break;
-      case 'unik': this.invulnUntil = Math.max(this.invulnUntil, this.tick + fl(def.dur * pw / 100)); break;
-      case 'zagrzebanie': this.heal(fl(this.S.maxHp * fl(def.pct * pw / 100) / 100)); break;
+      case 'granat': {
+        const t = this.target(); if (!t) break;
+        const rest = alive.filter(e => e !== t);
+        this.heroHit(t, P(def.pct), false, 'granat');
+        if (m === 1) for (const e of rest) this.heroHit(e, fl(P(def.pct) * 60 / 100), false, 'granat');
+        if (m === 2) this.applyStatus(t, 'burn', 5);
+        break;
+      }
+      case 'dziobniecie': this.hasteUntil = tick + P(def.dur) * (m === 2 ? 2 : 1); this.frenzyBleed = m === 1; break;
+      case 'unik': this.invulnUntil = Math.max(this.invulnUntil, tick + P(def.dur) * (m === 2 ? 2 : 1)); this.unikKontra = m === 1; break;
+      case 'zagrzebanie':
+        this.heal(fl(this.S.maxHp * P(m === 1 ? 50 : def.pct) / 100));
+        if (m === 2) this.critUntil = tick + 40;
+        break;
+      case 'chlust':
+        for (const e of alive) { this.heroHit(e, P(def.pct), false, 'chlust'); this.applyStatus(e, 'burn', m === 1 ? 6 : def.n); }
+        if (m === 2) stunAll(10);
+        break;
+      case 'lodowy': {
+        const t = this.target(); if (!t) break;
+        this.heroHit(t, P(def.pct), false, 'lodowy');
+        if (m === 1) this.applyStatus(t, 'frost', 99);
+        else if (m === 2) for (const e of this.alive()) this.applyStatus(e, 'frost', def.n);
+        else this.applyStatus(t, 'frost', def.n);
+        break;
+      }
+      case 'zgnile': {
+        const t = this.target(); if (!t) break;
+        if (m === 1) for (const e of alive) this.applyStatus(e, 'poison', 4);
+        else { this.applyStatus(t, 'poison', P(def.n * 10) / 10 | 0); for (const e of alive) if (e !== t) this.applyStatus(e, 'poison', 1); }
+        if (m === 2) this.applyStatus(t, 'poison', t.poison);
+        break;
+      }
+      case 'kontra': this.kontraUntil = tick + P(def.dur); this.kontraRed = m === 1 ? 75 : 50; this.kontraPct = P(m === 2 ? 250 : def.pct); break;
+      case 'darcie':
+        if (m === 1) this.bleedExtra = 2;
+        for (const e of alive) { this.heroHit(e, P(def.pct), false, 'darcie'); this.applyStatus(e, 'bleed', m === 1 ? 3 : def.n); }
+        if (m === 2) { const n = this.alive().reduce((a, e) => a + e.bleed, 0); this.heal(fl(this.S.maxHp * 3 * n / 100)); }
+        break;
+      case 'kapiel':
+        this.blindUntil = tick + P(def.dur); this.blindPct = m === 1 ? 75 : def.pct;
+        if (m === 2) stunAll(10);
+        break;
+      case 'premia': {
+        const t = this.target(); if (!t) break;
+        this.heroHit(t, P(m === 2 ? 300 : def.pct), false, 'premia');
+        const cap = m === 1 ? 6 : 3, per = m === 1 ? 2 : 1;
+        if (t.dead && this.coinsWon < cap) { const n = Math.min(per, cap - this.coinsWon); this.coinsWon += n; this.push({ k: 'coin', n }); }
+        break;
+      }
+      case 'egzekucja': {
+        const al = this.alive(); if (!al.length) break;
+        const thr = m === 1 ? 50 : def.thr;
+        const low = al.find(e => !e.immune && e.hp * 100 < e.maxHp * thr), t = low || this.target();
+        this.heroHit(t, P(low ? def.exec : def.pct), false, 'egzekucja');
+        if (m === 2 && t.dead) s.cd = tick + 1;
+        break;
+      }
     }
     return true;
   }
@@ -173,7 +234,8 @@ export class Fight {
   // ---------- ataki wrogów ----------
   enemyHit(e, mult) {
     if (this.hp <= 0 || this.over) return;
-    if (this.tick < this.invulnUntil) { this.push({ k: 'block', from: e.uid }); return; }
+    if (this.tick < this.invulnUntil) { this.push({ k: 'block', from: e.uid }); if (this.unikKontra) this.heroHit(e, 100, false, 'kontra'); return; }
+    if (this.tick < this.blindUntil && this.rng.int(100) < this.blindPct) { this.push({ k: 'dodge', from: e.uid }); return; }
     if (this.S.evade && this.rng.int(100) < this.S.evade) { this.push({ k: 'dodge', from: e.uid }); return; }
     let pct = 100 + this.furyExtra();
     if (e.boss === 'prezes' && e.p3) pct += 2 * fl((this.tick - e.p3At) / 10);
@@ -181,11 +243,14 @@ export class Fight {
     raw = fl(raw * pct / 100);
     let crit = false;
     if (e.crit && this.rng.int(100) < e.crit) { crit = true; raw = fl(raw * 150 / 100); }
-    const d = Math.max(1, fl(raw * 100 / (100 + this.S.armor)));
+    let d = Math.max(1, fl(raw * 100 / (100 + this.S.armor)));
+    const kontra = this.tick < this.kontraUntil;
+    if (kontra) d = Math.max(1, fl(d * (100 - this.kontraRed) / 100));
     this.hp -= d; this.taken += d; if (this.hp < this.lowest) this.lowest = Math.max(0, this.hp);
     this.push({ k: 'hurt', from: e.uid, d, crit });
     if (e.steal && this.stolenBy(e) < e.steal.max) { this.stolen += e.steal.n; e.stole = (e.stole || 0) + e.steal.n; this.push({ k: 'steal', from: e.uid }); }
     if (e.slow) { this.slowUntil = this.tick + e.slow.ticks; }
+    if (kontra && this.hp > 0) this.heroHit(e, this.kontraPct, false, 'kontra');
     if (this.hp > 0 && this.S.okrzyk && !this.okUsed && this.hp * 100 < this.S.maxHp * 20) { this.okUsed = true; this.invulnUntil = this.tick + 30; this.push({ k: 'okrzyk' }); }
     if (this.hp <= 0) this.heroDown();
   }
@@ -259,7 +324,7 @@ export class Fight {
     }
     if (e.spec && this.tick >= e.nextSpec) { e.windup = { end: this.tick + e.spec.windup }; this.push({ k: 'telegraph', uid: e.uid, end: e.windup.end }); return; }
     e.acc += fl(fl(e.aspd * e.aspdPct / 100) * (100 - Math.min(60, e.frost * STATUS.frost.slow)) / 100);
-    while (e.acc >= 1000 && !this.over) { e.acc -= 1000; this.enemyHit(e, 100); }
+    while (e.acc >= 1000 && !this.over && !e.dead) { e.acc -= 1000; this.enemyHit(e, 100); }
   }
 
   // ---------- jeden tick ----------
@@ -302,7 +367,7 @@ export class Fight {
     return {
       win: this.win, ticks: this.tick, hp: Math.max(0, this.hp), maxHp: this.S.maxHp, timeout: this.timeout,
       usedRevive: this.revived, stolen: this.stolen, dealt: this.dealt, taken: this.taken, maxHit: this.maxHit,
-      kills: this.kills, skillsUsed: this.used, lowest: this.lowest, boss: this.win && boss ? boss.boss : null,
+      kills: this.kills, skillsUsed: this.used, coinsWon: this.coinsWon, lowest: this.lowest, boss: this.win && boss ? boss.boss : null,
     };
   }
 }

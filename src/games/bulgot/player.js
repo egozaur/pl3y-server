@@ -48,13 +48,13 @@ export class BgPlayer {
         if (r.ok) run = r.run;
         break;
       }
-      case 'pick': r = need(run) || pickTile(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot)); break;
+      case 'pick': r = need(run) || pickTile(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot), b.mut === undefined ? undefined : Number(b.mut)); break;
       case 'reroll': r = need(run) || reroll(run); break;
       case 'rest': r = need(run) || rest(run); break;
-      case 'buy': r = need(run) || buyOffer(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot)); break;
-      case 'shop': r = need(run) || shopBuy(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot)); break;
+      case 'buy': r = need(run) || buyOffer(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot), b.mut === undefined ? undefined : Number(b.mut)); break;
+      case 'shop': r = need(run) || shopBuy(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot), b.mut === undefined ? undefined : Number(b.mut)); break;
       case 'bet': r = need(run) || bet(run, Number(b.amount)); break;
-      case 'bonus': r = need(run) || bonusPick(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot)); break;
+      case 'bonus': r = need(run) || bonusPick(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot), b.mut === undefined ? undefined : Number(b.mut)); break;
       case 'fightstart': r = need(run) || fightSetup(run); break;
       case 'fightfinish': r = need(run) || fightFinish(run, Array.isArray(b.inputs) ? b.inputs : []); break;
       case 'abandon': r = need(run) || abandon(run); break;
