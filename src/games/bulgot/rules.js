@@ -2,7 +2,7 @@
 // Wszystkie losowania biorą ziarno z run.seed, więc ten sam run daje te same oferty i spotkania.
 // Każda funkcja zwraca { ok: true, ... } albo { err, code }. Stan zapisuje i autoryzuje BgPlayer (player.js).
 import { mix, hash, makeRng } from './rng.js';
-import { RECIPES, BADGES, BADGE_OFFER, BADGE_POOL, AFFIXES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, RARITY_WEIGHTS, TYPE_WEIGHTS, DECREES, FLAWS, NEMESIS_TITLES, NEMESIS_NAMES, garnekMods, formFor } from './data.js';
+import { RECIPES, BADGES, BADGE_OFFER, BADGE_POOL, AFFIXES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, FLOOR_TPL, RARITY_WEIGHTS, TYPE_WEIGHTS, DECREES, FLAWS, NEMESIS_TITLES, NEMESIS_NAMES, garnekMods, formFor } from './data.js';
 import { heroStats } from './stats.js';
 import { runFight } from './sim.js';
 
@@ -32,12 +32,15 @@ const freshCur = run => ({ offer: run.offer.slice(), picked: null, rerolls: 0, b
 const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
+// Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
+export const RUN_V = 2;
+
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null }) {
   const M = MODES[mode], ch = CHARS[char];
   if (!M) return fail('Nieznany tryb.', 'mode');
   if (!ch) return fail('Nieznana postać.', 'char');
   const run = {
-    v: 1, id: String(seed), mode, char, garnek: garnek | 0, seed: seed >>> 0, round: 1, phase: 'offer',
+    v: RUN_V, id: String(seed), mode, char, garnek: garnek | 0, seed: seed >>> 0, round: 1, phase: 'offer',
     hp: 1, coins: ch.coins, tiles: [], skills: ch.startSkills.map(([id, lvl]) => ({ id, lvl })), offer: [], rerolls: 0, paid: 0, freeLeft: ch.freeRerolls,
     pending: null, rested: false, pool: pool.slice(), badges: [], started: now, ended: null, score: 0, timeBonus: 0, done: 0,
     flags: { bonusAtk: 0, bossHpBonus: 0, revived: false },
@@ -463,6 +466,19 @@ const zoneStart = (mode, round) => { let prev = 0; for (const z of MODES[mode].z
 
 export const isNemesisRound = run => !!(run.nemesis && !run.nemesis.beaten && run.nemesis.round === run.round);
 const riskyDoor = run => !!(run.door && run.door.risky);
+// Szablon zwykłego piętra (Czempion, Rój, Zwiad, Para) albo null (zwykłe piętro). Losowany z osobnej soli,
+// więc nie zmienia losowania zwykłych wrogów.
+export function floorTemplate(run) {
+  const M = MODES[run.mode], r = run.round;
+  if (M.bosses[r] || r <= M.early.rounds || isElite(run) || riskyDoor(run) || isNemesisRound(run)) return null;
+  const zi = zoneOf(run.mode, r), keys = Object.keys(FLOOR_TPL).filter(k => k !== 'zwiad' || zi < 2);
+  let tot = 0; for (const k of keys) tot += FLOOR_TPL[k].w;
+  let x = makeRng(mix(run.seed, r, hash('tpl'))).int(tot);
+  for (const k of keys) { x -= FLOOR_TPL[k].w; if (x < 0) return k === 'zwykle' ? null : k; }
+  return null;
+}
+const soloPool = zone => Object.values(ENEMIES).filter(e => e.zone === zone && !e.minion && !e.swarm).map(e => e.id);
+
 export function encounterIds(run) {
   const M = MODES[run.mode], r = run.round;
   if (M.bosses[r]) return [M.bosses[r]];
@@ -472,6 +488,11 @@ export function encounterIds(run) {
   const rr = makeRng(mix(run.seed, r, hash('enc')));
   // Nemezis przychodzi z jednym zwykłym pomocnikiem ze strefy (bez roju).
   if (isNemesisRound(run)) { const helpers = pool.filter(id => !ENEMIES[id].swarm); return [run.nemesis.enemy, rr.pick(helpers.length ? helpers : pool)]; }
+  const tpl = floorTemplate(run), solo = soloPool(zi);
+  if (tpl === 'czempion') return [rr.pick(solo)];
+  if (tpl === 'roj') return Array.from({ length: FLOOR_TPL.roj.n }, () => rr.pick(solo));
+  if (tpl === 'zwiad') return [rr.pick(soloPool(zi + 1))];
+  if (tpl === 'para') { const a = rr.pick(solo); return [a, rr.pick(solo.filter(id => id !== a))]; }
   // Strefa I: do 2 wrogów naraz; strefy II i III: w późniejszych rundach strefy do 3.
   let count = k <= 1 ? 1 : k <= 3 ? 1 + rr.int(2) : (zi === 0 ? 2 : 2 + rr.int(2));
   count = Math.min(3, count);
@@ -530,6 +551,12 @@ export function buildSetup(run) {
     enemies = ids.map(id => concrete(ENEMIES[id], s, gm, {}, early));
     const zm = M.zoneMul && M.zoneMul[zoneOf(run.mode, run.round)];   // mnożnik strefy (późne strefy groźniejsze niż sam wzrost)
     if (zm) for (const e of enemies) { e.hp = Math.max(1, fl(e.hp * zm.hp / 100)); e.atk = Math.max(1, fl(e.atk * zm.atk / 100)); }
+    // Szablon piętra (Czempion, Rój, Para; Zwiad to sam wybór wroga z następnej strefy).
+    const tpl = floorTemplate(run), TP = tpl && FLOOR_TPL[tpl];
+    if (tpl === 'czempion') { const e0 = enemies[0]; e0.hp = fl(e0.hp * TP.hp / 100); e0.champion = true; e0.name = 'Czempion ' + e0.name; }
+    if (tpl === 'roj') for (const e of enemies) { e.hp = Math.max(1, fl(e.hp * TP.hp / 100)); e.atk = Math.max(1, fl(e.atk * TP.atk / 100)); }
+    if (tpl === 'zwiad') enemies[0].scout = true;
+    if (tpl === 'para') { const big = enemies[0].hp >= enemies[1].hp ? enemies[0] : enemies[1]; big.armor += TP.armor; for (const e of enemies) e.regenPct = (e.regenPct || 0) + TP.regen; }
     if (elite) { const e0 = enemies[0]; e0.hp = fl(e0.hp * 130 / 100); e0.atk = fl(e0.atk * 112 / 100); e0.elite = true; e0.name = 'Elitarny ' + e0.name; e0.affixes = eliteAffixes(run); for (const a of e0.affixes) applyAffix(e0, a); }
     // Rozwidlenie Korytarza: za ryzykownymi drzwiami pierwszy wróg ma cechę elity.
     if (riskyDoor(run) && !elite) { const e0 = enemies[0]; e0.hp = fl(e0.hp * RULES.doorHp / 100); e0.atk = fl(e0.atk * RULES.doorAtk / 100); e0.elite = true; e0.name = 'Elitarny ' + e0.name; e0.affixes = [run.door.affix]; applyAffix(e0, run.door.affix); }
@@ -547,7 +574,7 @@ export function buildSetup(run) {
   const S = statsOf(run);
   return {
     v: 1, round: run.round, mode: run.mode, seed: mix(run.seed, run.round, hash('fight')), boss, elite, zone: zoneOf(run.mode, run.round),
-    door: riskyDoor(run), nemesis: isNemesisRound(run), fury: decreeIs(run, 'pilny') ? 300 : undefined,
+    door: riskyDoor(run), nemesis: isNemesisRound(run), tpl: floorTemplate(run) || undefined, fury: decreeIs(run, 'pilny') ? 300 : undefined,
     hero: { loadout: loadoutOf(run), hp: Math.min(run.hp, S.maxHp), revive: S.revive && !run.flags.revived },
     enemies, minion: concrete(ENEMIES['pisklak-stazysta'], s, gm, { minion: true }),
   };
@@ -563,7 +590,7 @@ export function fightFinish(run, inputs) {
   if (run.phase !== 'fight' || !run.fight) return fail('Nie ma walki do rozliczenia.', 'phase');
   const setup = buildSetup(run), res = runFight(setup, inputs);
   const S = statsOf(run), gm = garnekMods(run.garnek), c = cur(run), coinsBefore = run.coins, hpBefore = setup.hero.hp;
-  const entry = () => ({ r: run.round, zone: setup.zone, boss: setup.boss, elite: setup.elite, enemies: setup.enemies.map(e => ({ n: e.name, hp: e.hp, atk: e.atk })),
+  const entry = () => ({ r: run.round, zone: setup.zone, boss: setup.boss, elite: setup.elite, tpl: setup.tpl || null, enemies: setup.enemies.map(e => ({ n: e.name, hp: e.hp, atk: e.atk })),
     offer: c.offer, picked: c.picked, bought: c.bought, rerolls: c.rerolls, rested: c.rested || 0, event: c.event, bet: c.bet || null,
     hero: { maxHp: S.maxHp, atk: S.atk, aspd: S.aspd, armor: S.armor, crit: S.crit, evade: S.evade, regen: S.regen }, tiles: run.tiles.length, skills: run.skills.map(s => s.id + (s.lvl > 1 ? '*' : '')),
     coinsBefore, coinsAfter: run.coins, hpBefore, hpAfter: res.hp, win: res.win, ticks: res.ticks, dealt: res.dealt, taken: res.taken, maxHit: res.maxHit, skillsUsed: res.skillsUsed, stolen: res.stolen, revived: res.usedRevive, timeout: res.timeout });
@@ -652,6 +679,7 @@ export function abandon(run) {
 }
 
 // ---------- Widok dla klienta ----------
+export const hideFoes = run => (run.garnek | 0) >= 1;
 // Bez ziarna runu: oferty i spotkania z przyszłości nie dają się wyliczyć po stronie przeglądarki.
 export function view(run) {
   if (!run) return null;
@@ -659,7 +687,7 @@ export function view(run) {
   const v = {
     id: run.id, mode: run.mode, char: run.char, garnek: run.garnek, round: run.round, rounds: M.rounds, phase: run.phase,
     hp: run.hp, maxHp: S.maxHp, coins: run.coins, tiles: run.tiles, skills: run.skills, offer: run.offer, pending: run.pending,
-    rerollCost: run.phase === 'offer' ? rerollCost(run) : null, freeLeft: run.freeLeft, rested: run.rested, restCost: restCost(run), restPct: RULES.restPct + S.restBonus, badges: run.badges || [], affixes: !over && isElite(run) ? eliteAffixes(run) : null, buyDisc: S.buyDisc, stats: run.stats, flags: { bossHpBonus: run.flags.bossHpBonus, revived: run.flags.revived, bonusAtk: run.flags.bonusAtk },
+    rerollCost: run.phase === 'offer' ? rerollCost(run) : null, freeLeft: run.freeLeft, rested: run.rested, restCost: restCost(run), restPct: RULES.restPct + S.restBonus, badges: run.badges || [], affixes: !over && isElite(run) && !hideFoes(run) ? eliteAffixes(run) : null, buyDisc: S.buyDisc, stats: run.stats, flags: { bossHpBonus: run.flags.bossHpBonus, revived: run.flags.revived, bonusAtk: run.flags.bonusAtk },
     score: over ? run.score : liveScore(run), done: run.done, timeBonus: run.timeBonus, ended: run.ended, form: formFor(run.mode, run.round).id, zone: zoneOf(run.mode, run.round),
     boss: M.bosses[run.round] || null, elite: !over && isElite(run), hero: S,
     decree: over ? null : decreeOf(run), priceMul: priceMul(run), grow: run.grow || {}, flawAt: run.phase === 'offer' ? run.flawAt : -1,
@@ -669,6 +697,10 @@ export function view(run) {
     nemesis: run.nemesis ? { name: nemesisName(run.nemesis), enemy: run.nemesis.enemy, affix: run.nemesis.affix, tile: run.nemesis.tile, lvl: run.nemesis.lvl || 1, round: run.nemesis.round, beaten: run.nemesis.beaten } : null,
     nemesisRound: !over && isNemesisRound(run), interestMax: CHARS[run.char].interestMax || RULES.interestMax, willOptions: willOptions(run),
   };
-  if (!over) v.enemies = encounterIds(run);
+  // Podgląd wrogów: na Garnku 0 widać skład piętra i szablon; od Garnka 1 tylko zapowiedź bossa (reszta ukryta po stronie serwera).
+  if (!over) {
+    if (!hideFoes(run)) { v.enemies = encounterIds(run); v.tpl = floorTemplate(run); }
+    else { v.enemies = M.bosses[run.round] ? encounterIds(run) : null; v.tpl = null; v.hidden = !M.bosses[run.round]; }
+  }
   return v;
 }

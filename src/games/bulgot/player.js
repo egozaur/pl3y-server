@@ -5,7 +5,7 @@
 // Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /will /fightstart /fightfinish /abandon /history.
 // Odpowiedź: { ok, profile, run, ...wynik akcji } albo { err, code } z kodem 400/409.
 import { mix, hash } from './rng.js';
-import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, view, statsOf, pawn, redeem, willOptions } from './rules.js';
+import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, view, statsOf, pawn, redeem, willOptions, RUN_V } from './rules.js';
 import { newProfile, poolFor, evaluate, onBossKill, onRunEnd, onNemesisBeaten, markSeen, publicProfile } from './profile.js';
 import { MODES, CHARS, TILE_BY_ID } from './data.js';
 
@@ -32,6 +32,8 @@ export class BgPlayer {
     let run = (await st.get('run')) || null;
     const path = url.pathname.replace(/^\//, '');
     const extra = {};
+    // Run zapisany w starej wersji reguł (np. przed szablonami pięter) jest unieważniany.
+    if (run && run.v !== RUN_V) { run = null; await st.delete('run'); extra.voided = true; }
     let r = { ok: true };
     const wasOver = !run || run.phase === 'over';
 

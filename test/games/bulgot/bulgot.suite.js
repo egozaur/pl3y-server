@@ -489,7 +489,7 @@ test('run: pierwsza runda to Szczur Pasz, spotkania są deterministyczne i pasuj
       r.round = round; const ids = R.encounterIds(r); eq(R.encounterIds(r), ids, 'powtarzalne');
       assert(ids.length >= 1 && ids.length <= 3, 'od 1 do 3 wrogów');
       if (D.MODES[mode].bosses[round]) eq(ids, [D.MODES[mode].bosses[round]], 'boss w swojej rundzie');
-      else for (const id of ids) assert(D.ENEMIES[id].zone === R.zoneOf(mode, round) && !D.ENEMIES[id].minion, 'wróg ze strefy ' + id + ' r' + round);
+      else for (const id of ids) assert(D.ENEMIES[id].zone === R.zoneOf(mode, round) + (R.floorTemplate(r) === 'zwiad' ? 1 : 0) && !D.ENEMIES[id].minion, 'wróg ze strefy ' + id + ' r' + round);
     }
   }
 });
@@ -584,9 +584,10 @@ test('run: pełna partia botem (zawsze 1. kafelek, bez umiejętności) kończy s
 test('run: poziomy Garnka (elitarni wrogowie, premie bossów, brak regeneracji), Zakazana Pasza wzmacnia następnego bossa raz', () => {
   const r0 = fresh({ mode: 'full' }), r2 = fresh({ mode: 'full', garnek: 2 });
   r0.round = r2.round = 10; assert(R.view(r0).elite && R.view(r2).elite, 'elitarny wróg w rundzie 10 od Garnka 0');
-  const r2e = fresh({ mode: 'full', garnek: 2 }); r2e.round = 4; eq(R.view(r2e).affixes.length, 1, 'na wczesnych piętrach elita ma 1 cechę');
+  const r2e = fresh({ mode: 'full', garnek: 2 }); r2e.round = 4; eq(R.eliteAffixes(r2e).length, 1, 'na wczesnych piętrach elita ma 1 cechę');
   eq(R.encounterIds(r0).length <= 2, true, 'elita z najwyżej jednym pomocnikiem');
-  eq([R.view(r0).affixes.length, R.view(r2).affixes.length], [1, 2], 'Garnek 2: elita ma 2 cechy');
+  eq([R.view(r0).affixes.length, R.eliteAffixes(r2).length], [1, 2], 'Garnek 2: elita ma 2 cechy');
+  eq(R.view(r2).affixes, null, 'od Garnka 1 cechy elity są ukryte przed walką');
   const e2 = R.buildSetup(r2).enemies[0], r4 = fresh({ mode: 'full' }); r4.round = 4; const e0 = R.buildSetup(r4).enemies[0];
   assert(e2.elite && e2.name.startsWith('Elitarny ') && e2.affixes.length === 2, 'elita z cechami');
   eq(JSON.stringify(R.buildSetup(r2).enemies[0]), JSON.stringify(e2), 'cechy elity deterministyczne');
@@ -928,7 +929,10 @@ test('Rozwidlenie Korytarza: drzwi na stałych piętrach, ryzykowny wróg z cech
   const strong = x => { x.tiles = [...Array(12).fill('ziarno-mocy'), ...Array(8).fill('twardy-grzebien')]; x.hp = R.statsOf(x).maxHp; return x; };
   const c = strong(fresh()); c.round = 5; c.door = { risky: true, affix: 'szybki', reward: 'coins' };
   const st = R.buildSetup(c); assert(st.door && st.enemies[0].elite && st.enemies[0].affixes[0] === 'szybki' && st.enemies.length <= 2, 'wróg z cechą');
-  const plain = strong(fresh()); plain.round = 5; assert(R.buildSetup(plain).enemies[0].hp < st.enemies[0].hp, 'mocniejszy niż zwykle');
+  const plain = strong(fresh()); plain.round = 5; assert(R.floorTemplate(c) === null, 'ryzykowne drzwi bez szablonu piętra');
+  plain.door = null; assert(R.buildSetup({ ...plain, door: { risky: false } }).enemies.every(e => !e.elite), 'zwykłe drzwi: bez elity');
+  const same = { ...c, door: null }; const tp = R.floorTemplate(same);
+  if (!tp || tp === 'roj' || tp === 'para') assert(R.buildSetup(same).enemies[0].hp < st.enemies[0].hp, 'mocniejszy niż zwykle');
   const oc = win(c); assert(oc.result.win && oc.doorCoins === D.RULES.doorCoins && !oc.badge, 'nagroda: Ziarna, bez Odznaki');
   const rr = strong(fresh()); rr.round = 5; rr.door = { risky: true, affix: 'szybki', reward: 'rare' }; const orr = win(rr);
   assert(orr.result.win && rr.phase === 'bonus' && rr.offer.length === 3 && rr.offer.every(id => D.TILE_BY_ID[id].rarity >= 1), 'nagroda: rzadki kafelek');
@@ -1046,4 +1050,64 @@ test('BgPlayer: Testament Pyrtka (po przegranej, piąta karta następnego runu, 
   r = await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' }); assert(r.j.run.nemesis && r.j.run.nemesis.round >= 2, 'Nemezis w nowym runie');
   const run = st.m.get('run'); run.round = run.nemesis.round; run.phase = 'fight'; run.fight = { started: true }; run.tiles = [...Array(14).fill('ziarno-mocy'), ...Array(10).fill('twardy-grzebien')]; run.hp = 500;
   r = await post(o, 'fightfinish', { pl: PL, inputs: [] }); assert(r.j.result.win && r.j.nemesis && r.j.profile.nemesis === null && r.j.profile.counters.nemesisKills === 1, 'pokonany Nemezis znika z profilu');
+});
+
+// ---------- Szablony pięter i ukryty podgląd (2026-11-22) ----------
+test('szablony pięter: Czempion, Rój, Zwiad, Para losowane z ziarna, bez bossów, elit, Nemezis, drzwi i wczesnych pięter', () => {
+  const seen = {};
+  for (let seed = 1; seed <= 120; seed++) for (const mode of ['full', 'quick']) {
+    const M = D.MODES[mode], r = fresh({ seed, mode });
+    for (let round = 1; round <= M.rounds; round++) {
+      r.round = round; const tp = R.floorTemplate(r);
+      eq(R.floorTemplate(r), tp, 'deterministyczny');
+      if (M.bosses[round] || M.elite.includes(round) || round <= M.early.rounds) eq(tp, null, 'bez szablonu: boss/elita/wczesne ' + round);
+      if (!tp) continue;
+      seen[tp] = (seen[tp] || 0) + 1;
+      const ids = R.encounterIds(r), st = R.buildSetup(r), zi = R.zoneOf(mode, round);
+      eq(st.tpl, tp, 'setup zna szablon');
+      if (tp === 'czempion') assert(ids.length === 1 && st.enemies[0].champion && st.enemies[0].name.startsWith('Czempion '), 'Czempion: 1 wróg');
+      if (tp === 'roj') assert(ids.length === 3 && ids.every(id => !D.ENEMIES[id].swarm), 'Rój: 3 wrogów');
+      if (tp === 'zwiad') assert(ids.length === 1 && zi < 2 && D.ENEMIES[ids[0]].zone === zi + 1 && st.enemies[0].scout, 'Zwiad: wróg z następnej strefy');
+      if (tp === 'para') assert(ids.length === 2 && ids[0] !== ids[1] && st.enemies.every(e => e.regenPct === D.FLOOR_TPL.para.regen), 'Para: 2 różne typy, wspierają się');
+    }
+  }
+  for (const k of ['czempion', 'roj', 'zwiad', 'para']) assert(seen[k] > 20, 'szablon występuje: ' + k + ' ' + seen[k]);
+  // Czempion ma +80% Życia względem tego samego wroga bez szablonu
+  let r = null; for (let seed = 1; seed < 500 && !r; seed++) { const x = fresh({ seed }); x.round = 8; if (R.floorTemplate(x) === 'czempion') r = x; }
+  assert(r, 'znaleziono Czempiona'); const ch = R.buildSetup(r).enemies[0];
+  // Nemezis i ryzykowne drzwi wyłączają szablon
+  const n = fresh(); n.round = 8; n.nemesis = { enemy: 'lis-windykator', round: 8, affix: 'szybki', lvl: 1 }; eq(R.floorTemplate(n), null, 'Nemezis bez szablonu');
+  const d = fresh(); d.round = 8; d.door = { risky: true, affix: 'szybki', reward: 'coins' }; eq(R.floorTemplate(d), null, 'ryzykowne drzwi bez szablonu');
+  // Rój: każdy wróg osłabiony
+  let rj = null; for (let seed = 1; seed < 500 && !rj; seed++) { const x = fresh({ seed }); x.round = 9; if (R.floorTemplate(x) === 'roj') rj = x; }
+  assert(rj && R.buildSetup(rj).enemies.length === 3, 'Rój ma 3 wrogów');
+  assert(ch.hp > 0, 'Czempion ma życie');
+});
+
+test('ukryty podgląd: od Garnka 1 widok nie zdradza wrogów, szablonu ani cech elity (bossowie zapowiedziani)', () => {
+  const g0 = fresh(), g1 = fresh({ garnek: 1 });
+  for (const round of [2, 3, 4, 5, 7, 8, 9, 10, 11, 13, 16]) {
+    g0.round = g1.round = round;
+    const v0 = R.view(g0), v1 = R.view(g1);
+    assert(Array.isArray(v0.enemies) && v0.enemies.length >= 1, 'Garnek 0 widzi wrogów r' + round);
+    eq(v1.enemies, null, 'Garnek 1 nie widzi wrogów r' + round);
+    eq(v1.tpl, null, 'Garnek 1 nie widzi szablonu r' + round);
+    eq(v1.affixes, null, 'Garnek 1 nie widzi cech elity r' + round);
+    assert(v1.hidden === true, 'widok mówi, że skład jest ukryty');
+    // żaden identyfikator ani nazwa wroga nie wycieka w całym widoku
+    const txt = JSON.stringify(v1);
+    for (const id of R.encounterIds(g1)) { assert(!txt.includes('"' + id + '"'), 'wyciek id ' + id); assert(!txt.includes(D.ENEMIES[id].name), 'wyciek nazwy ' + id); }
+  }
+  g1.round = 6; eq(R.view(g1).enemies, ['brojler'], 'boss zapowiedziany także od Garnka 1');
+  assert(!R.view(g1).hidden, 'boss nie jest ukryty');
+  g0.round = 8; assert('tpl' in R.view(g0), 'Garnek 0 widzi szablon (albo null)');
+});
+
+test('unieważnianie runów ze starej wersji reguł', async () => {
+  const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
+  const old = fresh(); old.v = 1; await st.put('run', old);
+  const res = (await post(o, 'state', { pl: PL })).j;
+  assert(res.ok && res.voided === true && res.run === null, 'stary run unieważniony');
+  eq(await st.get('run'), undefined, 'stary run usunięty z pamięci');
+  eq(fresh().v, R.RUN_V, 'nowy run ma bieżącą wersję');
 });

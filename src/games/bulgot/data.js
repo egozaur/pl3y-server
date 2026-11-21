@@ -305,6 +305,17 @@ export const BOSSES = {
     text: 'Nietykalny, dopóki żyją Ochroniarze. Potem Restrukturyzacja i Wrzący Garnek.', quote: 'Padł Prezes, a z nim upadł cały cennik.' },
 };
 
+// ---------- Szablony zwykłych pięter ----------
+// Losowane z ziarna runu (rules.js → floorTemplate). Nie dotyczą wczesnych pięter, bossów, elit, Nemezis ani ryzykownych drzwi.
+// w = waga losowania; Zwiad (wróg z następnej strefy) nie występuje w ostatniej strefie.
+export const FLOOR_TPL = {
+  zwykle: { name: 'Zwykłe piętro', w: 40, text: 'Zwykli wrogowie ze strefy.' },
+  czempion: { name: 'Czempion', w: 15, hp: 180, text: 'Jeden wróg, ale z +80% Życia.' },
+  roj: { name: 'Rój', w: 15, n: 3, hp: 60, atk: 70, text: 'Trzech osłabionych wrogów naraz (60% Życia, 70% Ataku).' },
+  zwiad: { name: 'Zwiad', w: 15, text: 'Samotny wróg z następnej strefy fabryki.' },
+  para: { name: 'Para', w: 15, armor: 8, regen: 1, text: 'Dwa różne gatunki, które się wspierają: silniejszy osłania (+8 Pancerza), a obaj łatają rany (1% Życia na sekundę).' },
+};
+
 // ---------- Cechy elitarnych wrogów ----------
 export const AFFIXES = {
   opancerzony: { name: 'Opancerzony', text: '+15 Pancerza i tarcza na 2 ciosy' },
