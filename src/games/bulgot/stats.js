@@ -1,10 +1,13 @@
 // Bulgot: liczenie statystyk bohatera z postaci i kafelków. Czysta funkcja, bez losowości.
-// loadout = { char, tiles: [id...], skills: [{id,lvl}], coins, bonusAtk, noRegen }; opt.off = indeks kafelka wyłączonego (Skubanie).
-import { CHARS, TILE_BY_ID, MILESTONES, MILESTONE_EVERY, BADGES } from './data.js';
+// loadout = { char, tiles: [id...], skills: [{id,lvl}], coins, bonusAtk, noRegen, grow: {id: n}, flawed: [{id, flaw, on}], decree };
+// opt.off = indeks kafelka wyłączonego (Skubanie).
+import { CHARS, TILE_BY_ID, MILESTONES, MILESTONE_EVERY, BADGES, FLAWS, RULES } from './data.js';
 
-export function setCounts(tileIds) {
+// Okólnik „Wyjazd Integracyjny”: każdy zaczęty zestaw liczy się o 1 sztukę więcej.
+export function setCounts(tileIds, decree) {
   const c = {};
   for (const id of tileIds) { const t = TILE_BY_ID[id]; if (!t) continue; for (const st of (t.sets || (t.set ? [t.set] : []))) c[st] = (c[st] || 0) + 1; }
+  if (decree === 'integracja') for (const k of Object.keys(c)) c[k]++;
   return c;
 }
 
@@ -17,7 +20,19 @@ export function heroStats(loadout, opt = {}) {
   const has = id => ids.includes(id);
   for (const id of ids) { const t = TILE_BY_ID[id]; if (t && t.fx) for (const f of t.fx) add(f.k, f.v); }
   for (const b of (loadout.badges || [])) { const d = BADGES[b]; if (d) for (const f of d.fx) add(f.k, f.v); }
-  const sc = setCounts(ids);
+  // Wadliwa Partia: kafelek z wadą ma o flawBoost% mocniejsze dodatnie efekty; wada działa dopiero po ujawnieniu (on).
+  for (const w of (loadout.flawed || [])) {
+    if (!has(w.id)) continue;
+    const t = TILE_BY_ID[w.id];
+    if (t && t.fx) for (const f of t.fx) if (f.v > 0) add(f.k, Math.max(1, Math.floor(f.v * RULES.flawBoost / 100)));
+    if (w.on && FLAWS[w.flaw]) for (const f of FLAWS[w.flaw].fx) add(f.k, f.v);
+  }
+  // Kafelki rosnące (licznik w loadout.grow).
+  const gr = id => Math.min(TILE_BY_ID[id].grow.max, (loadout.grow || {})[id] || 0);
+  if (has('pierze-weterana')) add('atkPct', TILE_BY_ID['pierze-weterana'].grow.per * gr('pierze-weterana'));
+  if (has('trofeum-z-pior')) add('hpFlat', TILE_BY_ID['trofeum-z-pior'].grow.per * gr('trofeum-z-pior'));
+  if (has('skarbonka-piskleca')) add('coinFlat', 1 + gr('skarbonka-piskleca'));
+  const sc = setCounts(ids, loadout.decree);
   // progi statystyk (co 3 kopie)
   const cnt = {}; for (const id of ids) cnt[id] = (cnt[id] || 0) + 1;
   for (const [id, m] of Object.entries(MILESTONES)) { const n = Math.floor((cnt[id] || 0) / MILESTONE_EVERY); if (n) for (const f of m.fx) add(f.k, f.v * n); }
@@ -69,6 +84,8 @@ export function heroStats(loadout, opt = {}) {
     // ekonomia (liczona w rules.js)
     freeReroll: acc.freeReroll || 0, noSteal: !!acc.noSteal, bossCoins: acc.bossCoins || 0, restDisc: acc.restDisc || 0, buyDisc: acc.buyDisc || 0, interest: acc.interest || 0,
     shred: acc.shred || 0,
+    // wady (Wadliwa Partia)
+    selfBurn: acc.selfBurn || 0, restHalf: !!acc.restHalf, furyBlast: acc.furyBlast || 0,
     okrzyk: (sc.rambo || 0) >= 3,
     revive: has('gniazdo-zapasowe') || has('feniks-z-rosolu'),
     coinFlat: acc.coinFlat || 0,

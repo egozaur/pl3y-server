@@ -2,12 +2,12 @@
 // i aktywny run. Całą logikę gry liczy serwer: oferty, rerolle, zakupy, walki (powtórka z wejść gracza).
 //
 // Gracz przychodzi już sprawdzony przez Worker (index.js → playerFromToken): body.pl = { n, nick, avatar }.
-// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /reroll /shop /bet /bonus /fightstart /fightfinish /abandon.
+// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /will /fightstart /fightfinish /abandon /history.
 // Odpowiedź: { ok, profile, run, ...wynik akcji } albo { err, code } z kodem 400/409.
 import { mix, hash } from './rng.js';
-import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, view, statsOf } from './rules.js';
-import { newProfile, poolFor, evaluate, onBossKill, onRunEnd, markSeen, publicProfile } from './profile.js';
-import { MODES, CHARS } from './data.js';
+import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, view, statsOf, pawn, redeem, willOptions } from './rules.js';
+import { newProfile, poolFor, evaluate, onBossKill, onRunEnd, onNemesisBeaten, markSeen, publicProfile } from './profile.js';
+import { MODES, CHARS, TILE_BY_ID } from './data.js';
 
 export class BgPlayer {
   constructor(ctx, env, now = () => Date.now()) { this.ctx = ctx; this.env = env; this.now = now; this.chain = Promise.resolve(); }
@@ -44,8 +44,20 @@ export class BgPlayer {
         if (!CHARS[char] || !profile.chars.includes(char)) return json({ err: 'Ta postać jest jeszcze zablokowana.', code: 'char' }, 400);
         if (g < 0 || g > profile.garnek) return json({ err: 'Ten poziom Garnka jest jeszcze zablokowany.', code: 'garnek' }, 400);
         const seed = mix(Date.now() & 0x7fffffff, hash(pl.n), (crypto.getRandomValues(new Uint32Array(1)))[0]);
-        r = newRun({ mode, char, garnek: g, pool: poolFor(profile), seed, now: this.now() });
-        if (r.ok) run = r.run;
+        // Testament Pyrtka działa w runie inną postacią niż ta, która go spisała (chyba że masz tylko jedną postać).
+        const w = profile.will, useWill = !!(w && TILE_BY_ID[w.tile] && !(profile.chars.length > 1 && w.char === char));
+        r = newRun({ mode, char, garnek: g, pool: poolFor(profile), seed, now: this.now(), nemesis: profile.nemesis || null, will: useWill ? w.tile : null });
+        if (r.ok) { run = r.run; if (useWill) profile.will = null; }
+        break;
+      }
+      case 'pawn': r = need(run) || pawn(run, String(b.id || '')); break;
+      case 'redeem': r = need(run) || redeem(run); break;
+      case 'will': {
+        const opts = willOptions(run), i = Number(b.i);
+        if (!opts) return json({ err: 'Teraz nie spiszesz testamentu.', code: 'phase', ...this.out(profile, run) }, 409);
+        if (i !== -1 && !opts[i]) return json({ err: 'Nie ma takiego kafelka.', code: 'index', ...this.out(profile, run) }, 409);
+        run.willDone = true;
+        if (i >= 0) { profile.will = { tile: opts[i], char: run.char }; r = { ok: true, will: opts[i] }; }
         break;
       }
       case 'pick': r = need(run) || pickTile(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot), b.mut === undefined ? undefined : Number(b.mut)); break;
@@ -67,6 +79,7 @@ export class BgPlayer {
     // Skutki uboczne: odblokowania, boss, koniec runu, ranking.
     if (run && path !== 'state') {
       if (r.boss) onBossKill(profile, r.boss);
+      if (r.nemesis) onNemesisBeaten(profile);
       markSeen(profile, run.tiles);
       const fresh = evaluate(profile, run);
       if (run.phase === 'over' && !wasOver) {
@@ -90,7 +103,7 @@ export class BgPlayer {
     const o = this.out(profile, run);
     const body = { ok: true, ...o, ...extra };
     if (r.setup) body.setup = r.setup;
-    for (const k of ['healed', 'result', 'reward', 'boss', 'bonus', 'event', 'crate', 'bought', 'price', 'bet', 'won', 'tile', 'cost', 'left', 'badge', 'automat', 'chose']) if (r[k] !== undefined) body[k] = r[k];
+    for (const k of ['healed', 'result', 'reward', 'boss', 'bonus', 'event', 'crate', 'bought', 'price', 'bet', 'won', 'tile', 'cost', 'left', 'badge', 'automat', 'chose', 'interest', 'doorCoins', 'grew', 'revealed', 'nemesis', 'pawned', 'redeemed', 'will', 'door']) if (r[k] !== undefined) body[k] = r[k];
     return json(body);
   }
 

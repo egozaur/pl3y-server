@@ -5,11 +5,11 @@
 // Każdy tick zostawia w this.ev listę zdarzeń do animacji. runFight(setup, inputs) puszcza całą walkę naraz.
 // Zasada: żadnego Math.random, Date ani funkcji trygonometrycznych.
 import { makeRng } from './rng.js';
-import { SKILLS, TILE_BY_ID, STATUS } from './data.js';
+import { SKILLS, TILE_BY_ID, STATUS, REACTIONS, RULES } from './data.js';
 import { heroStats } from './stats.js';
 
 export const MAX_TICKS = 900;      // 90 s
-export const FURY_FROM = 450;      // po 45 s wrogowie wpadają w Furię
+export const FURY_FROM = 450;      // po 45 s wrogowie wpadają w Furię (Okólnik „Tryb Pilny”: setup.fury = 300)
 const fl = Math.floor;
 
 export class Fight {
@@ -32,6 +32,8 @@ export class Fight {
     this.uid = 0;
     this.enemies = setup.enemies.map(e => this.mk(e));
     this.burnDealt = 0; this.freezes = 0;
+    this.furyFrom = setup.fury || FURY_FROM; this.decree = this.loadout.decree || null;
+    this.chain = 0; this.chainT = -99; this.chainSlots = []; this.skillBonus = 0; this.chains = 0; this.reacts = 0; this.reactSeen = [];
     if (this.S.startBurn || this.S.startFrost) for (const e of this.enemies) { if (this.S.startBurn) this.applyStatus(e, 'burn', this.S.startBurn); if (this.S.startFrost) this.applyStatus(e, 'frost', this.S.startFrost); }
     this.stolen = 0; this.dealt = 0; this.taken = 0; this.maxHit = 0; this.kills = 0; this.used = 0; this.lowest = this.hp;
   }
@@ -56,7 +58,7 @@ export class Fight {
     if (this.tick < this.slowUntil) a = fl(a * 80 / 100);
     return Math.max(10, a);
   }
-  furyExtra() { return this.tick >= FURY_FROM ? 5 * fl((this.tick - FURY_FROM) / 10) : 0; }
+  furyExtra() { return this.tick >= this.furyFrom ? 5 * fl((this.tick - this.furyFrom) / 10) : 0; }
 
   heal(n) {
     if (n <= 0 || this.hp <= 0) return;
@@ -71,9 +73,10 @@ export class Fight {
     if (t.immune) { this.push({ k: 'immune', to: t.uid }); return 0; }
     if (t.evade && this.rng.int(100) < t.evade) { this.push({ k: 'miss', to: t.uid }); return 0; }
     let raw = fl(this.S.atk * pct / 100);
-    raw = fl(raw * (100 + this.S.dmg + (this.S.overtime && this.tick >= 200 ? this.S.overtime : 0) + (this.S.vsCold && (t.frost > 0 || this.tick < t.frozenUntil) ? this.S.vsCold : 0)) / 100);
+    raw = fl(raw * (100 + this.S.dmg + this.skillBonus + (this.S.overtime && this.tick >= 200 ? this.S.overtime : 0) + (this.S.vsCold && (t.frost > 0 || this.tick < t.frozenUntil) ? this.S.vsCold : 0)) / 100);
     let crit = false;
-    if (canCrit && (this.tick < this.critUntil || this.rng.int(100) < this.S.crit)) { crit = true; raw = fl(raw * this.S.critMult / 100); }
+    if (t.brittle) { t.brittle = false; crit = true; raw = fl(raw * this.S.critMult / 100); }   // Kruchość: trafienie zawsze krytyczne
+    else if (canCrit && (this.tick < this.critUntil || this.rng.int(100) < this.S.crit)) { crit = true; raw = fl(raw * this.S.critMult / 100); }
     let d = Math.max(1, fl(raw * 100 / (100 + Math.max(0, t.armor))));
     if (t.shieldHits > 0) { t.shieldHits--; this.push({ k: 'shield', to: t.uid }); return 0; }
     if (t.shield > 0) { const a = Math.min(t.shield, d); t.shield -= a; d -= a; this.push({ k: 'shieldhit', to: t.uid, d: a }); if (d <= 0) return a; }
@@ -98,7 +101,7 @@ export class Fight {
     if (!t || t.dead || t.immune || n <= 0) return false;
     if (t.resist && t.resist.includes(kind)) { this.push({ k: 'resist', to: t.uid, s: kind }); return false; }
     const def = STATUS[kind], S = this.S;
-    const until = this.tick + fl(def.dur * (100 + (S.stDur || 0)) / 100);
+    const until = this.tick + fl(def.dur * (100 + (S.stDur || 0)) / 100) * (kind === 'frost' && this.decree === 'oszczednosci' ? 2 : 1);
     if (kind === 'frost') {
       if (this.tick < t.frozenUntil) return false;
       t.frost += n; t.frostT = until;
@@ -112,18 +115,44 @@ export class Fight {
         this.push({ k: 'freeze', uid: t.uid }); this.freezes++;
         if (S.shatter) for (const e of this.alive()) this.heroHit(e, S.shatter, false, 'shatter');
       }
+      this.react(t, kind);
       return true;
     }
     const max = def.max + (kind === 'bleed' ? (S.bleedMax || 0) + this.bleedExtra : kind === 'burn' ? (S.burnMax || 0) : 0);
     t[kind] = Math.min(max, t[kind] + n); t[kind + 'T'] = until;
+    this.react(t, kind);
     return true;
+  }
+  // Czy wróg ma dany efekt (Mróz liczy się też jako zamrożenie).
+  hasSt(t, kind) { return kind === 'frost' ? t.frost > 0 || this.tick < t.frozenUntil : t[kind] > 0; }
+  // Reakcje: świeżo nałożony efekt spotyka drugi efekt z pary (REACTIONS), z przerwą cd na wroga.
+  react(t, kind) {
+    if (t.dead) return;
+    for (const R of Object.values(REACTIONS)) {
+      if (!R.of.includes(kind)) continue;
+      const other = R.of[0] === kind ? R.of[1] : R.of[0];
+      if (!this.hasSt(t, other) || !this.hasSt(t, kind)) continue;
+      t.rcd = t.rcd || {};
+      if (this.tick < (t.rcd[R.id] || 0)) continue;
+      t.rcd[R.id] = this.tick + R.cd;
+      this.reacts++; if (!this.reactSeen.includes(R.id)) this.reactSeen.push(R.id);
+      this.push({ k: 'react', uid: t.uid, r: R.id });
+      if (R.id === 'szok') {
+        const stacks = t.burn + (this.tick < t.frozenUntil ? STATUS.frost.need : t.frost);
+        t.frost = 0; t.burn = fl(t.burn / 2);
+        this.heroHit(t, Math.min(R.max, R.per * stacks), false, 'szok');
+      } else if (R.id === 'goraczka') t.feverUntil = this.tick + R.dur;
+      else if (R.id === 'kruchosc') t.brittle = true;
+      if (t.dead) return;
+    }
   }
   // Obrażenia jednego stosu na sekundę.
   dotPer(kind) {
     const S = this.S;
     if (kind === 'bleed') return S.bleed + fl(S.atk * STATUS.bleed.per / 100);
     const bonus = kind === 'burn' ? (S.burnPct || 0) : (S.poisonPct || 0);
-    return Math.max(1, fl(S.atk * STATUS[kind].per * (100 + bonus) / 10000));
+    const d = Math.max(1, fl(S.atk * STATUS[kind].per * (100 + bonus) / 10000));
+    return kind === 'burn' && this.decree === 'oszczednosci' ? Math.max(1, fl(d / 2)) : d;
   }
   dots() {
     for (const e of this.enemies) {
@@ -133,7 +162,8 @@ export class Fight {
         if (!e[kind] || e.dead) continue;
         if (this.tick > e[kind + 'T']) { e[kind] = 0; continue; }
         if (e.immune) continue;
-        const d = e[kind] * this.dotPer(kind);
+        let d = e[kind] * this.dotPer(kind);
+        if (kind !== 'burn' && this.tick < (e.feverUntil || 0)) d = fl(d * (100 + REACTIONS.goraczka.pct) / 100);   // Gorączka
         e.hp -= d; this.dealt += d; if (kind === 'burn') this.burnDealt += d;
         this.push({ k: 'hit', to: e.uid, d, crit: false, kind });
         if (kind === 'burn' && this.S.burnHeal) this.heal(fl(e.burn * this.S.burnHeal / 10));
@@ -154,6 +184,7 @@ export class Fight {
     t.dead = true; t.hp = 0; this.kills++;
     this.push({ k: 'kill', uid: t.uid });
     if (t.poison > 0) { const nx = this.enemies.find(e => !e.dead && !e.immune); if (nx) this.applyStatus(nx, 'poison', Math.max(1, fl(t.poison * (STATUS.poison.spread + (this.S.spreadPct || 0)) / 100))); }
+    if (this.tick < (t.feverUntil || 0)) for (const x of this.alive()) if (!x.immune) this.applyStatus(x, 'poison', REACTIONS.goraczka.spread);   // Gorączka przechodzi
     if (t.explode && this.hp > 0 && !this.over) { this.push({ k: 'boom', uid: t.uid }); this.enemyHit(t, t.explode); }
     if (t.boss === 'brojler') for (const m of this.enemies) if (m.minion && !m.dead) { m.dead = true; m.hp = 0; this.push({ k: 'kill', uid: m.uid }); }
   }
@@ -167,7 +198,12 @@ export class Fight {
     this.used++;
     this.push({ k: 'skill', slot, id: s.id, mut: m });
     const alive = this.alive(), P = x => fl(x * pw / 100), tick = this.tick;
-    const stunAll = d => { for (const e of this.alive()) { e.stunUntil = Math.max(e.stunUntil, tick + d); if (e.windup) { e.windup = null; e.nextSpec = e.stunUntil + (e.spec ? e.spec.every : 0); this.push({ k: 'break', uid: e.uid }); } this.push({ k: 'stun', uid: e.uid }); } };
+    const stunAll = d => this.stunAll(d);
+    // Okno Gdakania: kolejna umiejętność w krótkim czasie po poprzedniej podbija obrażenia; trzecia kończy serię.
+    if (this.chain > 0 && tick - this.chainT <= RULES.chainWindow) { this.chain++; this.chainSlots.push(slot); } else { this.chain = 1; this.chainSlots = [slot]; }
+    this.chainT = tick;
+    this.skillBonus = this.chain >= 2 ? RULES.chainPct[Math.min(1, this.chain - 2)] : 0;
+    if (this.chain >= 2) this.push({ k: 'chain', n: this.chain });
     switch (s.id) {
       case 'grad': {
         const n = m === 2 ? 9 : def.hits;
@@ -243,7 +279,16 @@ export class Fight {
         break;
       }
     }
+    this.skillBonus = 0;
+    if (this.chain >= 3) {
+      if (new Set(this.chainSlots).size >= 3) { this.chains++; this.push({ k: 'seria' }); this.stunAll(RULES.chainStun); }   // Pełna Kurza Seria: Popłoch
+      this.chain = 0; this.chainSlots = [];
+    }
     return true;
+  }
+  stunAll(d) {
+    const tick = this.tick;
+    for (const e of this.alive()) { e.stunUntil = Math.max(e.stunUntil, tick + d); if (e.windup) { e.windup = null; e.nextSpec = e.stunUntil + (e.spec ? e.spec.every : 0); this.push({ k: 'break', uid: e.uid }); } this.push({ k: 'stun', uid: e.uid }); }
   }
 
   // ---------- ataki wrogów ----------
@@ -360,7 +405,19 @@ export class Fight {
     for (const s of inputs) this.useSkill(s);
     if (this.off >= 0 && t >= this.offUntil) { this.off = -1; this.S = heroStats(this.loadout); this.push({ k: 'skubanie-end' }); if (this.S.egg && !this.nextEgg) this.nextEgg = t + this.S.egg; }
     for (const e of this.enemies) if (e.boss === 'prezes') e.immune = this.enemies.some(g => g.guard && !g.dead);
-    if (t === FURY_FROM) this.push({ k: 'fury' });
+    if (t === this.furyFrom) {
+      this.push({ k: 'fury' });
+      // Wada „Wybuchowa Usterka”
+      if (this.S.furyBlast && this.hp > 0) {
+        const d = Math.max(1, fl(this.S.maxHp * this.S.furyBlast / 100));
+        this.hp -= d; this.taken += d; if (this.hp < this.lowest) this.lowest = Math.max(0, this.hp);
+        this.push({ k: 'flaw', f: 'wybuchowy' }); this.push({ k: 'hurt', d, crit: false, kind: 'flaw' });
+        if (this.hp <= 0) this.heroDown();
+        if (this.over) { this.tick++; return; }
+      }
+    }
+    // Wada „Samozapłon”: co 20 s 3 stosy Oparzenia na bohaterze.
+    if (this.S.selfBurn && t % 200 === 199) { this.hburn = Math.min(10, this.hburn + 3); this.hburnT = t + 40; this.hburnPer = Math.max(this.hburnPer, 1, fl(this.S.maxHp / 100)); this.push({ k: 'flaw', f: 'samozaplon' }); }
 
     if (t % 10 === 9) {
       this.heal(this.S.regen);
@@ -399,7 +456,7 @@ export class Fight {
     return {
       win: this.win, ticks: this.tick, hp: Math.max(0, this.hp), maxHp: this.S.maxHp, timeout: this.timeout,
       usedRevive: this.revived, stolen: this.stolen, dealt: this.dealt, taken: this.taken, maxHit: this.maxHit,
-      kills: this.kills, skillsUsed: this.used, coinsWon: this.coinsWon, burnDealt: this.burnDealt, freezes: this.freezes, lowest: this.lowest, boss: this.win && boss ? boss.boss : null,
+      kills: this.kills, skillsUsed: this.used, chains: this.chains, reactions: this.reacts, reactSeen: this.reactSeen, coinsWon: this.coinsWon, burnDealt: this.burnDealt, freezes: this.freezes, lowest: this.lowest, boss: this.win && boss ? boss.boss : null,
     };
   }
 }

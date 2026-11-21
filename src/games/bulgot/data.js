@@ -12,11 +12,12 @@ export const TYPES = { stat: 'Statystyka', skill: 'Umiejętność', item: 'Przed
 // grow: o ile rośnie życie i atak wrogów z każdą rundą (mnożnik). bosses: runda -> boss. bonusAfter: po tych bossach dodatkowa oferta.
 // elite: rundy z elitą (nagroda: Odznaka). zoneMul: dodatkowy mnożnik życia/ataku zwykłych wrogów w strefie (%, null = brak).
 export const MODES = {
-  quick: { name: 'Szybki', rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.14, atk: 1.098 }, bossPct: { hp: 80, atk: 90 },
-    zones: [{ upTo: 5, zone: 0 }, { upTo: 10, zone: 1 }], elite: [4, 8] },
-  full: { name: 'Pełny', rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 135, atk: 80 }, grow: { hp: 1.125, atk: 1.08 }, bossPct: { hp: 100, atk: 100 },
-    zones: [{ upTo: 6, zone: 0 }, { upTo: 12, zone: 1 }, { upTo: 20, zone: 2 }], elite: [4, 10, 16], zoneMul: [null, null, { hp: 130, atk: 112 }] },
+  quick: { name: 'Szybki', rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.16, atk: 1.11 }, bossPct: { hp: 80, atk: 90 },
+    zones: [{ upTo: 5, zone: 0 }, { upTo: 10, zone: 1 }], elite: [4, 8], doors: [2, 6, 9] },
+  full: { name: 'Pełny', rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 135, atk: 80 }, grow: { hp: 1.14, atk: 1.093 }, bossPct: { hp: 100, atk: 100 },
+    zones: [{ upTo: 6, zone: 0 }, { upTo: 12, zone: 1 }, { upTo: 20, zone: 2 }], elite: [4, 10, 16], zoneMul: [null, null, { hp: 130, atk: 112 }], doors: [2, 5, 8, 11, 14, 17] },
 };
+// doors: piętra z Rozwidleniem Korytarza (wybór: zwykłe piętro albo wróg z cechą elity za nagrodę).
 
 export const ZONES = [
   { name: 'Kurnik i Podwórze', tag: 'I' },
@@ -28,6 +29,18 @@ export const ZONES = [
 export const RULES = {
   coinsRound: 4, coinsBoss: 6, prices: [6, 12, 20, 30], restCost: 4, restPct: 20, healPct: 35, rerollBase: 2, offerSize: 4, bonusSize: 3,
   eliteCoinsPct: 50, scoreRound: 1000, scoreCoin: 50, scoreTimeMax: 2000, garnekScore: 25, maxSkills: 3, maxSkillLvl: 3,
+  // Odsetki w Spiżarni: +1 Ziarno za każde `interestPer` niewydanych Ziaren po wygranej walce, najwyżej `interestMax` (Kaczor: CHARS.kaczor.interestMax).
+  interestPer: 10, interestMax: 3,
+  // Rozwidlenie Korytarza: ryzykowne drzwi = pierwszy wróg z cechą elity (życie/atak w %), nagroda: Ziarna albo wybór rzadkiego kafelka.
+  doorCoins: 8, doorHp: 165, doorAtk: 125,
+  // Lombard Lisa: zastaw = pełna cena rzadkości teraz, wykup na następnym piętrze za `pawnBack`% ceny; przepadek wzmacnia Lisy o `pawnFox`%.
+  pawnBack: 150, pawnFox: 25,
+  // Wadliwa Partia: szansa (%) na kafelek z wadą w ofercie i o ile (%) mocniejsze są jego dodatnie efekty.
+  flawChance: 25, flawBoost: 50,
+  // Okno Gdakania: kolejna umiejętność w ciągu `chainWindow` ticków podbija obrażenia (2. o chainPct[0]%, 3. o chainPct[1]%), pełna seria ogłusza na `chainStun`.
+  chainWindow: 15, chainPct: [20, 50], chainStun: 10,
+  // Awans Wroga: Nemezis ma tyle % życia/ataku (rośnie z każdym awansem).
+  nemesisHp: 140, nemesisAtk: 115,
 };
 
 // Forma kurczaka zależy od postępu (ułamek runu), nie od numeru rundy, więc tryb szybki też dochodzi do Rambo Chickena.
@@ -50,8 +63,8 @@ export const CHARS = {
   pyrtek: { id: 'pyrtek', name: 'Pyrtek', style: 'Uniwersalny', text: 'Mały, ale zawzięty. Statystyki bazowe, bez fanaberii.', base: BASE, fx: [], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: null },
   kwoka: { id: 'kwoka', name: 'Kwoka Babcia', style: 'Czołg', text: '+30% Życia, -20% tempa ataku. Zaczyna z Zagrzebaniem w Sianie.', base: BASE,
     fx: [{ k: 'hpPct', v: 30 }, { k: 'aspdPct', v: -20 }], startSkills: [['zagrzebanie', 1]], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-kwoka' },
-  kaczor: { id: 'kaczor', name: 'Kaczor Hazardzista', style: 'Ryzyko', text: '+10 Ziaren, 1 darmowy reroll na rundę, więcej kafelków ryzyka w ofertach.', base: BASE,
-    fx: [], startSkills: [], coins: 10, freeRerolls: 1, riskWeight: 2, lock: 'u-kaczor' },
+  kaczor: { id: 'kaczor', name: 'Kaczor Hazardzista', style: 'Ryzyko', text: '+10 Ziaren, 1 darmowy reroll na rundę, więcej kafelków ryzyka w ofertach, Odsetki do 5 Ziaren.', base: BASE,
+    fx: [], startSkills: [], coins: 10, freeRerolls: 1, riskWeight: 2, lock: 'u-kaczor', interestMax: 5 },
   indor: { id: 'indor', name: 'Indor Bogdan', style: 'Ciężkie ciosy', text: '+60% Ataku, -30% tempa ataku, 15% szansy na trafienie krytyczne.', base: BASE,
     fx: [{ k: 'atkPct', v: 60 }, { k: 'aspdPct', v: -30 }, { k: 'crit', v: 10 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-indor' },
 };
@@ -101,6 +114,16 @@ export const STATUS = {
   frost: { id: 'frost', name: 'Mróz', dur: 40, need: 5, slow: 8, freeze: 15, text: 'Spowalnia wroga; 5 stosów zamraża go na 1,5 s.' },
   poison: { id: 'poison', name: 'Salmonella', dur: 60, max: 12, per: 6, spread: 50, text: 'Słabsze obrażenia co sekundę, ale przechodzą na kolejnego wroga.' },
   bleed: { id: 'bleed', name: 'Krwawienie', dur: 30, max: 3, per: 8, text: 'Obrażenia co sekundę; do 3 stosów.' },
+};
+
+// Reakcje: dwa różne efekty na jednym wrogu łączą się (sprawdzane przy każdym nałożeniu efektu, `cd` ticków przerwy na wroga).
+export const REACTIONS = {
+  szok: { id: 'szok', name: 'Szok Termiczny', of: ['burn', 'frost'], cd: 30, per: 15, max: 300,
+    text: 'Oparzenie + Mróz: wybuch za 15% Ataku na każdy stos obu efektów (maks. 300%). Zdejmuje Mróz i połowę Oparzenia.' },
+  goraczka: { id: 'goraczka', name: 'Gorączka', of: ['poison', 'bleed'], cd: 30, dur: 50, pct: 50, spread: 3,
+    text: 'Salmonella + Krwawienie: przez 5 s oba efekty bolą cel o 50% mocniej; jeśli w tym czasie zginie, każdy inny wróg dostaje 3 stosy Salmonelli.' },
+  kruchosc: { id: 'kruchosc', name: 'Kruchość', of: ['frost', 'bleed'], cd: 30,
+    text: 'Mróz + Krwawienie: następne trafienie w cel jest zawsze krytyczne (także umiejętnością).' },
 };
 
 // Żywioły (oznaczenia kafelków): pokazywane na kartach, używane przez przepisy Wylęgarni i Odznaki.
@@ -177,6 +200,10 @@ export const TILES = [
   { id: 'krawat', name: 'Krawat', type: 'item', rarity: 1, set: 'korpo', tags: ['korpo'], text: '+1 darmowy reroll w każdej rundzie, +5% obrażeń', fx: [{ k: 'freeReroll', v: 1 }, { k: 'dmg', v: 5 }], flavor: 'Zawiązany na węzeł windsorski. Albo na szyi wroga.' },
   { id: 'polisa', name: 'Polisa Ubezpieczeniowa', type: 'item', rarity: 1, set: 'korpo', tags: ['korpo'], text: 'Nikt nie kradnie ci Ziaren; +5 Pancerza', fx: [{ k: 'noSteal', v: 1 }, { k: 'armor', v: 5 }], flavor: 'Obejmuje lisy, kanarki i inne zdarzenia losowe.' },
   { id: 'premia-kwartalna', name: 'Premia Kwartalna', type: 'item', rarity: 2, set: 'korpo', tags: ['korpo'], lock: 'u-premiakw', text: '+12 Ziaren za każdego pokonanego bossa, +10% Ataku', fx: [{ k: 'bossCoins', v: 12 }, { k: 'atkPct', v: 10 }], flavor: 'Wypłacana w ziarnie. Zarząd mówi, że to benefit.' },
+  // Kafelki rosnące: zaczynają słabo i rosną z warunku (licznik w run.grow, logika w stats.js i rules.js → fightFinish).
+  { id: 'pierze-weterana', name: 'Pierze Weterana', type: 'item', rarity: 1, grow: { max: 15, per: 3 }, text: 'Rośnie: +3% Ataku na stałe za każdą wygraną walkę, w której spadłeś poniżej 40% Życia (maks. +45%)', flavor: 'Każda blizna to awans. Nieformalny.' },
+  { id: 'trofeum-z-pior', name: 'Trofeum z Piór', type: 'item', rarity: 0, grow: { max: 60, per: 2 }, text: 'Rośnie: +2 maks. Życia na stałe za każdego pokonanego wroga (do 4 na walkę)', flavor: 'Kolekcja piór pokonanych. Wisi nad grzędą.' },
+  { id: 'skarbonka-piskleca', name: 'Skarbonka Pisklęcia', type: 'item', rarity: 0, grow: { max: 5, per: 1 }, text: 'Rośnie: +1 Ziarno po wygranej, +1 więcej za każde piętro bez Odpoczynku (maks. +6)', flavor: 'Brzęczy. Pisklę mówi, że to oszczędności na emeryturę.' },
   // Ryzyko i wydarzenia
   { id: 'pakt-z-lisem', name: 'Pakt z Lisem', type: 'risk', rarity: 1, text: '+50% Ataku, -30% maks. Życia do końca runu', fx: [{ k: 'atkPct', v: 50 }, { k: 'hpPct', v: -30 }], flavor: 'Lis ma drobny druk. Bardzo drobny.' },
   { id: 'szklane-skrzydlo', name: 'Szklane Skrzydło', type: 'risk', rarity: 2, lock: 'u-szklane', text: '+80% Ataku, -50% maks. Życia', fx: [{ k: 'atkPct', v: 80 }, { k: 'hpPct', v: -50 }], flavor: 'Piękne, kruche i bardzo, bardzo groźne.' },
@@ -303,8 +330,37 @@ export const BADGES = {
   'fundusz-socjalny': { name: 'Fundusz Socjalny', text: 'Odpoczynek leczy 2 razy więcej i kosztuje 1 Ziarno mniej', fx: [{ k: 'restBonus', v: 20 }, { k: 'restDisc', v: 1 }] },
   'klucz-do-serwerowni': { name: 'Klucz do Serwerowni', text: 'Efekty statusowe trwają 50% dłużej, Oparzenie i Salmonella +15% obrażeń', fx: [{ k: 'stDur', v: 50 }, { k: 'burnPct', v: 15 }, { k: 'poisonPct', v: 15 }] },
   'parasol-ochronny': { name: 'Parasol Ochronny', text: 'Pierwsze 3 ciosy wrogów w każdej walce są zablokowane', fx: [{ k: 'parasol', v: 3 }] },
+  // Specjalna: tylko za pokonanie Nemezis (nie trafia do losowych ofert Odznak ani do Kapliczki).
+  'sprawiedliwosc': { name: 'Sprawiedliwość Kurnika', text: '+10% Ataku i +10% maks. Życia', fx: [{ k: 'atkPct', v: 10 }, { k: 'hpPct', v: 10 }], special: true },
 };
 export const BADGE_OFFER = 3;
+export const BADGE_POOL = Object.keys(BADGES).filter(b => !BADGES[b].special);
+
+// ---------- Okólniki Zarządu (modyfikator strefy, losowany z ziarna runu przy wejściu do strefy) ----------
+// Efekty: oszczednosci (sim.js: Mróz, Oparzenie), integracja (stats.js: zestawy), pilny (sim.js: Furia; rules.js: premia za szybkość),
+// audyt, premia, homeoffice (rules.js: rerolle i ceny, wrogowie i Ziarna, odpoczynek i leczenie).
+export const DECREES = {
+  oszczednosci: { name: 'Oszczędności Energii', text: 'Mróz trwa 2 razy dłużej, a Oparzenie zadaje o połowę mniej.' },
+  audyt: { name: 'Audyt Wydatków', text: 'Dwa pierwsze rerolle na każdym piętrze są za darmo, ale dokupowanie jest o 50% droższe.' },
+  integracja: { name: 'Wyjazd Integracyjny', text: 'Zestawy przedmiotów liczą się tak, jakbyś miał o 1 sztukę więcej.' },
+  premia: { name: 'Premia Motywacyjna', text: 'Wrogowie mają +15% Życia, ale każde wygrane piętro daje +3 Ziarna.' },
+  homeoffice: { name: 'Praca Zdalna', text: 'Odpoczynek leczy 2 razy więcej, ale leczenie po walce jest słabsze o 10 pkt proc.' },
+  pilny: { name: 'Tryb Pilny', text: 'Wrogowie wpadają w Furię już po 30 s, ale premia za szybkość walk jest podwójna.' },
+};
+
+// ---------- Wadliwa Partia: ukryte wady kafelków (ujawniają się i zaczynają działać po następnej walce) ----------
+export const FLAWS = {
+  samozaplon: { name: 'Samozapłon', text: 'Co 20 s podpala ciebie (3 stosy Oparzenia).', fx: [{ k: 'selfBurn', v: 1 }] },
+  rozklejony: { name: 'Rozklejony', text: 'Odpoczynek leczy o połowę mniej.', fx: [{ k: 'restHalf', v: 1 }] },
+  wybuchowy: { name: 'Wybuchowa Usterka', text: 'Gdy wrogowie wpadają w Furię, wybucha: tracisz 15% maks. Życia.', fx: [{ k: 'furyBlast', v: 15 }] },
+  ciezki: { name: 'Ciężki', text: '-10% tempa ataku.', fx: [{ k: 'aspdPct', v: -10 }] },
+  kruchy: { name: 'Kruchy', text: '-10% maks. Życia.', fx: [{ k: 'hpPct', v: -10 }] },
+  zarloczny: { name: 'Żarłoczny', text: '-1 Ziarno po każdej wygranej rundzie.', fx: [{ k: 'coinFlat', v: -1 }] },
+};
+
+// ---------- Awans Wroga (Nemezis) ----------
+export const NEMESIS_TITLES = ['Kierownik', 'Starszy Specjalista', 'Koordynator', 'Brygadzista', 'Kontroler Jakości', 'Dyrektor Regionalny'];
+export const NEMESIS_NAMES = ['Zbigniew', 'Halina', 'Mirosław', 'Grażyna', 'Bożydar', 'Wiesława', 'Czesław', 'Krystyna'];
 
 // ---------- Temperatura Garnka (poziomy trudności) ----------
 export const GARNEK = [

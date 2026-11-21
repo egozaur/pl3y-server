@@ -1,6 +1,7 @@
 // Bulgot: profil gracza (Księga Kurnika): odblokowania, liczniki, najlepsze wyniki, Temperatura Garnka.
 // Czyste funkcje na obiekcie `profile`; zapis robi BgPlayer.
 import { STARTER_TILES, UNLOCKS, UNLOCK_BY_ID, MODES } from './data.js';
+import { nemesisName } from './rules.js';
 
 export function newProfile() {
   return { v: 1, chars: ['pyrtek'], tiles: [], garnek: 0, best: {}, counters: { runs: 0, wins: 0, fox: 0 }, bosses: {}, flags: {}, seen: [], unlocked: [] };
@@ -37,6 +38,7 @@ const CHECKS = {
 export function evaluate(p, r) {
   const fresh = [];
   if (r && r.stats.hatched) for (const id of r.stats.hatched) { p.recipes = p.recipes || []; if (!p.recipes.includes(id)) p.recipes.push(id); }
+  if (r && r.stats.reactions) for (const id of r.stats.reactions) { p.reactions = p.reactions || []; if (!p.reactions.includes(id)) p.reactions.push(id); }
   for (const u of UNLOCKS) {
     if (p.unlocked.includes(u.id)) continue;
     const ok = CHECKS[u.id];
@@ -49,6 +51,9 @@ export function evaluate(p, r) {
   }
   return fresh;
 }
+
+// Pokonany Nemezis znika z profilu.
+export function onNemesisBeaten(p) { p.nemesis = null; p.counters.nemesisKills = (p.counters.nemesisKills || 0) + 1; }
 
 // Wywoływane po rozstrzygnięciu walki z bossem.
 export function onBossKill(p, bossId) { p.bosses[bossId] = (p.bosses[bossId] || 0) + 1; }
@@ -63,6 +68,11 @@ export function onRunEnd(p, r) {
     if (r.mode === 'full') p.flags.winFull = true;
     if (r.mode === 'quick') p.flags.winQuick = true;
   } else if (r.coins > 30) p.flags.loseRich = true;
+  // Awans Wroga: wróg, który zakończył run, zostaje Nemezis (a Nemezis, który wygrał znowu, awansuje wyżej).
+  if (!win && r.killer) {
+    if (r.killer.nemesis && p.nemesis) { p.nemesis.lvl = (p.nemesis.lvl || 1) + 1; p.counters.nemesisWins = (p.counters.nemesisWins || 0) + 1; }
+    else if (r.killer.next) p.nemesis = r.killer.next;
+  }
   let garnekUnlocked = false;
   if (win && r.garnek === p.garnek && p.garnek < 5) { p.garnek++; garnekUnlocked = true; }
   const prev = p.best[r.mode];
@@ -78,7 +88,8 @@ export function markSeen(p, ids) { for (const id of ids) if (!p.seen.includes(id
 export function publicProfile(p) {
   return {
     nick: p.nick, avatar: p.avatar || 0, chars: p.chars, tiles: p.tiles, garnek: p.garnek, best: p.best,
-    counters: p.counters, bosses: p.bosses, seen: p.seen, unlocked: p.unlocked, recipes: p.recipes || [],
+    counters: p.counters, bosses: p.bosses, seen: p.seen, unlocked: p.unlocked, recipes: p.recipes || [], reactions: p.reactions || [],
+    nemesis: p.nemesis ? { ...p.nemesis, name: nemesisName(p.nemesis) } : null, will: p.will || null,
     locks: UNLOCKS.filter(u => !p.unlocked.includes(u.id)).map(u => ({ id: u.id, kind: u.kind, target: u.target, text: u.text })),
     modes: Object.keys(MODES),
   };
