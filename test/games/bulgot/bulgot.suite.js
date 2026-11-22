@@ -81,7 +81,7 @@ test('dane: kafelki, umiejętności z Mutacjami, odblokowania, spójne odwołani
   for (const id of Object.keys(D.MILESTONES)) assert(D.TILE_BY_ID[id] && D.TILE_BY_ID[id].type === 'stat' && D.TILE_BY_ID[id].repeat, 'próg ' + id);
   assert(new Set(ALL).size === D.TILES.length, 'unikalne id');
   const by = t => D.TILES.filter(x => x.type === t).length;
-  assert(by('skill') === Object.keys(D.SKILLS).length && by('skill') === 14, '14 umiejętności, każda ma kafelek');
+  assert(by('skill') === Object.keys(D.SKILLS).length && by('skill') === 24, '24 umiejętności, każda ma kafelek');
   for (const sk of Object.values(D.SKILLS)) assert(sk.muts && sk.muts.length === 2 && sk.muts.every(m => m.name && m.text), 'Mutacje ' + sk.id);
   for (const t of D.TILES) for (const tg of (t.tags || [])) assert(D.ELEMENTS[tg], 'żywioł ' + t.id);
   for (const t of D.TILES) {
@@ -1329,8 +1329,8 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
   eq(c.pending.offer.length, 3, 'nadal 3 propozycje, gdy zostało mniej niż 3 nowe');
 });
 
-test('RUN_V = 3: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 3, 'wersja reguł');
+test('RUN_V = 4: stary run (wersja 2) jest unieważniany', async () => {
+  eq(R.RUN_V, 4, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1354,4 +1354,84 @@ test('łup z bossa: szansa 15% (RULES.lootChance), losowana deterministycznie z 
     const go = seed => { const b = fresh({ seed }); b.round = 6; b.tiles = [...Array(8).fill('twardy-grzebien'), 'ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy']; b.hp = 9999; b.phase = 'fight'; b.fight = {}; R.fightFinish(b, []); R.choose(b, 0); return b; };
     eq(go(nl).phase, 'bonus', 'bez łupu: po Odznace od razu bonus'); eq(go(wl).phase, 'loot', 'z łupem: faza łupu');
   } finally { D.RULES.lootChance = 100; }
+});
+
+// ---------- etap 2: nowe umiejętności i przedmioty ----------
+test('etap 2: pula (121 kafelków), zestawy mają 6–7 sztuk, każda nowa umiejętność ma 2 mutacje i kafelek, nowe kafelki są w ofertach', () => {
+  const sets = {}; for (const t of D.TILES.filter(x => x.set && !x.hatched)) sets[t.set] = (sets[t.set] || 0) + 1;
+  for (const [s, n] of Object.entries(sets)) assert(n >= 6 && n <= 7, 'zestaw ' + s + ' ma ' + n + ' sztuk');
+  for (const id of ['wrzatek', 'podpalka', 'powiew', 'sopel', 'zakwas', 'pazury', 'wir', 'garsc', 'zwolnienie', 'pogotowie']) { const s = D.SKILLS[id]; assert(s && s.muts.length === 2 && D.TILES.some(t => t.skill === id), 'umiejętność ' + id); }
+  const seen = new Set();
+  for (let seed = 1; seed < 300; seed++) { const run = fresh({ seed }); run.round = 8; for (const id of R.makeOffer(run, 100 + (seed % 5))) seen.add(id); }
+  for (const id of ['wrzatek-z-kotla', 'kura-nioska', 'open-space', 'zwolnienie-dyscyplinarne', 'spichlerz', 'sopel-w-plecy']) assert(seen.has(id), 'w ofertach pojawia się ' + id);
+});
+
+test('umiejętności etapu 2: Wrzątek, Podpałka, Powiew, Sopel, Zakwas, Pazury, Wir, Garść Ziarna, Zwolnienie, Pogotowie (i ich Mutacje)', () => {
+  const big = (o = {}) => foe({ hp: 100000, atk: 1, aspd: 10, ...o });
+  const first = (id, lvl = 1, mut = 0, enemies = [big(), big()], lo = {}, hp) => { const f = new Fight(setup({ lo: { ...lo, skills: [{ id, lvl, mut }] }, enemies, hp })); f.skills[0].cd = 0; f.step([0]); return f; };
+  let f = first('wrzatek'); eq([f.enemies[0].burn, f.enemies[1].burn], [3, 0], 'Wrzątek: 3 Oparzenia na celu');
+  f = first('wrzatek', 3, 1); eq([f.enemies[0].burn, f.enemies[1].burn], [3, 3], 'Wrzątek Hurtowy: na wszystkich');
+  let g = new Fight(setup({ lo: { skills: [sk('wrzatek')] }, enemies: [big()] })); g.skills[0].cd = 0; g.applyStatus(g.enemies[0], 'burn', 4); g.step([0]); eq(g.enemies[0].burn, 10, 'podwaja 4 → 8 i +3, limit 10');
+  const dmg = m => { const x = first('wrzatek', 3, m, [big()]); return 100000 - x.enemies[0].hp; };
+  assert(dmg(2) > dmg(1) * 2, 'Gotowanie na Wolnym Ogniu: 150% zamiast 60%');
+  f = first('podpalka'); for (let i = 0; i < 12; i++) f.step(); assert(f.enemies[0].burn >= 1 && f.igniteUntil > f.tick, 'Podpałka: ataki nakładają Oparzenie');
+  f = first('podpalka', 3, 2); assert(f.igniteUntil - f.tick > 100, 'Długi Knot trwa 2 razy dłużej');
+  f = first('powiew'); eq(f.enemies.map(e => e.frost), [3, 3], 'Powiew: 3 Mrozu na wszystkich'); f = first('powiew', 3, 1); assert(f.enemies.every(e => e.frozenUntil > 0), 'Zamieć: 5 stosów zamraża');
+  f = first('powiew', 3, 2, [big()], {}, 20); assert(f.hp > 20, 'Szron na Piórach leczy');
+  g = new Fight(setup({ lo: { skills: [sk('sopel')] }, enemies: [big(), big()] })); g.skills[0].cd = 0; g.applyStatus(g.enemies[1], 'frost', 2); g.step([0]);
+  assert(g.enemies[0].hp === 100000 && g.enemies[1].hp < 100000, 'Sopel w Plecy celuje w wroga z Mrozem');
+  const sd = (fr) => { const x = new Fight(setup({ lo: { skills: [sk('sopel')] }, enemies: [big()] })); x.skills[0].cd = 0; if (fr) x.applyStatus(x.enemies[0], 'frost', 2); x.step([0]); return 100000 - x.enemies[0].hp; };
+  assert(sd(true) >= sd(false) * 2.5, 'Sopel: ok. ×2,7 w wroga z Mrozem');
+  f = first('sopel', 3, 1); assert(f.enemies.every(e => e.hp < 100000), 'Odłamki: oba cele dostają obrażenia');
+  f = first('zakwas'); eq(f.enemies.map(e => e.poison), [1, 1], 'Zakwas: +1 na nowo'); g = new Fight(setup({ lo: { skills: [sk('zakwas')] }, enemies: [big()] })); g.skills[0].cd = 0; g.applyStatus(g.enemies[0], 'poison', 3); g.step([0]); eq(g.enemies[0].poison, 7, 'podwaja 3 → 6 i +1');
+  g = new Fight(setup({ lo: { skills: [{ id: 'zakwas', lvl: 3, mut: 1 }] }, enemies: [big()] })); g.skills[0].cd = 0; g.applyStatus(g.enemies[0], 'poison', 3); g.step([0]); eq(g.enemies[0].poison, 10, 'Burzliwa Fermentacja potraja 3 → 9 i +1');
+  f = first('pazury'); eq(f.enemies[0].bleed, 3, 'Pazury: 3 Krwawienia'); f = first('pazury', 3, 1); assert(f.enemies[0].bleed + f.enemies[1].bleed >= 3, 'Krwawy Taniec');
+  f = first('pazury', 1, 0, [big()], {}, 20); assert(f.hp > 20, 'Pazury leczą za stosy Krwawienia');
+  f = first('wir'); assert(100000 - f.enemies[0].hp + 100000 - f.enemies[1].hp > 0 && evs(f.ev, 'hit').length === 3, 'Wir: 3 jaja'); f = first('wir', 3, 2); eq(evs(f.ev, 'hit').length, 6, 'Dziesiątka: 6 jaj');
+  f = first('wir', 3, 1); assert(f.enemies.some(e => e.burn > 0), 'Jajecznica: Oparzenie');
+  f = first('garsc', 1, 0, [big()], {}, 20); assert(f.hp > 20 && f.dmgUntil > f.tick && f.dmgBonus === 30, 'Garść Ziarna: bonus obrażeń i leczenie'); f = first('garsc', 3, 1, [big()]); eq(f.dmgBonus, 78, 'Wiadro Ziarna: 60% × moc poziomu 3');
+  // Zwolnienie: wróg poniżej progu odchodzi, boss nie
+  g = new Fight(setup({ lo: { skills: [sk('zwolnienie')] }, enemies: [foe({ hp: 1000 }), foe({ hp: 1000 })] })); g.skills[0].cd = 0; g.enemies[1].hp = 100; g.step([0]); assert(g.enemies[1].dead && !g.enemies[0].dead && g.coinsWon === 1, 'Zwolnienie: wróg poniżej 25% odchodzi, +1 Ziarno');
+  g = new Fight(setup({ lo: { skills: [sk('zwolnienie')] }, enemies: [foe({ hp: 100000, boss: 'brojler', id: 'brojler' })] })); g.skills[0].cd = 0; g.enemies[0].hp = 100; g.step([0]); assert(!g.enemies[0].dead || g.enemies[0].hp <= 0, 'boss nie jest zwalniany od ręki (traci tylko zwykłe obrażenia)');
+  g = new Fight(setup({ lo: { skills: [{ id: 'zwolnienie', lvl: 3, mut: 2 }] }, enemies: [foe({ hp: 1000 }), foe({ hp: 1000 })] })); g.skills[0].cd = 0; g.enemies[1].hp = 350; g.step([0]); assert(g.enemies[1].dead, 'Restrukturyzacja: próg 40%');
+  g = new Fight(setup({ lo: { skills: [sk('pogotowie')] }, enemies: [big({ idle: 99999 })], hp: 10 })); g.skills[0].cd = 0; g.step([0]); for (let i = 0; i < 45; i++) g.step(); assert(g.hp >= 10 + 3 * 5, 'Pogotowie leczy co sekundę (8% z 70 = 5, ok. 4 s)'); const h1 = g.hp; for (let i = 0; i < 100; i++) g.step(); eq(g.hp, h1, 'po 4 s koniec leczenia');
+});
+
+test('przedmioty etapu 2: Wywar Dnia, Tłusta Pokrywka, Szczypta Soli, Lodowa Spódnica, Szron Poranny, Jajko Niespodzianka, Kombajn, Strach na Wróble, Karabin, Apteczka, Open Space', () => {
+  const big = (o = {}) => foe({ hp: 100000, atk: 1, aspd: 10, ...o });
+  const S = ids => heroStats(loadout({ tiles: ids }));
+  // Wywar Dnia: po śmierci płonącego wroga stosy przechodzą dalej
+  let f = new Fight(setup({ lo: { tiles: ['wywar-dnia'] }, enemies: [foe({ hp: 5 }), big()] })); f.applyStatus(f.enemies[0], 'burn', 6); f.kill(f.enemies[0]); eq(f.enemies[1].burn, 3, 'Wywar Dnia: połowa stosów przechodzi');
+  f = new Fight(setup({ lo: { tiles: [] }, enemies: [foe({ hp: 5 }), big()] })); f.applyStatus(f.enemies[0], 'burn', 6); f.kill(f.enemies[0]); eq(f.enemies[1].burn, 0, 'bez przedmiotu nic nie przechodzi');
+  // Tłusta Pokrywka: pancerz za stosy Oparzenia na wrogach (maks. 12)
+  const hurt = tiles => { const x = new Fight(setup({ lo: { tiles }, enemies: [foe({ hp: 100000, atk: 100, aspd: 10 })], hp: 1000 })); x.applyStatus(x.enemies[0], 'burn', 10); x.hp = 1000; x.enemyHit(x.enemies[0], 100); return 1000 - x.hp; };
+  assert(hurt(['tlusta-pokrywka']) < hurt([]), 'Tłusta Pokrywka zmniejsza obrażenia przy płonącym wrogu');
+  // Szczypta Soli: +20% obrażeń na wroga z Oparzeniem
+  const dealt = tiles => { const x = new Fight(setup({ lo: { tiles }, enemies: [big()] })); x.applyStatus(x.enemies[0], 'burn', 1); const b = x.enemies[0].hp; x.heroHit(x.enemies[0], 1000, false, 'test'); return b - x.enemies[0].hp; };
+  assert(dealt(['szczypta-soli']) > dealt([]), 'Szczypta Soli');
+  // Lodowa Spódnica
+  const hurtF = (tiles, frost) => { const x = new Fight(setup({ lo: { tiles }, enemies: [foe({ hp: 100000, atk: 100, aspd: 10 })], hp: 1000 })); if (frost) x.applyStatus(x.enemies[0], 'frost', 1); x.hp = 1000; x.enemyHit(x.enemies[0], 100); return 1000 - x.hp; };
+  assert(hurtF(['lodowa-spodnica'], true) < hurtF([], true) && hurtF(['lodowa-spodnica'], false) === hurtF([], false), 'Lodowa Spódnica: słabsze ciosy tylko od mroźnych wrogów');
+  // Szron Poranny: pierwszy cios mrozi (5 stosów = zamrożenie)
+  f = new Fight(setup({ lo: { tiles: ['szron-poranny'] }, enemies: [big()] })); for (let i = 0; i < 12; i++) f.step(); assert(f.freezes === 1 || f.enemies[0].frozenUntil > 0, 'Szron Poranny: pierwszy cios zamraża');
+  // Jajko Niespodzianka: co 9 s wybuch
+  f = new Fight(setup({ lo: { tiles: ['jajko-niespodzianka'] }, enemies: [big()] })); for (let i = 0; i < 280; i++) f.step(); let eggs = 0; const g2 = new Fight(setup({ lo: { tiles: ['jajko-niespodzianka'] }, enemies: [big()] })); for (let i = 0; i < 280; i++) { g2.step(); eggs += evs(g2.ev, 'egg').length; } eq(eggs, 3, 'co 9 s: 3 wybuchy w 28 s');
+  // Kura Nioska
+  eq(S(['kura-nioska', 'zlote-jajo', 'tykajace-jajo']).coinFlat, 3 + 3, 'Kura Nioska: +1 za każdy przedmiot Jajeczny (3 sztuki) plus Złote Jajo +3');
+  eq(S(Array(6).fill('kura-nioska')).coinFlat, 4, 'limit +4');
+  // Kombajn: obrażenia dla pozostałych wrogów
+  f = new Fight(setup({ lo: { tiles: ['kombajn-zbozowy', 'kombajn-zbozowy', 'kombajn-zbozowy', 'kombajn-zbozowy', 'kombajn-zbozowy'] }, enemies: [big(), big()] })); for (let i = 0; i < 200; i++) f.step(); assert(f.enemies[1].hp < 100000, 'Kombajn: pozostali wrogowie obrywają');
+  // Strach na Wróble
+  f = new Fight(setup({ lo: { tiles: ['strach-na-wroble'] }, enemies: [foe({ boss: 'brojler', id: 'brojler', hp: 100000 }), big()] })); eq([f.enemies[0].stunUntil, f.enemies[1].stunUntil], [7, 15], 'Strach na Wróble: 1,5 s (boss 0,8 s)');
+  // Karabin Maszynowy: więcej ciosów
+  const swings = tiles => { const x = new Fight(setup({ lo: { tiles }, enemies: [big()] })); for (let i = 0; i < 300; i++) x.step(); return 100000 - x.enemies[0].hp; };
+  assert(swings(Array(6).fill('karabin-maszynowy')) > swings([]) * 1.3, 'Karabin Maszynowy: podwójne uderzenia');
+  // Apteczka Polowa: raz na walkę poniżej 50%
+  f = new Fight(setup({ lo: { tiles: ['apteczka-polowa'] }, enemies: [foe({ hp: 100000, atk: 20, aspd: 10 })], hp: 40 })); f.enemyHit(f.enemies[0], 100); assert(f.hp > 20 && f.medUsed, 'Apteczka leczy po zejściu poniżej 50%'); const hh = f.hp; f.hp = 10; f.enemyHit(f.enemies[0], 100); assert(f.hp < hh && f.hp < 10, 'tylko raz na walkę');
+  // Open Space: reset cooldownu
+  const uses = tiles => { const x = new Fight(setup({ lo: { tiles, skills: [sk('grad')] }, enemies: [big()] })); x.skills[0].cd = 0; for (let i = 0; i < 600; i++) x.step(x.tick >= x.skills[0].cd ? [0] : []); return x.used; };
+  assert(uses(Array(5).fill('open-space')) > uses([]) + 2, 'Open Space: umiejętność używana częściej (reset cooldownu)');
+  // Spichlerz, Służbowy Samochód, Szczypta: statystyki
+  eq(S(['spichlerz']).maxHp, 70 + 12, 'Spichlerz +12 Życia'); eq(S(['spichlerz']).coinPct, 20, 'Spichlerz +20% Ziaren');
+  const car = fresh(); car.tiles = ['sluzbowy-samochod']; car.hp = 5; eq(R.restCost(car), 0, 'Służbowy Samochód: darmowy Odpoczynek'); eq(S(['sluzbowy-samochod']).restDisc, 4, 'restDisc'); eq(S(['sluzbowy-samochod']).healBonus, 10, 'leczenie po wygranej +10 pkt proc.');
 });

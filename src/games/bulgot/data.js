@@ -12,9 +12,9 @@ export const TYPES = { stat: 'Statystyka', skill: 'Umiejętność', item: 'Przed
 // grow: o ile rośnie życie i atak wrogów z każdą rundą (mnożnik). bosses: runda -> boss. bonusAfter: po tych bossach dodatkowa oferta.
 // elite: rundy z elitą (nagroda: Odznaka). zoneMul: dodatkowy mnożnik życia/ataku zwykłych wrogów w strefie (%, null = brak).
 export const MODES = {
-  quick: { name: 'Zupka Chińska', rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.135, atk: 1.092 }, bossPct: { hp: 80, atk: 90 },
+  quick: { name: 'Zupka Chińska', rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.125, atk: 1.086 }, bossPct: { hp: 80, atk: 90 },
     zones: [{ upTo: 5, zone: 0 }, { upTo: 10, zone: 1 }], elite: [4, 8], doors: [2, 6, 9] },
-  full: { name: 'Bulion Babci', rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 135, atk: 80 }, grow: { hp: 1.115, atk: 1.072 }, bossPct: { hp: 100, atk: 100 },
+  full: { name: 'Bulion Babci', rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 135, atk: 80 }, grow: { hp: 1.109, atk: 1.068 }, bossPct: { hp: 100, atk: 100 },
     zones: [{ upTo: 6, zone: 0 }, { upTo: 12, zone: 1 }, { upTo: 20, zone: 2 }], elite: [4, 10, 16], zoneMul: [null, null, { hp: 130, atk: 112 }], doors: [2, 5, 8, 11, 14, 17] },
 };
 // doors: piętra z Rozwidleniem Korytarza (wybór: zwykłe piętro albo wróg z cechą elity za nagrodę).
@@ -109,6 +109,28 @@ export const SKILLS = {
     muts: [{ name: 'Premia Roczna', text: '+2 Ziarna za zabójstwo, do 6 na walkę.' }, { name: 'Nadgodziny', text: '300% Ataku zamiast 160%.' }] },
   egzekucja: { id: 'egzekucja', name: 'Egzekucja Ostrogą', cd: 90, pct: 130, exec: 400, thr: 30, text: '130% Ataku; wróg poniżej 30% Życia dostaje 400%.', key: 'egzekucja', el: 'krew',
     muts: [{ name: 'Wyrok', text: 'Próg egzekucji to 50% Życia.' }, { name: 'Seria', text: 'Zabójstwo od razu odnawia umiejętność.' }] },
+
+  // Etap 2: nowe umiejętności (po 1–2 na żywioł i styl)
+  wrzatek: { id: 'wrzatek', name: 'Wrzątek z Kotła', cd: 70, pct: 60, n: 3, text: '60% Ataku, podwaja stosy Oparzenia na celu i dodaje 3.', key: 'wrzatek', el: 'ogien',
+    muts: [{ name: 'Wrzątek Hurtowy', text: 'Działa na wszystkich wrogów.' }, { name: 'Gotowanie na Wolnym Ogniu', text: '150% Ataku zamiast 60%.' }] },
+  podpalka: { id: 'podpalka', name: 'Podpałka', cd: 90, dur: 60, text: 'Przez 6 s każdy zwykły atak nakłada stos Oparzenia.', key: 'podpalka', el: 'ogien',
+    muts: [{ name: 'Pochodnia', text: 'Każdy atak nakłada 2 stosy.' }, { name: 'Długi Knot', text: 'Trwa 2 razy dłużej.' }] },
+  powiew: { id: 'powiew', name: 'Mroźny Powiew', cd: 75, n: 3, text: '3 stosy Mrozu na wszystkich wrogach.', key: 'powiew', el: 'lod',
+    muts: [{ name: 'Zamieć', text: '5 stosów Mrozu zamiast 3.' }, { name: 'Szron na Piórach', text: 'Dodatkowo leczy 10% maks. Życia.' }] },
+  sopel: { id: 'sopel', name: 'Sopel w Plecy', cd: 70, pct: 110, exec: 300, text: '110% Ataku; wróg z Mrozem lub zamrożony dostaje 300%.', key: 'sopel', el: 'lod',
+    muts: [{ name: 'Odłamki', text: 'Pozostali wrogowie dostają 50% Ataku.' }, { name: 'Lodowa Seria', text: 'Uderza dwa razy.' }] },
+  zakwas: { id: 'zakwas', name: 'Zakwas Babci Kwoki', cd: 90, n: 1, text: 'Podwaja stosy Salmonelli na wszystkich wrogach i dodaje 1.', key: 'zakwas', el: 'trucizna',
+    muts: [{ name: 'Burzliwa Fermentacja', text: 'Potraja stosy zamiast podwajać.' }, { name: 'Zakwas Mamy', text: 'Leczy 2% maks. Życia za każdy stos Salmonelli na wrogach.' }] },
+  pazury: { id: 'pazury', name: 'Wyrywanie Pazurów', cd: 85, pct: 100, n: 3, text: '100% Ataku i 3 stosy Krwawienia na celu; leczy 2% maks. Życia za każdy stos Krwawienia na celu.', key: 'pazury', el: 'krew',
+    muts: [{ name: 'Krwawy Taniec', text: 'Trzy uderzenia w losowych wrogów.' }, { name: 'Wampirze Pazury', text: 'Leczy 4% maks. Życia za stos zamiast 2%.' }] },
+  wir: { id: 'wir', name: 'Jajeczny Wir', cd: 75, hits: 3, pct: 70, text: '3 jaja po 70% Ataku w losowych wrogów.', key: 'wir', el: 'jajo',
+    muts: [{ name: 'Jajecznica', text: 'Każde jajo nakłada stos Oparzenia.' }, { name: 'Dziesiątka', text: '6 jaj zamiast 3.' }] },
+  garsc: { id: 'garsc', name: 'Garść Ziarna', cd: 110, dur: 50, pct: 30, text: 'Przez 5 s +30% obrażeń i leczy 10% maks. Życia.', key: 'garsc', el: 'ziarno',
+    muts: [{ name: 'Wiadro Ziarna', text: '+60% obrażeń zamiast 30%.' }, { name: 'Biesiada', text: 'Leczy 25% maks. Życia zamiast 10%.' }] },
+  zwolnienie: { id: 'zwolnienie', name: 'Zwolnienie Dyscyplinarne', cd: 95, pct: 130, thr: 25, text: '130% Ataku; wróg poniżej 25% Życia (nie boss) odchodzi natychmiast. Zwolnienie daje 1 Ziarno (do 3 na walkę).', key: 'zwolnienie', el: 'korpo',
+    muts: [{ name: 'Odprawa', text: '+2 Ziarna za zwolnienie, do 6 na walkę.' }, { name: 'Restrukturyzacja', text: 'Próg zwolnienia to 40% Życia.' }] },
+  pogotowie: { id: 'pogotowie', name: 'Kurze Pogotowie', cd: 130, dur: 40, pct: 8, text: 'Przez 4 s leczy 8% maks. Życia na sekundę.', key: 'pogotowie',
+    muts: [{ name: 'Pełne Pogotowie', text: 'Leczy 14% na sekundę.' }, { name: 'Dyżur Nocny', text: 'Trwa 2 razy dłużej.' }] },
 };
 
 // ---------- Efekty statusowe (nakładane na wrogów) ----------
@@ -232,6 +254,16 @@ export const TILES = [
   { id: 'piaskowa-kapiel', name: 'Piaskowa Kąpiel', type: 'skill', rarity: 1, skill: 'kapiel', text: 'Umiejętność: przez 3 s wrogowie pudłują połowę ciosów, cooldown 11 s', flavor: 'Kurza kąpiel w piachu. Higiena po wiejsku.' },
   { id: 'dziobanie-premii', name: 'Dziobanie Premii', type: 'skill', rarity: 1, skill: 'premia', tags: ['korpo'], lock: 'u-premia', text: 'Umiejętność: 160% Ataku, zabójstwo daje Ziarno (do 3), cooldown 7 s', flavor: 'Premia uznaniowa. Uznaje ją dziób.' },
   { id: 'egzekucja-ostroga', name: 'Egzekucja Ostrogą', type: 'skill', rarity: 2, skill: 'egzekucja', tags: ['krew'], lock: 'u-egzekucja', text: 'Umiejętność: 130% Ataku, 400% poniżej 30% Życia wroga, cooldown 9 s', flavor: 'Szybko, sprawnie i bez zbędnej papierologii.' },
+  { id: 'wrzatek-z-kotla', name: 'Wrzątek z Kotła', type: 'skill', rarity: 1, skill: 'wrzatek', tags: ['ogien'], text: 'Umiejętność: 60% Ataku, podwaja Oparzenie na celu i dodaje 3 stosy, cooldown 7 s', flavor: 'Prosto z kotła, z pozdrowieniami dla wroga.' },
+  { id: 'podpalka', name: 'Podpałka', type: 'skill', rarity: 0, skill: 'podpalka', tags: ['ogien'], text: 'Umiejętność: przez 6 s każdy atak nakłada Oparzenie, cooldown 9 s', flavor: 'Rozpałka do grilla. Grillem jesteś ty.' },
+  { id: 'mrozny-powiew', name: 'Mroźny Powiew', type: 'skill', rarity: 1, skill: 'powiew', tags: ['lod'], text: 'Umiejętność: 3 stosy Mrozu na wszystkich wrogach, cooldown 7,5 s', flavor: 'Drzwi do Chłodni zostawiono otwarte. Nie przypadkiem.' },
+  { id: 'sopel-w-plecy', name: 'Sopel w Plecy', type: 'skill', rarity: 2, skill: 'sopel', tags: ['lod'], text: 'Umiejętność: 110% Ataku, 300% w wroga z Mrozem, cooldown 7 s', flavor: 'Wisiał pod dachem od listopada. Czekał na swoją chwilę.' },
+  { id: 'zakwas-babci', name: 'Zakwas Babci Kwoki', type: 'skill', rarity: 1, skill: 'zakwas', tags: ['trucizna'], text: 'Umiejętność: podwaja stosy Salmonelli na wszystkich wrogach, +1, cooldown 9 s', flavor: 'Im starszy, tym lepszy. Babcia nie je własnego chleba.' },
+  { id: 'wyrywanie-pazurow', name: 'Wyrywanie Pazurów', type: 'skill', rarity: 1, skill: 'pazury', tags: ['krew'], text: 'Umiejętność: 100% Ataku, 3 stosy Krwawienia, leczenie za stosy, cooldown 8,5 s', flavor: 'Pazury są po to, żeby ich używać. Dwa razy dziennie.' },
+  { id: 'jajeczny-wir', name: 'Jajeczny Wir', type: 'skill', rarity: 0, skill: 'wir', tags: ['jajo'], text: 'Umiejętność: 3 jaja po 70% Ataku w losowych wrogów, cooldown 7,5 s', flavor: 'Jajka lecą, a nikt nie zamówił omletu.' },
+  { id: 'garsc-ziarna', name: 'Garść Ziarna', type: 'skill', rarity: 0, skill: 'garsc', tags: ['ziarno'], text: 'Umiejętność: przez 5 s +30% obrażeń i leczy 10% maks. Życia, cooldown 11 s', flavor: 'Śniadanie mistrzów. Obiad też.' },
+  { id: 'zwolnienie-dyscyplinarne', name: 'Zwolnienie Dyscyplinarne', type: 'skill', rarity: 2, skill: 'zwolnienie', tags: ['korpo'], text: 'Umiejętność: 130% Ataku, wróg poniżej 25% Życia odchodzi od razu (+1 Ziarno), cooldown 9,5 s', flavor: 'Bez wypowiedzenia, bez odprawy, za to z uśmiechem.' },
+  { id: 'kurze-pogotowie', name: 'Kurze Pogotowie', type: 'skill', rarity: 1, skill: 'pogotowie', text: 'Umiejętność: przez 4 s leczy 8% maks. Życia na sekundę, cooldown 13 s', flavor: 'Dzwoń 112. Albo gdakaj głośno.' },
   { id: 'zagrzebanie-w-sianie', name: 'Zagrzebanie w Sianie', type: 'skill', rarity: 2, skill: 'zagrzebanie', lock: 'u-zagrzebanie', text: 'Umiejętność: leczy 30% maks. Życia, cooldown 16 s', flavor: 'Siano leczy wszystko. Prawie.' },
   // Przedmioty z synergią
   { id: 'zlote-jajo', name: 'Złote Jajo', type: 'item', rarity: 1, set: 'jajeczne', text: '+3 Ziarna po każdej wygranej rundzie', fx: [{ k: 'coinFlat', v: 3 }], flavor: 'Prezes by za nie zabił. Dosłownie.' },
@@ -247,6 +279,21 @@ export const TILES = [
   { id: 'zepsute-jajo', name: 'Zepsute Jajo', type: 'item', rarity: 1, set: 'jajeczne', tags: ['trucizna', 'jajo'], text: 'Wybuchy jaj i Granat nakładają 3 stosy Salmonelli; 10% szans na Salmonellę przy ataku', fx: [{ k: 'eggPoison', v: 3 }, { k: 'poisonHit', v: 10 }], flavor: 'Nikt nie chce wiedzieć, ile leżało w kącie.' },
   { id: 'mokra-pasza', name: 'Mokra Pasza', type: 'item', rarity: 0, set: 'zbozowe', tags: ['trucizna', 'ziarno'], text: '25% szans na Salmonellę przy ataku, +20% obrażeń Salmonelli', fx: [{ k: 'poisonHit', v: 25 }, { k: 'poisonPct', v: 20 }], flavor: 'Pachnie jak magazyn po powodzi.' },
   { id: 'kolczatka', name: 'Kolczatka', type: 'item', rarity: 1, set: 'rambo', tags: ['krew'], text: 'Ataki krwawią (3 na stos), +2 do limitu stosów Krwawienia', fx: [{ k: 'bleed', v: 3 }, { k: 'bleedMax', v: 2 }], flavor: 'Obroża po psie łańcuchowym. Teraz w lepszych rękach.' },
+  // Etap 2: nowe przedmioty do zestawów (nowe efekty)
+  { id: 'wywar-dnia', name: 'Wywar Dnia', type: 'item', rarity: 1, set: 'rosolowe', tags: ['ogien'], text: 'Gdy płonący wróg ginie, połowa jego stosów Oparzenia przechodzi na następnego', fx: [{ k: 'burnSpread', v: 50 }], flavor: 'Dziś zupa dnia. Jutro wróg dnia.' },
+  { id: 'tlusta-pokrywka', name: 'Tłusta Pokrywka', type: 'item', rarity: 1, set: 'rosolowe', tags: ['ogien'], text: '+1 Pancerza za każdy stos Oparzenia na wrogach (maks. +12)', fx: [{ k: 'burnArmor', v: 1 }], flavor: 'Przykrywa wszystko. Zwłaszcza błędy.' },
+  { id: 'szczypta-soli', name: 'Szczypta Soli', type: 'item', rarity: 0, set: 'rosolowe', tags: ['ogien'], text: '+20% obrażeń zadawanych wrogom z Oparzeniem', fx: [{ k: 'vsBurn', v: 20 }], flavor: 'Sól podkręca smak. I rany.' },
+  { id: 'lodowa-spodnica', name: 'Lodowa Spódnica', type: 'item', rarity: 1, set: 'chlodnicze', tags: ['lod'], text: 'Wrogowie z Mrozem lub zamrożeni zadają ci o 30% mniej obrażeń', fx: [{ k: 'frostWeak', v: 30 }], flavor: 'Kolekcja jesień–zima. Ceny letnie.' },
+  { id: 'szron-poranny', name: 'Szron Poranny', type: 'item', rarity: 1, set: 'chlodnicze', tags: ['lod'], text: 'Pierwszy cios w walce nakłada 5 stosów Mrozu', fx: [{ k: 'firstFrost', v: 5 }], flavor: 'Pojawia się o świcie. Razem z kontrolą jakości.' },
+  { id: 'jajko-niespodzianka', name: 'Jajko Niespodzianka', type: 'item', rarity: 1, set: 'jajeczne', tags: ['jajo'], text: 'Co 9 s wybucha: 130% Ataku i losowy skutek (3 stosy Oparzenia, Mrozu, Salmonelli albo Krwawienia, albo leczenie 8% Życia)', fx: [{ k: 'surprise', v: 90 }], flavor: 'Nikt nie wie, co w środku. Nawet kura.' },
+  { id: 'kura-nioska', name: 'Kura Nioska', type: 'item', rarity: 2, set: 'jajeczne', tags: ['jajo'], text: '+1 Ziarno po wygranej za każdy przedmiot z zestawu Jajeczne w sprzęcie (maks. +4)', fx: [{ k: 'nioska', v: 1 }], flavor: 'Znosi jaja o stałej cenie. Rynek jest zdziwiony.' },
+  { id: 'kombajn-zbozowy', name: 'Kombajn Zbożowy', type: 'item', rarity: 1, set: 'zbozowe', tags: ['ziarno'], text: '20% szans, że zwykły atak uderza też pozostałych wrogów za 40% obrażeń', fx: [{ k: 'cleave', v: 20 }], flavor: 'Żniwa trwają cały rok. Zwłaszcza w kurniku.' },
+  { id: 'spichlerz', name: 'Spichlerz', type: 'item', rarity: 0, set: 'zbozowe', tags: ['ziarno'], text: '+12 maks. Życia, +20% Ziaren z nagród', fx: [{ k: 'hpFlat', v: 12 }, { k: 'coinPct', v: 20 }], flavor: 'Pełny spichlerz, pełny kurczak.' },
+  { id: 'strach-na-wroble', name: 'Strach na Wróble', type: 'item', rarity: 1, set: 'zbozowe', tags: ['ziarno'], text: 'Wrogowie zaczynają walkę ogłuszeni na 1,5 s (bossowie na 0,8 s)', fx: [{ k: 'scare', v: 15 }], flavor: 'Wróble się go boją. Wrogowie też, nie wiedzieć czemu.' },
+  { id: 'karabin-maszynowy', name: 'Karabin Maszynowy', type: 'item', rarity: 2, set: 'rambo', tags: ['krew'], text: '15% szans, że zwykły atak uderza dwa razy', fx: [{ k: 'double', v: 15 }], flavor: 'Pokój wywalczony serią.' },
+  { id: 'apteczka-polowa', name: 'Apteczka Polowa', type: 'item', rarity: 1, set: 'rambo', tags: ['krew'], text: 'Raz na walkę: gdy spadniesz poniżej 50% Życia, leczy 25% maks. Życia', fx: [{ k: 'medkit', v: 25 }], flavor: 'Plaster, bandaż i woda utleniona. Reszta to hart ducha.' },
+  { id: 'sluzbowy-samochod', name: 'Służbowy Samochód', type: 'item', rarity: 2, set: 'korpo', tags: ['korpo'], text: 'Odpoczynek jest za darmo, a leczenie po wygranej większe o 10 pkt proc.', fx: [{ k: 'restDisc', v: 4 }, { k: 'healBonus', v: 10 }], flavor: 'Do użytku służbowego. Używany wyłącznie służbowo.' },
+  { id: 'open-space', name: 'Open Space', type: 'item', rarity: 1, set: 'korpo', tags: ['korpo'], text: 'Każda użyta umiejętność ma 12% szans na natychmiastowy reset cooldownu', fx: [{ k: 'skillReset', v: 12 }], flavor: 'Wszyscy wszystko słyszą. Spotkania zwołują się same.' },
   // Zestaw Rosołowy (Oparzenie)
   { id: 'chochla', name: 'Chochla', type: 'item', rarity: 0, set: 'rosolowe', tags: ['ogien'], text: '25% szans na Oparzenie przy ataku', fx: [{ k: 'burnHit', v: 25 }], flavor: 'Służbowa. Z inwentarzem numer 0001.' },
   { id: 'kostka-rosolowa', name: 'Kostka Rosołowa', type: 'item', rarity: 1, set: 'rosolowe', tags: ['ogien'], text: '+40% obrażeń od Oparzenia, limit Oparzenia +5 stosów', fx: [{ k: 'burnPct', v: 40 }, { k: 'burnMax', v: 5 }], flavor: 'Skoncentrowany smak wroga.' },

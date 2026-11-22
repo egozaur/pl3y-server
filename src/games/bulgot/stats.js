@@ -43,6 +43,7 @@ export function heroStats(loadout, opt = {}) {
     add('atkPct', (sc.zbozowe || 0) >= 3 ? pct : Math.min(40, pct));
   }
   if (has('siewnik')) add('atkFlat', loadout.bonusAtk || 0);
+  if (has('kura-nioska')) add('coinFlat', Math.min(4, sc.jajeczne || 0));   // Kura Nioska: +1 Ziarno za każdy przedmiot Jajeczny (maks. 4)
   if ((sc.rambo || 0) >= 2) add('atkPct', 20);
   if ((sc.zbozowe || 0) >= 2) add('coinPct', 10);
   const rs = sc.rosolowe || 0, chl = sc.chlodnicze || 0, kp = sc.korpo || 0;
@@ -85,6 +86,9 @@ export function heroStats(loadout, opt = {}) {
     // ekonomia (liczona w rules.js)
     freeReroll: acc.freeReroll || 0, noSteal: !!acc.noSteal, bossCoins: acc.bossCoins || 0, restDisc: acc.restDisc || 0, buyDisc: acc.buyDisc || 0, interest: acc.interest || 0,
     shred: acc.shred || 0,
+    // Etap 2: nowe efekty przedmiotów (sim.js)
+    burnSpread: acc.burnSpread || 0, burnArmor: acc.burnArmor || 0, vsBurn: acc.vsBurn || 0, frostWeak: Math.min(75, acc.frostWeak || 0), firstFrost: acc.firstFrost || 0,
+    surprise: acc.surprise || 0, cleave: Math.min(100, acc.cleave || 0), scare: acc.scare || 0, double: Math.min(100, acc.double || 0), medkit: acc.medkit || 0, skillReset: Math.min(60, acc.skillReset || 0),
     // wady (Wadliwa Partia)
     selfBurn: acc.selfBurn || 0, restHalf: !!acc.restHalf, furyBlast: acc.furyBlast || 0,
     okrzyk: (sc.rambo || 0) >= 3,
