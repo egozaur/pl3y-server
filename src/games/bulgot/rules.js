@@ -710,6 +710,8 @@ export function view(run) {
     pawned: run.pawned ? { ...run.pawned, cost: redeemCost(run.pawned), canRedeem: run.round === run.pawned.round + 1 } : null, foxDebt: run.foxDebt || 0, lostPawn: run.lostPawn || null,
     door: run.door, doors: (M.doors || []).filter(r => !M.bosses[r] && !M.elite.includes(r)), will: run.will && !run.willUsed && run.round === 1 ? run.will : null,
     nemesis: run.nemesis ? { name: nemesisName(run.nemesis), enemy: run.nemesis.enemy, affix: run.nemesis.affix, tile: run.nemesis.tile, lvl: run.nemesis.lvl || 1, round: run.nemesis.round, beaten: run.nemesis.beaten } : null,
+    // Tablica Zarządu (faktury za pokonane piętra): tylko liczby z dziennika wygranych walk, bez składu przyszłych pięter.
+    board: (run.log || []).filter(e => e.win).map(e => ({ r: e.r, boss: !!e.boss, ticks: e.ticks, dealt: e.dealt, reward: e.reward | 0 })),
     nemesisRound: !over && isNemesisRound(run), interestMax: CHARS[run.char].interestMax || RULES.interestMax, willOptions: willOptions(run),
   };
   // Podgląd wrogów: na Garnku 0 widać skład piętra i szablon; od Garnka 1 tylko zapowiedź bossa (reszta ukryta po stronie serwera).

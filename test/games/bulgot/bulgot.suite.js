@@ -254,6 +254,12 @@ test('Ziarna zdobyte łącznie w runie (stats.earned): wzrosty liczą się, wyda
   const r3 = fresh(); r3.phase = 'fight'; r3.fight = {}; r3.hp = 70; const e1 = r3.stats.earned || 0;
   const w = R.fightFinish(r3, []); assert(w.ok, 'walka rozstrzygnięta'); if (w.result.win) assert(r3.stats.earned > e1, 'nagroda za piętro liczy się do zdobytych Ziaren');
 });
+test('view().board: faktury za wygrane piętra (liczby z dziennika), bez wrogów i ziarna', () => {
+  const run = fresh(); run.phase = 'fight'; run.fight = {}; run.hp = 70; run.tiles = Array(12).fill('ziarno-mocy');
+  const w = R.fightFinish(run, []); assert(w.ok && w.result.win, 'wygrana walka');
+  const v = R.view(run); eq(v.board.length, 1, 'jedna faktura'); eq(Object.keys(v.board[0]).sort(), ['boss', 'dealt', 'r', 'reward', 'ticks'], 'tylko liczby');
+  eq([v.board[0].r, v.board[0].reward], [1, w.reward], 'piętro i wypłata'); assert(!JSON.stringify(v.board).includes('enemies'), 'brak wrogów');
+});
 test('wynik walki: ile życia wrogów zostało i kto walczył (ciekawostki na ekranie porażki)', () => {
   const lost = runFight(setup({ hp: 5, enemies: [foe({ name: 'Szczur', hp: 1000, atk: 50 })] }));
   assert(!lost.win && lost.foeLeft > 90 && lost.foes[0] === 'Szczur', 'przegrana: prawie całe życie wroga zostało');
