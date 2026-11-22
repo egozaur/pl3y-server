@@ -2,7 +2,7 @@
 // i aktywny run. Całą logikę gry liczy serwer: oferty, rerolle, zakupy, walki (powtórka z wejść gracza).
 //
 // Gracz przychodzi już sprawdzony przez Worker (index.js → playerFromToken): body.pl = { n, nick, avatar }.
-// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /will /fightstart /fightfinish /abandon /history.
+// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /will /fightstart /fightfinish /abandon /history /analysis.
 // Odpowiedź: { ok, profile, run, ...wynik akcji } albo { err, code } z kodem 400/409.
 import { mix, hash } from './rng.js';
 import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, view, statsOf, pawn, redeem, willOptions, RUN_V } from './rules.js';
@@ -74,6 +74,20 @@ export class BgPlayer {
       case 'fightfinish': r = need(run) || fightFinish(run, Array.isArray(b.inputs) ? b.inputs : []); break;
       case 'abandon': r = need(run) || abandon(run); break;
       case 'history': break;
+      case 'analysis': {   // „Wyślij do analizy”: kopia zakończonego runu (z dziennika historii) trafia do kolekcji w BgRanks
+        const hist = (await st.get('history')) || [], h = hist.find(x => x.id === String(b.id || ''));
+        if (!h) return json({ err: 'Nie znaleziono tego runu w historii.', code: 'none', ...this.out(profile, run) }, 409);
+        if (!h.sent) {
+          const tags = Array.isArray(b.tags) ? b.tags.slice(0, 6).map(t => String(t).slice(0, 24)) : [];
+          const entry = { ...h, n: pl.n, note: String(b.note || '').slice(0, 300), tags, sentAt: this.now() };
+          try {
+            const res = await this.env.BG_RANKS.get(this.env.BG_RANKS.idFromName('ranks')).fetch('https://bg/analysis-put', { method: 'POST', body: JSON.stringify({ entry }) });
+            if (!res.ok) throw new Error('put');
+          } catch { return json({ err: 'Nie udało się wysłać. Spróbuj za chwilę.', code: 'send', ...this.out(profile, run) }, 409); }
+          h.sent = true; await st.put('history', hist);
+        }
+        extra.sent = true; break;
+      }
       default: return json({ err: 'Nie znaleziono.' }, 404);
     }
     if (r.err) return json({ err: r.err, code: r.code, ...this.out(profile, run) }, 409);
@@ -114,7 +128,7 @@ export class BgPlayer {
     try {
       const hist = (await st.get('history')) || [];
       hist.push({ id: run.id, nick: pl.nick, started: run.started, ended: this.now(), mode: run.mode, char: run.char, garnek: run.garnek, outcome: run.ended, abandoned,
-        floorsDone: run.done, endedOnRound: run.round, score: run.score, timeBonus: run.timeBonus, coinsLeft: run.coins, buys: run.stats.buys || 0, rerolls: run.stats.rerolls,
+        v: run.v, floorsDone: run.done, endedOnRound: run.round, score: run.score, timeBonus: run.timeBonus, coinsLeft: run.coins, buys: run.stats.buys || 0, rerolls: run.stats.rerolls,
         tiles: run.tiles, skills: run.skills, finalStats: statsOf(run), log: run.log });
       while (hist.length > 30) hist.shift();
       await st.put('history', hist);

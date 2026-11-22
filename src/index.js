@@ -85,6 +85,7 @@ export function limitKind(method, path) {
   if (path === '/api/pl/admin-reset') return 'admin';
   if (path.startsWith('/api/pl/')) return 'read';
   if (path === '/api/bg/ranks') return 'read';
+  if (path === '/api/bg/analysis' || path === '/api/bg/analysis-del') return 'admin';
   if (path.startsWith('/api/bg/')) return 'bg';
   if (path === '/api/wd/guess') return 'guess';
   if (path.startsWith('/api/wd/')) return 'read';
@@ -120,6 +121,16 @@ export default {
     // Link resetu PIN-u z Discorda: admin otwiera go w dowolnej przeglądarce, bez sesji PL3Y. Chroni go podpis HMAC.
     // GET pokazuje tylko przycisk (podgląd linku w Discordzie nie może sam zresetować PIN-u), dopiero POST resetuje.
     if (url.pathname === '/api/pl/admin-reset' && (req.method === 'GET' || req.method === 'POST')) return adminReset(req, env, url);
+
+    // Partie wysłane do analizy czyta tylko admin: nagłówek X-Admin-Key = sekret BG_ADMIN_KEY (bez sekretu odczyt jest wyłączony).
+    if ((url.pathname === '/api/bg/analysis' && req.method === 'GET') || (url.pathname === '/api/bg/analysis-del' && req.method === 'POST')) {
+      const key = req.headers.get('X-Admin-Key') || '';
+      if (!env.BG_ADMIN_KEY || key.length !== env.BG_ADMIN_KEY.length || !sameKey(key, env.BG_ADMIN_KEY)) return jres({ err: 'Brak dostępu.', code: 'admin' }, 403);
+      const stub = env.BG_RANKS.get(env.BG_RANKS.idFromName('ranks'));
+      if (req.method === 'GET') return jres(await (await stub.fetch('https://bg/analysis-list')).json());
+      const b = await readJson(req, 20000);
+      return jres(await (await stub.fetch('https://bg/analysis-del', { method: 'POST', body: JSON.stringify({ ids: b && b.ids }) })).json());
+    }
 
     if (url.pathname === '/api/auth/login' && req.method === 'POST') {
       if (!origin) return new Response('Forbidden', { status: 403 });
@@ -214,7 +225,7 @@ export default {
       const mode = url.searchParams.get('mode') || 'full';
       return cors(origin, await env.BG_RANKS.get(env.BG_RANKS.idFromName('ranks')).fetch('https://bg/list?mode=' + encodeURIComponent(mode)));
     }
-    m = url.pathname.match(/^\/api\/bg\/(state|start|pick|reroll|buy|rest|shop|bet|bonus|choose|pawn|redeem|will|fightstart|fightfinish|abandon|history)$/);
+    m = url.pathname.match(/^\/api\/bg\/(state|start|pick|reroll|buy|rest|shop|bet|bonus|choose|pawn|redeem|will|fightstart|fightfinish|abandon|history|analysis)$/);
     if (m && req.method === 'POST') {
       if (!origin) return new Response('Forbidden', { status: 403 });
       const b = await readJson(req, 20000);
@@ -255,6 +266,8 @@ export default {
 async function readJson(req, max) {
   try { return JSON.parse((await req.text()).slice(0, max)); } catch { return null; }
 }
+// Porównanie sekretów bez wczesnego wyjścia (stały czas dla tej samej długości).
+const sameKey = (a, b) => { let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0; };
 const jres = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 
 // /api/pl/*: sprawdzenie nicka, założenie (nick + PIN + awatar), logowanie PIN-em, „kim jestem”, zmiana awatara, prośba o reset.

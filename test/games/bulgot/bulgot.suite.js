@@ -686,6 +686,29 @@ test('historia gier: pełny dziennik rund i podsumowanie, ostatnie 30, trasa his
   assert((await post(o, 'history', { pl: PL })).j.history.length === 30, 'historia ma limit 30');
 });
 
+test('analiza: „Wyślij do analizy” kopiuje zakończony run do kolekcji (tylko własny, tylko raz); odczyt wymaga klucza admina', async () => {
+  const env = mkEnv(), o = new BgPlayer({ storage: mkStorage() }, env);
+  await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' }); await post(o, 'abandon', { pl: PL });
+  const id = (await post(o, 'history', { pl: PL })).j.history[0].id;
+  assert((await post(o, 'analysis', { pl: PL, id: 'cudzy-run' })).j.code === 'none', 'nieznany run nie jest wysyłany');
+  assert((await post(o, 'analysis', {})).status === 401, 'bez gracza 401');
+  const r = await post(o, 'analysis', { pl: PL, id, note: 'za łatwo'.repeat(100), tags: ['za-latwo', 'blad', 'x'.repeat(50), 1, 2, 3, 4, 5] });
+  assert(r.status === 200 && r.j.sent === true, 'wysłane');
+  await post(o, 'analysis', { pl: PL, id });
+  assert((await post(o, 'history', { pl: PL })).j.history[0].sent === true, 'wpis historii oznaczony jako wysłany');
+  const rk = env.BG_RANKS.get(env.BG_RANKS.idFromName('ranks'));
+  const list = (await (await rk.fetch('https://bg/analysis-list')).json()).list;
+  assert(list.length === 1 && list[0].id === id && list[0].nick === 'Ala' && list[0].n === 'ala' && list[0].note.length === 300 && list[0].tags.length === 6 && list[0].tags[0] === 'za-latwo' && list[0].tags[2].length === 24 && Array.isArray(list[0].log), 'jedna kopia w kolekcji (bez duplikatu), z dziennikiem i notatką ≤ 300 znaków');
+  // odczyt tylko z kluczem admina (Worker); bez sekretu w środowisku odczyt jest wyłączony
+  const get = (key, path = '/api/bg/analysis', method = 'GET', body) => worker.fetch(new Request('https://srv' + path, { method, body: body && JSON.stringify(body), headers: { 'CF-Connecting-IP': '10.9.' + (ipN++ % 250) + '.1', ...(key ? { 'X-Admin-Key': key } : {}) } }), env);
+  assert((await get('klucz-admina-xyz')).status === 403, 'bez sekretu BG_ADMIN_KEY odczyt wyłączony');
+  env.BG_ADMIN_KEY = 'klucz-admina-xyz';
+  assert((await get('')).status === 403 && (await get('zly-klucz-admina')).status === 403 && (await get('klucz-admina-xyy')).status === 403, 'zły klucz = 403');
+  const ok = await get('klucz-admina-xyz'); assert(ok.status === 200 && (await ok.json()).list.length === 1, 'z kluczem admina lista partii');
+  assert((await (await get('klucz-admina-xyz', '/api/bg/analysis-del', 'POST', { ids: [id] })).json()).deleted === 1, 'usunięcie po pobraniu');
+  assert((await (await get('klucz-admina-xyz')).json()).list.length === 0, 'kolekcja pusta');
+});
+
 test('odpoczynek: za Ziarna leczy 20% życia, raz na rundę, nie w trakcie walki, nie przy pełnym życiu', () => {
   const run = fresh(); run.coins = 20; run.hp = 20;
   const S = R.statsOf(run), heal = Math.floor(S.maxHp * D.RULES.restPct / 100);

@@ -1,9 +1,10 @@
 // Bulgot: Durable Object „BgRanks” (jeden na cały PL3Y): ranking najlepszych wyników, osobno dla trybu szybkiego i pełnego.
 // Każdy gracz ma w tabeli jeden wpis (jego najlepszy wynik). Klucz „r:<tryb>” = lista posortowana malejąco.
+// Kolekcja „do analizy” (partie wysłane przez graczy): POST /analysis-put { entry }, GET /analysis-list, POST /analysis-del { ids }.
 // POST /submit { mode, entry: { n, nick, avatar, score, rounds, win, char, garnek, at } } → { rank }; GET /list?mode=quick|full.
 import { MODES } from './data.js';
 
-const KEEP = 100, SHOW = 50;
+const KEEP = 100, SHOW = 50, AN_KEEP = 500;
 
 export class BgRanks {
   constructor(ctx, env) { this.ctx = ctx; this.env = env; }
@@ -32,6 +33,27 @@ export class BgRanks {
         await this.ctx.storage.put(key, list);
       }
       return json({ rank: list.findIndex(x => x.n === e.n) + 1 });
+    }
+    if (url.pathname === '/analysis-put' && req.method === 'POST') {
+      let b; try { b = await req.json(); } catch { return json({ err: 'Nieprawidłowe dane.' }, 400); }
+      const e = b && b.entry;
+      if (!e || typeof e.id !== 'string' || !e.id || typeof e.n !== 'string' || !MODES[e.mode]) return json({ err: 'Nieprawidłowe dane.' }, 400);
+      const st = this.ctx.storage, key = 'an:' + e.id.slice(0, 40);
+      await st.put(key, e);
+      // limit: najstarsze wysyłki wypadają po przekroczeniu AN_KEEP
+      const all = await st.list({ prefix: 'an:' });
+      if (all.size > AN_KEEP) { const old = [...all.entries()].sort((a, c) => (a[1].sentAt || 0) - (c[1].sentAt || 0)).slice(0, all.size - AN_KEEP).map(x => x[0]); await st.delete(old); }
+      return json({ ok: true });
+    }
+    if (url.pathname === '/analysis-list' && req.method === 'GET') {
+      const all = await this.ctx.storage.list({ prefix: 'an:' });
+      return json({ list: [...all.values()].sort((a, c) => (a.sentAt || 0) - (c.sentAt || 0)) });
+    }
+    if (url.pathname === '/analysis-del' && req.method === 'POST') {
+      let b; try { b = await req.json(); } catch { return json({ err: 'Nieprawidłowe dane.' }, 400); }
+      const ids = Array.isArray(b && b.ids) ? b.ids.filter(x => typeof x === 'string').slice(0, 200).map(x => 'an:' + x.slice(0, 40)) : [];
+      if (ids.length) await this.ctx.storage.delete(ids);
+      return json({ ok: true, deleted: ids.length });
     }
     return json({ err: 'Nie znaleziono.' }, 404);
   }
