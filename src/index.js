@@ -225,7 +225,7 @@ export default {
       const mode = url.searchParams.get('mode') || 'full';
       return cors(origin, await env.BG_RANKS.get(env.BG_RANKS.idFromName('ranks')).fetch('https://bg/list?mode=' + encodeURIComponent(mode)));
     }
-    m = url.pathname.match(/^\/api\/bg\/(state|start|pick|reroll|buy|rest|shop|bet|bonus|choose|pawn|redeem|will|fightstart|fightfinish|abandon|history|analysis)$/);
+    m = url.pathname.match(/^\/api\/bg\/(state|start|pick|reroll|buy|rest|shop|bet|bonus|choose|pawn|redeem|will|fightstart|fightfinish|abandon|history|analysis|skillorder)$/);
     if (m && req.method === 'POST') {
       if (!origin) return new Response('Forbidden', { status: 403 });
       const b = await readJson(req, 20000);

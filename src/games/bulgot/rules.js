@@ -672,6 +672,16 @@ export function willOptions(run) {
   return ids.length ? ids : null;
 }
 
+// Zamiana kolejności umiejętności (sloty = klawisze 1/2/3 w walce; pierwszy slot dostaje „Pierwszą gotową”). Tylko przed walką.
+export function swapSkills(run, a, b) {
+  if (run.phase === 'over') return fail('Run już się skończył.', 'phase');
+  if (run.phase === 'fight' && run.fight) return fail('Walka już się zaczęła.', 'fighting');
+  const n = run.skills.length;
+  if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0 || a >= n || b >= n) return fail('Nie ma takiego slotu.', 'index');
+  if (a !== b) [run.skills[a], run.skills[b]] = [run.skills[b], run.skills[a]];
+  return { ok: true, skills: run.skills.map(s => s.id) };
+}
+
 export function abandon(run) {
   if (run.phase === 'over') return fail('Run już się skończył.', 'phase');
   endRun(run, 'lose');

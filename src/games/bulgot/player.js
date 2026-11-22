@@ -2,10 +2,10 @@
 // i aktywny run. Całą logikę gry liczy serwer: oferty, rerolle, zakupy, walki (powtórka z wejść gracza).
 //
 // Gracz przychodzi już sprawdzony przez Worker (index.js → playerFromToken): body.pl = { n, nick, avatar }.
-// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /will /fightstart /fightfinish /abandon /history /analysis.
+// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /will /fightstart /fightfinish /abandon /history /analysis /skillorder.
 // Odpowiedź: { ok, profile, run, ...wynik akcji } albo { err, code } z kodem 400/409.
 import { mix, hash } from './rng.js';
-import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, view, statsOf, pawn, redeem, willOptions, RUN_V } from './rules.js';
+import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, swapSkills, view, statsOf, pawn, redeem, willOptions, RUN_V } from './rules.js';
 import { newProfile, poolFor, evaluate, onBossKill, onRunEnd, onNemesisBeaten, markSeen, publicProfile } from './profile.js';
 import { MODES, CHARS, TILE_BY_ID } from './data.js';
 
@@ -73,6 +73,7 @@ export class BgPlayer {
       case 'fightstart': r = need(run) || fightSetup(run); break;
       case 'fightfinish': r = need(run) || fightFinish(run, Array.isArray(b.inputs) ? b.inputs : []); break;
       case 'abandon': r = need(run) || abandon(run); break;
+      case 'skillorder': r = need(run) || swapSkills(run, Number(b.a), Number(b.b)); break;
       case 'history': break;
       case 'analysis': {   // „Wyślij do analizy”: kopia zakończonego runu (z dziennika historii) trafia do kolekcji w BgRanks
         const hist = (await st.get('history')) || [], h = hist.find(x => x.id === String(b.id || ''));

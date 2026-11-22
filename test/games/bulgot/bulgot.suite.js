@@ -709,6 +709,20 @@ test('analiza: „Wyślij do analizy” kopiuje zakończony run do kolekcji (tyl
   assert((await (await get('klucz-admina-xyz')).json()).list.length === 0, 'kolekcja pusta');
 });
 
+test('kolejność umiejętności: zamiana slotów przed walką, nie w trakcie walki, błędne sloty odrzucone (przez BgPlayer)', async () => {
+  const run = fresh(); run.skills = [sk('grad'), sk('pianie'), sk('granat')];
+  assert(R.swapSkills(run, 0, 2).ok && run.skills.map(s => s.id).join() === 'granat,pianie,grad', 'zamiana slotów 0 i 2');
+  assert(R.swapSkills(run, 1, 1).ok && run.skills[1].id === 'pianie', 'zamiana ze sobą nic nie psuje');
+  assert(R.swapSkills(run, 0, 3).code === 'index' && R.swapSkills(run, -1, 0).code === 'index' && R.swapSkills(run, 0.5, 1).code === 'index' && R.swapSkills(run, NaN, 1).code === 'index', 'błędne sloty');
+  run.phase = 'fight'; run.fight = { started: true }; assert(R.swapSkills(run, 0, 1).code === 'fighting', 'w trakcie walki nie');
+  run.fight = null; assert(R.swapSkills(run, 0, 1).ok, 'w przygotowaniu do walki tak');
+  run.phase = 'over'; assert(R.swapSkills(run, 0, 1).code === 'phase', 'po końcu runu nie');
+  // przez BgPlayer: kolejność zapisuje się na serwerze i widać ją w stanie
+  const env = mkEnv(), o = new BgPlayer({ storage: mkStorage() }, env);
+  assert((await post(o, 'skillorder', { pl: PL, a: 0, b: 1 })).j.code === 'norun', 'bez runu');
+  await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
+  const j = (await post(o, 'skillorder', { pl: PL, a: 0, b: 1 })).j; assert(j.code === 'index', 'bez umiejętności nie ma czego zamieniać');
+});
 test('odpoczynek: za Ziarna leczy 20% życia, raz na rundę, nie w trakcie walki, nie przy pełnym życiu', () => {
   const run = fresh(); run.coins = 20; run.hp = 20;
   const S = R.statsOf(run), heal = Math.floor(S.maxHp * D.RULES.restPct / 100);
