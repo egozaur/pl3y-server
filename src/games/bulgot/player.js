@@ -2,10 +2,10 @@
 // i aktywny run. Całą logikę gry liczy serwer: oferty, rerolle, zakupy, walki (powtórka z wejść gracza).
 //
 // Gracz przychodzi już sprawdzony przez Worker (index.js → playerFromToken): body.pl = { n, nick, avatar }.
-// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /will /fightstart /fightfinish /abandon /history /analysis /skillorder /code.
+// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /upgrade /will /fightstart /fightfinish /abandon /history /analysis /skillorder /code.
 // Odpowiedź: { ok, profile, run, ...wynik akcji } albo { err, code } z kodem 400/409.
 import { mix, hash } from './rng.js';
-import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, swapSkills, view, statsOf, pawn, redeem, willOptions, RUN_V } from './rules.js';
+import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, swapSkills, view, statsOf, pawn, redeem, upgrade, willOptions, RUN_V } from './rules.js';
 import { newProfile, poolFor, evaluate, evaluateAchievements, onBossKill, onRunEnd, onNemesisBeaten, markSeen, publicProfile } from './profile.js';
 import { MODES, CHARS, TILE_BY_ID, UNLOCK_BY_ID } from './data.js';
 
@@ -54,6 +54,7 @@ export class BgPlayer {
       }
       case 'pawn': r = need(run) || pawn(run, String(b.id || '')); break;
       case 'redeem': r = need(run) || redeem(run); break;
+      case 'upgrade': r = need(run) || upgrade(run, String(b.id || '')); break;
       case 'will': {
         const opts = willOptions(run), i = Number(b.i);
         if (!opts) return json({ err: 'Teraz nie spiszesz testamentu.', code: 'phase', ...this.out(profile, run) }, 409);
@@ -132,7 +133,7 @@ export class BgPlayer {
     const o = this.out(profile, run);
     const body = { ok: true, ...o, ...extra };
     if (r.setup) body.setup = r.setup;
-    for (const k of ['healed', 'result', 'reward', 'boss', 'bonus', 'event', 'crate', 'bought', 'price', 'bet', 'won', 'tile', 'cost', 'left', 'badge', 'automat', 'chose', 'interest', 'doorCoins', 'grew', 'revealed', 'nemesis', 'pawned', 'redeemed', 'will', 'door']) if (r[k] !== undefined) body[k] = r[k];
+    for (const k of ['healed', 'result', 'reward', 'boss', 'bonus', 'event', 'crate', 'bought', 'price', 'bet', 'won', 'tile', 'cost', 'left', 'badge', 'automat', 'chose', 'interest', 'doorCoins', 'grew', 'revealed', 'nemesis', 'pawned', 'redeemed', 'upgraded', 'loot', 'looted', 'will', 'door']) if (r[k] !== undefined) body[k] = r[k];
     return json(body);
   }
 

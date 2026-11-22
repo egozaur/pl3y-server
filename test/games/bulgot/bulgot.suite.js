@@ -74,7 +74,7 @@ test('rng: ten sam seed daje ten sam ciąg, mix i hash są stabilne', () => {
 // ---------- dane ----------
 test('dane: kafelki, umiejętności z Mutacjami, odblokowania, spójne odwołania', () => {
   assert(D.TILES.length >= 39, 'co najmniej 39 kafelków, jest ' + D.TILES.length);
-  eq(D.STARTER_TILES.length, D.TILES.filter(t => !t.lock && !t.hatched && !t.hidden).length, 'na start = bez blokady (bez wyklutych)');
+  eq(D.STARTER_TILES.length, D.TILES.filter(t => !t.lock && !t.hatched && !t.hidden && !t.boss).length, 'na start = bez blokady (bez wyklutych)');
   for (const r of D.RECIPES) { const o = D.TILE_BY_ID[r.out]; assert(o && o.hatched && o.rarity === 3 && r.of.length === 2 && r.of.every(id => D.TILE_BY_ID[id] && D.TILE_BY_ID[id].type === 'item'), 'przepis ' + r.out); for (const st of o.sets) assert(D.SETS[st], 'zestaw ' + r.out); }
   eq(new Set(D.RECIPES.flatMap(r => r.of)).size, D.RECIPES.length * 2, 'każdy składnik w jednym przepisie');
   for (const id of Object.keys(D.MILESTONES)) assert(D.TILE_BY_ID[id] && D.TILE_BY_ID[id].type === 'stat' && D.TILE_BY_ID[id].repeat, 'próg ' + id);
@@ -117,7 +117,7 @@ test('statystyki: baza, kafelki, procenty, zestawy, Worek, Zakazana Pasza, wył�
   S = heroStats(loadout({ tiles: ['zakazana-pasza'] })); eq([S.atk, S.maxHp, S.aspd], [10, 87, 125], 'Zakazana Pasza +25% wszystkiego');
   S = heroStats(loadout({ tiles: ['czujne-oko', 'ziarno-mocy'] }), { off: 1 }); eq(S.atk, 8, 'wyłączony kafelek (Skubanie) nie liczy się');
   S = heroStats(loadout({ tiles: ['czujne-oko'].concat(Array(20).fill('czujne-oko')) })); eq(S.crit, 100, 'krytyk ma sufit 100%');
-  S = heroStats(loadout({ tiles: ['cieple-gniazdko'], noRegen: true })); eq(S.regen, 1, 'Wulkan: regeneracja o połowę słabsza');
+  S = heroStats(loadout({ tiles: ['cieple-gniazdko'], noRegen: true })); eq(S.regen, 10, 'Wulkan: regeneracja o połowę słabsza');
   S = heroStats(loadout({ char: 'kwoka' })); eq([S.maxHp, S.aspd], [Math.floor(B.hp * 130 / 100), 80], 'Kwoka');
   S = heroStats(loadout({ char: 'indor' })); eq([S.atk, S.aspd, S.crit], [Math.floor(8 * 160 / 100), 70, 15], 'Indor');
 });
@@ -235,7 +235,7 @@ test('efekty: Oparzenie kumuluje się do limitu i bije co sekundę mimo pancerza
 
 test('Zjarany Kurczak: statystyki, Chmura Dymu co 4 s (Oparzenie i spowolnienie), inne postacie bez zmian', () => {
   const S = heroStats(loadout({ char: 'zjarany' }));
-  eq([S.atk, S.aspd, S.regen, S.burnHit, S.burnMax, S.smoke], [7, 55, 2, 30, 4, 40], 'Zjarany: statystyki');
+  eq([S.atk, S.aspd, S.regen, S.burnHit, S.burnMax, S.smoke], [7, 55, 20, 30, 4, 40], 'Zjarany: statystyki');
   eq(heroStats(loadout({ char: 'indor' })).smoke, 0, 'Indor bez Chmury');
   const f = new Fight(setup({ lo: { char: 'zjarany' }, enemies: [foe({ hp: 100000, atk: 1, aspd: 100 }), foe({ hp: 100000, atk: 1, aspd: 100 })] }));
   const smokes = []; for (let i = 0; i < 90; i++) { f.step(); for (const e of f.ev) if (e.k === 'smoke') smokes.push(f.tick - 1); }
@@ -374,7 +374,7 @@ test('przedmioty: Szron mrozi atakujących, Termometr bije mocniej, Polisa chron
 
 test('przedmioty: ekonomia (Teczka, Krawat, Premia Kwartalna, zniżki zestawu Korporacyjnego)', () => {
   const run = fresh(); run.tiles = ['teczka', 'krawat', 'polisa']; run.coins = 40;
-  eq([R.shopPrice(D.TILE_BY_ID['ziarno-mocy'], run), R.shopPrice(D.TILE_BY_ID['ziarno-mocy'])], [4, 6], 'dokupowanie 25% taniej');
+  eq([R.shopPrice(D.TILE_BY_ID['ziarenko-z-podlogi'], run), R.shopPrice(D.TILE_BY_ID['ziarenko-z-podlogi'])], [4, 6], 'dokupowanie 25% taniej');
   eq(R.restCost(run), D.RULES.restCost - 2, 'odpoczynek taniej');
   run.offer = ['ziarno-mocy', 'twardy-grzebien', 'szybki-dziob', 'ostry-dziob']; R.pickTile(run, 0);
   R.fightSetup(run); const coins0 = run.coins; const out = R.fightFinish(run, []);
@@ -586,6 +586,8 @@ test('run: walka → nagrody, leczenie, następna runda; bonus po bossie; zwyci�
   assert(bo.ok && bo.result.win && bo.boss === 'brojler' && bo.badge && b.phase === 'badge' && b.pending.offer.length === 3 && b.pending.bonus, 'po bossie najpierw Odznaka');
   assert(R.choose(b, 7).code === 'index', 'zła Odznaka');
   const bdg = b.pending.offer[1]; assert(R.choose(b, 1).ok && b.badges[0] === bdg && b.stats.badges === 1, 'Odznaka zapisana');
+  assert(b.phase === 'loot' && b.pending.kind === 'loot' && b.pending.offer.length === 3 && b.pending.bonus, 'po Odznace łup z bossa: 3 legendarne do wyboru');
+  assert(R.choose(b, 0).ok && b.tiles.includes(b.log[b.log.length - 1].loot), 'łup zapisany w dzienniku i dodany');
   assert(b.phase === 'bonus' && b.offer.length === 3, 'bonus po bossie: 3 kafelki');
   assert(b.offer.every(id => D.TILE_BY_ID[id].rarity >= 1 && !D.TILE_BY_ID[id].event), 'rzadkie lub lepsze, bez wydarzeń');
   assert(b.coins === 6 && b.stats.bossKills.includes('brojler'), 'boss daje 6 Ziaren');
@@ -603,7 +605,7 @@ test('run: pełna partia botem (zawsze 1. kafelek, bez umiejętności) kończy s
     while (run.phase !== 'over' && guard++ < 300) {
       if (run.phase === 'offer') { const r = R.pickTile(run, 0, 0, 1); if (r.err) R.pickTile(run, 1, 0, 1); if (run.phase === 'offer' && run.pending == null) { const k = tileIdx(run, t => t.type === 'stat'); R.pickTile(run, k < 0 ? 0 : k); } }
       else if (run.phase === 'event') { const k = run.pending.kind; k === 'shop' ? R.shopBuy(run, -1) : k === 'gamble' ? R.bet(run, 0) : R.choose(run, 2); }
-      else if (run.phase === 'badge' || run.phase === 'door') R.choose(run, 0);
+      else if (run.phase === 'badge' || run.phase === 'door' || run.phase === 'loot') R.choose(run, 0);
       else if (run.phase === 'bonus') { if (R.bonusPick(run, 0, 0).err) R.bonusPick(run, 0, 0); }
       else if (run.phase === 'fight') { R.fightSetup(run); R.fightFinish(run, []); }
       assert(run.coins >= 0 && run.hp >= 0, 'liczby nieujemne');
@@ -653,10 +655,10 @@ test('run: powtórka z wejść gracza to jedyne źródło wyniku walki (podrobio
 
 test('dokupowanie: cena wg rzadkości, kafelek znika z oferty, wolny wybór zostaje, wydarzeń nie kupisz', () => {
   const run = fresh(); run.coins = 100;
-  force(run, 'ziarno-mocy', 'czujne-oko', 'unik-skrzydlem', 'hazard-w-kurniku');
+  force(run, 'ziarenko-z-podlogi', 'oko-kontrolera-jakosci', 'unik-skrzydlem', 'hazard-w-kurniku');
   const atk0 = R.statsOf(run).atk;
-  let r = R.buyOffer(run, 0); assert(r.ok && r.bought === 'ziarno-mocy' && r.price === D.RULES.prices[0], 'zwykły kosztuje ' + D.RULES.prices[0]);
-  assert(run.coins === 100 - D.RULES.prices[0] && R.statsOf(run).atk === atk0 + 6 && run.offer[0] === null && run.phase === 'offer', 'Ziarna pobrane, efekt od razu, faza oferty trwa');
+  let r = R.buyOffer(run, 0); assert(r.ok && r.bought === 'ziarenko-z-podlogi' && r.price === D.RULES.prices[0], 'zwykły kosztuje ' + D.RULES.prices[0]);
+  assert(run.coins === 100 - D.RULES.prices[0] && R.statsOf(run).atk === atk0 + 2 && run.offer[0] === null && run.phase === 'offer', 'Ziarna pobrane, efekt od razu, faza oferty trwa');
   assert(R.buyOffer(run, 0).code === 'index', 'drugi raz tego samego nie kupisz');
   assert(R.buyOffer(run, 3).code === 'event', 'Hazard to wydarzenie: nie na sprzedaż');
   r = R.buyOffer(run, 1); assert(r.ok && r.price === D.RULES.prices[1], 'rzadki kosztuje ' + D.RULES.prices[1]);
@@ -703,7 +705,7 @@ test('historia gier: pełny dziennik rund i podsumowanie, ostatnie 30, trasa his
     const ph = r.run.phase;
     const pi = Math.max(0, r.run.offer.findIndex(id => id && id !== 'automat-z-pasza'));
     if (ph === 'offer') r = (await post(o, 'pick', { pl: PL, i: pi, slot: 0, mut: 1 })).j;
-    else if (ph === 'badge' || ph === 'door') r = (await post(o, 'choose', { pl: PL, i: 0 })).j;
+    else if (ph === 'badge' || ph === 'door' || ph === 'loot') r = (await post(o, 'choose', { pl: PL, i: 0 })).j;
     else if (ph === 'event') { const kd = r.run.pending.kind; r = (await post(o, kd === 'shop' ? 'shop' : kd === 'gamble' ? 'bet' : 'choose', { pl: PL, i: kd === 'shop' ? -1 : 2, amount: 0 })).j; }
     else if (ph === 'bonus') r = (await post(o, 'bonus', { pl: PL, i: 0, slot: 0 })).j;
     else { await post(o, 'fightstart', { pl: PL }); r = (await post(o, 'fightfinish', { pl: PL, inputs: [] })).j; }
@@ -847,7 +849,7 @@ test('BgPlayer: start, wybór, walka, koniec runu, odblokowania, ranking; błęd
     const ph = r.j.run.phase;
     const pi = Math.max(0, r.j.run.offer.findIndex(id => id && id !== 'automat-z-pasza'));
     if (ph === 'offer') r = await post(o, 'pick', { pl: PL, i: pi, slot: 0, mut: 1 });
-    else if (ph === 'badge' || ph === 'door') r = await post(o, 'choose', { pl: PL, i: 0 });
+    else if (ph === 'badge' || ph === 'door' || ph === 'loot') r = await post(o, 'choose', { pl: PL, i: 0 });
     else if (ph === 'event') { const kd = r.j.run.pending.kind; r = await post(o, kd === 'shop' ? 'shop' : kd === 'gamble' ? 'bet' : 'choose', { pl: PL, i: kd === 'shop' ? -1 : 2, amount: 0 }); }
     else if (ph === 'bonus') r = await post(o, 'bonus', { pl: PL, i: 0, slot: 0 });
     else { const fs = await post(o, 'fightstart', { pl: PL }); assert(fs.j.setup && fs.j.setup.seed, 'setup z ziarnem walki'); r = await post(o, 'fightfinish', { pl: PL, inputs: [] }); assert(r.j.result, 'wynik walki'); }
@@ -881,7 +883,9 @@ test('BgPlayer: pokonanie bossa zwraca jego id, zapisuje w profilu i odblokowuje
   assert(r.j.profile.bosses.brojler === 1, 'licznik pokonanych bossów w profilu');
   assert(r.j.unlocks && r.j.unlocks.some(u => u.target === 'unik-skrzydlem') && r.j.profile.tiles.includes('unik-skrzydlem'), 'odblokowanie Uniku Skrzydłem');
   const cb = await post(o, 'choose', { pl: PL, i: 0 });
-  assert(cb.j.ok && cb.j.run.badges.length === 1 && cb.j.run.phase === 'bonus' && cb.j.run.offer.length === 3, 'Odznaka, potem faza bonusowa');
+  assert(cb.j.ok && cb.j.run.badges.length === 1 && cb.j.run.phase === 'loot' && cb.j.run.pending.offer.length === 3, 'Odznaka, potem łup z bossa');
+  const lb = await post(o, 'choose', { pl: PL, i: 1 });
+  assert(lb.j.ok && lb.j.looted && lb.j.run.phase === 'bonus' && lb.j.run.offer.length === 3, 'łup, potem faza bonusowa');
 });
 test('BgPlayer: żądania jednego gracza wykonują się po kolei (bez zgubionych zapisów)', async () => {
   const env = mkEnv(), o = new BgPlayer({ storage: mkStorage() }, env);
@@ -939,6 +943,7 @@ test('Worker: Bulgot wymaga sesji PL3Y i nicka gracza, cały przebieg przez /api
   const pt = c.j.pt;
   let r = await api(env, '/api/bg/start', { pt, mode: 'quick', char: 'pyrtek', garnek: 0 }, o);
   assert(r.status === 200 && r.j.run.phase === 'offer' && r.j.profile.nick === 'Kura', 'start przez Worker');
+  const up = await api(env, '/api/bg/upgrade', { pt, id: 'ziarenko-z-podlogi' }, o); assert(up.status === 409 && up.j.code === 'index', 'trasa /api/bg/upgrade istnieje w Workerze (409 index, nie 404)');
   const n2 = await api(env, '/api/pl/claim', { nick: 'Druga', pin: '2468' }, o);
   assert((await api(env, '/api/bg/state', { pt: n2.j.pt }, o)).j.run === null, 'run jest przypisany do gracza');
   let guard = 0;
@@ -946,7 +951,7 @@ test('Worker: Bulgot wymaga sesji PL3Y i nicka gracza, cały przebieg przez /api
     const ph = r.j.run.phase;
     const pi = Math.max(0, r.j.run.offer.findIndex(id => id && id !== 'automat-z-pasza'));
     if (ph === 'offer') r = await api(env, '/api/bg/pick', { pt, i: pi, slot: 0, mut: 1 }, o);
-    else if (ph === 'badge' || ph === 'door') r = await api(env, '/api/bg/choose', { pt, i: 0 }, o);
+    else if (ph === 'badge' || ph === 'door' || ph === 'loot') r = await api(env, '/api/bg/choose', { pt, i: 0 }, o);
     else if (ph === 'event') { const kd = r.j.run.pending.kind; r = await api(env, kd === 'shop' ? '/api/bg/shop' : kd === 'gamble' ? '/api/bg/bet' : '/api/bg/choose', { pt, i: kd === 'shop' ? -1 : 2, amount: 0 }, o); }
     else if (ph === 'bonus') r = await api(env, '/api/bg/bonus', { pt, i: 0, slot: 0 }, o);
     else { await api(env, '/api/bg/fightstart', { pt }, o); r = await api(env, '/api/bg/fightfinish', { pt, inputs: [] }, o); }
@@ -1063,7 +1068,7 @@ test('Okólniki Zarządu: inne w każdej strefie, Audyt, Premia, Praca Zdalna, T
   const n = R.newRun({ mode: 'full', char: 'pyrtek', garnek: 0, pool: ALL, seed: 4242 }).run; eq(n.decrees, ds, 'zapisane w runie');
   eq(R.view(n).decree, ds[0], 'widok: okólnik bieżącej strefy'); n.round = 7; eq(R.view(n).decree, ds[1], 'druga strefa');
   const a = fresh(); a.decrees = ['audyt', null, null]; a.coins = 50;
-  eq(R.shopPrice(D.TILE_BY_ID['ziarno-mocy'], a), 9, 'Audyt: dokupowanie +50%');
+  eq(R.shopPrice(D.TILE_BY_ID['ziarenko-z-podlogi'], a), 9, 'Audyt: dokupowanie +50%');
   eq([R.reroll(a).cost, R.reroll(a).cost, R.reroll(a).cost, a.freeLeft], [0, 0, 2, 0], 'Audyt: dwa darmowe rerolle');
   const p0 = fresh(), p1 = fresh(); p1.decrees = ['premia', null, null]; p0.round = p1.round = 3;
   assert(R.buildSetup(p1).enemies[0].hp === flo(R.buildSetup(p0).enemies[0].hp * 115 / 100), 'Premia: +15% Życia wrogów');
@@ -1231,4 +1236,108 @@ test('Hasło do ukrytej postaci (code): tylko „dzioby”, odblokowuje Zjaraneg
   r = await post(o, 'state', { pl: PL }); assert(r.j.profile.chars.includes('zjarany'), 'zostaje w profilu');
   r = await post(o, 'code', { pl: PL, text: 'dzioby' }); assert(r.j.ok && !r.j.unlocks, 'drugi raz nic nie zmienia');
   r = await post(o, 'start', { pl: PL, mode: 'quick', char: 'zjarany' }); assert(r.j.ok, 'można zacząć run Zjaranym');
+});
+
+// ---------- poziomy statystyk, Ulepszanie, łup z bossów ----------
+test('rodziny statystyk: 9 rodzin × 3 poziomy + legendarny, stare id na poziomie 3, rosnąca moc, jedna ikona na rodzinę', () => {
+  eq(D.STAT_FAMS.length, 9, '9 rodzin');
+  const OLD = ['twardy-grzebien', 'ziarno-mocy', 'ostry-dziob', 'szybki-dziob', 'pancerz-z-pierza', 'czujne-oko', 'zwinne-nogi', 'cieple-gniazdko', 'czterolistna-koniczyna'];
+  for (const F of D.STAT_FAMS) {
+    eq(F.ids.length, 4, 'cztery poziomy ' + F.fam);
+    const ts = F.ids.map(id => D.TILE_BY_ID[id]);
+    ts.forEach((t, i) => { assert(t && t.type === 'stat' && t.repeat && t.fam === F.fam && t.lvl === i + 1 && t.rarity === i, 'poziom ' + (i + 1) + ' ' + F.fam); });
+    assert(OLD.includes(F.ids[2]), 'poziom 3 ma stare id: ' + F.fam);
+    const v = ts.map(t => t.fx[0].v); assert(v[0] < v[1] && v[1] < v[2] && v[2] < v[3], 'moc rośnie ' + F.fam);
+    assert(v[3] >= v[2] * 1.5 && v[3] <= v[2] * 1.85, 'legendarny 150–185% poziomu 3: ' + F.fam + ' ' + v.join('/'));
+    eq([ts[0].next, ts[1].next, ts[2].next, !!ts[3].boss], [F.ids[1], F.ids[2], undefined, true], 'next i boss ' + F.fam);
+    assert(!D.STARTER_TILES.includes(F.ids[3]), 'legendarny nie jest w puli startowej');
+  }
+});
+
+test('oferty: występują poziomy 1–3, legendarne z bossów nigdy w ofertach, rerollach, bonusie ani Automacie', () => {
+  const lv = new Set(); let boss = 0;
+  for (let seed = 1; seed < 400; seed++) {
+    const run = fresh({ seed, mode: 'full' });
+    for (const salt of [0, 100, 101, 300]) for (const round of [1, 8, 15]) {
+      run.round = round;
+      for (const id of R.makeOffer(run, salt, salt === 300 ? { size: 3, minRarity: 1, noEvents: true } : {})) { const t = D.TILE_BY_ID[id]; if (t.type === 'stat') lv.add(t.lvl); if (t.boss) boss++; }
+    }
+  }
+  eq([...lv].sort(), [1, 2, 3], 'w ofertach poziomy 1–3'); eq(boss, 0, 'legendarne statystyki nie wypadają w ofertach');
+  const a = fresh(); a.coins = 5; a.offer = ['automat-z-pasza', 'ziarno-mocy', 'twardy-grzebien', 'szybki-dziob'];
+  const ra = R.pickTile(a, 0); assert(ra.ok && ra.automat.every(id => D.TILE_BY_ID[id].lvl === 3), 'Automat daje statystyki poziomu 3');
+});
+
+test('Ulepszanie: 3 kopie poziomu 1 lub 2 → 1 kafelek następnego poziomu; błędy: za mało kopii, zła faza, poziom 3, brak kafelka', () => {
+  const run = fresh(); run.tiles = ['grzebien-z-tasmy', 'grzebien-z-tasmy', 'czujne-oko'];
+  eq(R.view(run).up, [], 'za mało kopii: brak ulepszeń w widoku');
+  eq(R.upgrade(run, 'grzebien-z-tasmy').code, 'copies', 'za mało kopii');
+  run.tiles.push('grzebien-z-tasmy', 'grzebien-z-tasmy'); run.hp = R.statsOf(run).maxHp;
+  eq(R.view(run).up, ['grzebien-z-tasmy'], 'widok pokazuje możliwe ulepszenie');
+  const hp0 = R.statsOf(run).maxHp, r = R.upgrade(run, 'grzebien-z-tasmy');
+  assert(r.ok && r.upgraded.to === 'grzebien-hodowlany', 'zlanie');
+  eq(run.tiles, ['grzebien-z-tasmy', 'czujne-oko', 'grzebien-hodowlany'], '3 kopie znikają, 1 nowa (jedna zostaje)');
+  eq(R.statsOf(run).maxHp, hp0 - 15 + 12, 'statystyki liczą się z nowego kafelka'); assert(run.hp <= R.statsOf(run).maxHp, 'życie nie przekracza maks.');
+  eq([run.stats.upgrades, run.cur.upgrades], [1, [{ from: 'grzebien-z-tasmy', to: 'grzebien-hodowlany' }]], 'licznik i dziennik rundy');
+  run.tiles = Array(3).fill('grzebien-hodowlany'); assert(R.upgrade(run, 'grzebien-hodowlany').ok && run.tiles[0] === 'twardy-grzebien', 'poziom 2 → 3 (stare id)');
+  run.tiles = Array(3).fill('twardy-grzebien'); eq(R.upgrade(run, 'twardy-grzebien').code, 'level', 'poziom 3 nie jest ulepszany');
+  run.tiles = Array(3).fill('grzebien-rosolowego-krola'); eq(R.upgrade(run, 'grzebien-rosolowego-krola').code, 'level', 'legendarny nie jest ulepszany');
+  eq(R.upgrade(run, 'ziarno-mocy').code, 'index', 'brak takiego kafelka'); eq(R.upgrade(run, 'nie-ma').code, 'index', 'nieznany kafelek');
+  run.tiles = Array(3).fill('slieskie-nozki'); run.phase = 'fight'; eq(R.upgrade(run, 'slieskie-nozki').code, 'phase', 'zła faza'); assert(run.tiles.length === 3, 'nic nie zginęło');
+  run.phase = 'event'; eq(R.upgrade(run, 'slieskie-nozki').code, 'phase', 'zła faza (wydarzenie)');
+});
+
+test('Ulepszanie: wynik liczy się jak zdobyty (próg), wada fabryczna nie zostaje sierotą, regeneracja w dziesiątych, BgPlayer przyjmuje akcję', async () => {
+  const run = fresh(); run.tiles = [...Array(3).fill('nogi-akrobaty'), ...Array(2).fill('zwinne-nogi')];
+  assert(R.upgrade(run, 'nogi-akrobaty').ok && run.tiles.filter(x => x === 'zwinne-nogi').length === 3, 'Nogi Akrobaty ×3 → Zwinne Nogi (trzecia kopia)');
+  eq([R.statsOf(run).evade, R.statsOf(run).aspd], [6 * 3 + 5, 108], 'trzy Zwinne Nogi: 18% + próg Taniec Kurczaka (5% uniku, 8% szybkości ataku)');
+  const f = fresh(); f.tiles = Array(3).fill('sloma-z-wczoraj'); f.flawed = [{ id: 'sloma-z-wczoraj', flaw: 'kruchy', on: false, round: 1 }];
+  assert(R.upgrade(f, 'sloma-z-wczoraj').ok && f.flawed.length === 0, 'wada zniknęła razem ze stopioną kopią');
+  eq(heroStats({ char: 'pyrtek', tiles: ['sloma-z-wczoraj', 'gniazdko-z-siana'] }).regen, 17, 'regeneracja w dziesiątych częściach (0,5 + 1,2 / s)');
+  const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
+  await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
+  const run0 = await st.get('run'); run0.tiles = Array(3).fill('ziarenko-z-podlogi'); run0.phase = 'offer'; await st.put('run', run0);
+  let r = await post(o, 'upgrade', { pl: PL, id: 'ziarenko-z-podlogi' });
+  assert(r.j.ok && r.j.upgraded.to === 'ziarno-selekcjonowane' && r.j.run.tiles.join() === 'ziarno-selekcjonowane' && r.j.run.up.length === 0, 'BgPlayer: upgrade');
+  r = await post(o, 'upgrade', { pl: PL, id: 'ziarno-selekcjonowane' }); eq(r.j.code, 'copies', 'BgPlayer: za mało kopii'); eq(r.status, 409, 'status 409');
+});
+
+test('łup z bossa: po bossie (nie ostatnim) wybierasz 1 z 3 legendarnych z ziarna runu, deterministycznie; po Prezesie run się kończy bez łupu', () => {
+  const mkBoss = () => { const b = fresh(); b.round = 6; b.tiles = [...Array(8).fill('twardy-grzebien'), 'ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy']; b.hp = 9999; b.phase = 'fight'; b.fight = {}; return b; };
+  const A = mkBoss(), B = mkBoss(); R.fightFinish(A, []); R.fightFinish(B, []);
+  eq([A.phase, A.pending.kind, A.pending.offer.length], ['badge', 'badge', 3], 'najpierw Odznaka'); assert(A.pending.loot, 'po Odznace łup');
+  R.choose(A, 0); R.choose(B, 0);
+  eq(A.phase, 'loot', 'faza łupu'); eq(A.pending.offer, B.pending.offer, 'deterministyczny wybór (to samo ziarno)');
+  assert(A.pending.offer.length === 3 && new Set(A.pending.offer).size === 3 && A.pending.offer.every(id => D.TILE_BY_ID[id].boss && D.TILE_BY_ID[id].rarity === 3), 'trzy różne legendarne');
+  eq(R.view(A).offer, [], 'oferta pusta w fazie łupu'); assert(!('seed' in R.view(A)), 'widok nie zdradza ziarna');
+  eq(R.choose(A, 5).code, 'index', 'zły indeks'); eq(R.pickTile(A, 0).code, 'phase', 'nie wybierzesz zwykłego kafelka w fazie łupu');
+  const id = A.pending.offer[2], r = R.choose(A, 2);
+  assert(r.ok && r.looted === id && A.tiles.includes(id), 'łup dodany do kafelków');
+  eq(A.phase, 'bonus', 'po łupie bonus (po bossie 1 w trybie pełnym)'); eq(A.log.at(-1).loot, id, 'łup w dzienniku');
+  const C = mkBoss(); C.seed = 777; R.fightFinish(C, []); R.choose(C, 0); assert(C.pending.offer.every(x => D.TILE_BY_ID[x].boss), 'inne ziarno, nadal legendarne');
+  const P = fresh(); P.round = 20; P.tiles = [...Array(40).fill('ziarno-mocy'), ...Array(40).fill('twardy-grzebien')]; P.skills = [{ id: 'granat', lvl: 2 }]; P.hp = 99999; P.phase = 'fight'; P.fight = {};
+  const rp = R.fightFinish(P, []); assert(rp.ended === 'win' && P.phase === 'over' && !rp.loot, 'Prezes: koniec runu, bez łupu');
+  const Q = fresh({ mode: 'quick' }); Q.round = 5; Q.tiles = [...Array(8).fill('twardy-grzebien'), 'ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy']; Q.hp = 9999; Q.phase = 'fight'; Q.fight = {};
+  R.fightFinish(Q, []); R.choose(Q, 0); eq(Q.phase, 'loot', 'tryb szybki: łup po bossie 5'); R.choose(Q, 0); eq(Q.phase, 'bonus', 'potem bonus');
+});
+
+test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; pula nigdy nie jest pusta', () => {
+  const b = fresh(); b.round = 6; b.tiles = ['grzebien-rosolowego-krola', ...Array(8).fill('twardy-grzebien'), 'ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy']; b.hp = 9999; b.phase = 'fight'; b.fight = {}; R.fightFinish(b, []); R.choose(b, 0);
+  assert(!b.pending.offer.includes('grzebien-rosolowego-krola'), 'nie proponuje już posiadanego');
+  const all = D.TILES.filter(t => t.boss).map(t => t.id); const c = fresh(); c.round = 6; c.tiles = [...all.slice(0, 8), ...Array(8).fill('twardy-grzebien'), 'ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy']; c.hp = 9999; c.phase = 'fight'; c.fight = {}; R.fightFinish(c, []); R.choose(c, 0);
+  eq(c.pending.offer.length, 3, 'nadal 3 propozycje, gdy zostało mniej niż 3 nowe');
+});
+
+test('RUN_V = 3: stary run (wersja 2) jest unieważniany', async () => {
+  eq(R.RUN_V, 3, 'wersja reguł');
+  const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
+  await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
+  const run = await st.get('run'); run.v = 2; await st.put('run', run);
+  const r = await post(o, 'state', { pl: PL }); assert(r.j.voided && !r.j.run, 'run v2 unieważniony');
+});
+
+test('regeneracja: ułamkowe wartości kumulują się w sekundach (0,5 / s = 1 Życia co 2 s)', () => {
+  const lo = { char: 'pyrtek', tiles: ['sloma-z-wczoraj'], skills: [] };
+  const setup = { v: 1, round: 1, mode: 'quick', seed: 5, boss: null, elite: false, zone: 0, hero: { loadout: lo, hp: 10 }, enemies: [{ id: 'szczur-pasz', name: 'Test', hp: 999999, atk: 1, aspd: 100, armor: 0, evade: 0, crit: 0, art: 'rat', idle: 99999 }], minion: null };
+  const f = new Fight(setup); for (let i = 0; i < 100; i++) f.step([]); eq(f.hp, 15, '10 s × 0,5 = +5 Życia');
 });

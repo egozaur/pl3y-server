@@ -2,7 +2,7 @@
 // Wszystkie losowania biorą ziarno z run.seed, więc ten sam run daje te same oferty i spotkania.
 // Każda funkcja zwraca { ok: true, ... } albo { err, code }. Stan zapisuje i autoryzuje BgPlayer (player.js).
 import { mix, hash, makeRng } from './rng.js';
-import { RECIPES, BADGES, BADGE_OFFER, BADGE_POOL, AFFIXES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, FLOOR_TPL, RARITY_WEIGHTS, TYPE_WEIGHTS, DECREES, FLAWS, NEMESIS_TITLES, NEMESIS_NAMES, garnekMods, formFor } from './data.js';
+import { TILES, RECIPES, BADGES, BADGE_OFFER, BADGE_POOL, AFFIXES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, FLOOR_TPL, RARITY_WEIGHTS, TYPE_WEIGHTS, DECREES, FLAWS, NEMESIS_TITLES, NEMESIS_NAMES, garnekMods, formFor } from './data.js';
 import { heroStats, setCounts } from './stats.js';
 import { runFight } from './sim.js';
 
@@ -33,7 +33,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 2;
+export const RUN_V = 3;
 
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null }) {
   const M = MODES[mode], ch = CHARS[char];
@@ -60,7 +60,7 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null
 
 // ---------- Oferta kafelków ----------
 function tileAvailable(run, t) {
-  if (t.hatched) return false;
+  if (t.hatched || t.boss) return false;   // wyklute i legendarne z bossów nie trafiają do ofert
   if (t.repeat) return true;
   if (RECIPES.some(r => r.of.includes(t.id) && run.tiles.includes(r.out))) return false;   // składnik już wyklutego przedmiotu
   if (t.type === 'skill') { const s = run.skills.find(x => x.id === t.skill); return !s || s.lvl < RULES.maxSkillLvl; }
@@ -253,7 +253,7 @@ export function pickTile(run, i, slot, mut) {
     if (run.coins < 5) return fail('Automat chce 5 Ziaren.', 'coins');
     setCoins(run, run.coins - 5);
     const rr = makeRng(mix(run.seed, run.round, hash('automat')));
-    const stats = run.pool.map(x => TILE_BY_ID[x]).filter(x => x && x.type === 'stat' && tileAvailable(run, x));
+    const stats = run.pool.map(x => TILE_BY_ID[x]).filter(x => x && x.type === 'stat' && x.lvl === 3 && tileAvailable(run, x));   // Automat wypluwa statystyki poziomu 3
     const got = [];
     for (let k = 0; k < 2 && stats.length; k++) { const x = rr.pick(stats); applyTile(run, x); got.push(x.id); }
     run.stats.riskPicks++;
@@ -271,7 +271,7 @@ export function pickTile(run, i, slot, mut) {
   if (t.event === 'skrzynka') {
     const rr = makeRng(mix(run.seed, run.round, hash('crate')));
     const trap = rr.int(100) < 25;
-    const epics = run.pool.map(x => TILE_BY_ID[x]).filter(x => x && x.rarity >= 2 && !x.event && tileAvailable(run, x));   // wyklutych nie ma w puli (tileAvailable)
+    const epics = run.pool.map(x => TILE_BY_ID[x]).filter(x => x && x.rarity >= 2 && x.type !== 'stat' && !x.event && tileAvailable(run, x));   // wyklutych nie ma w puli (tileAvailable)
     const prize = epics.length ? rr.pick(epics) : null;
     const note = { crate: { tile: prize ? prize.id : null, trap } };
     if (prize) { const e = applyTile(run, prize, undefined, 1); if (e && e.code === 'slot') applyTile(run, prize, 0, 1); }   // pełne sloty: umiejętność ze skrzynki zastępuje pierwszy slot; Mutacja ze skrzynki to zawsze gałąź 1
@@ -337,6 +337,30 @@ export function restPctOf(run, S = statsOf(run)) {
   if (decreeIs(run, 'homeoffice')) p *= 2;
   if (S.restHalf) p = fl(p / 2);
   return p;
+}
+
+// ---------- Ulepszanie statystyk ----------
+// 3 kopie tego samego kafelka statystyki poziomu 1 albo 2 zlewają się za darmo w 1 kafelek następnego poziomu rodziny (t.next).
+// Poziom 3 → legendarny to nie ulepszanie (legendarne to tylko łup z bossów). Tylko w fazie oferty, więc powtórka walki się nie zmienia.
+export const UPGRADE_COST = 3;
+export const upgradable = run => [...new Set(run.tiles)].filter(id => { const t = TILE_BY_ID[id]; return t && t.next && run.tiles.filter(x => x === id).length >= UPGRADE_COST; });
+export function upgrade(run, id) {
+  if (run.phase !== 'offer') return fail('Zlewać kafelki można tylko przed wyborem kafelka.', 'phase');
+  const t = TILE_BY_ID[id];
+  if (!t || !run.tiles.includes(id)) return fail('Nie masz takiego kafelka.', 'index');
+  if (!t.next) return fail('Ten kafelek nie ma wyższego poziomu.', 'level');
+  if (run.tiles.filter(x => x === id).length < UPGRADE_COST) return fail('Do ulepszenia potrzebujesz ' + UPGRADE_COST + ' kopii tego kafelka.', 'copies');
+  const before = statsOf(run).maxHp;
+  for (let k = 0; k < UPGRADE_COST; k++) run.tiles.splice(run.tiles.lastIndexOf(id), 1);
+  // wada fabryczna nie może mieć więcej wpisów niż kopii (stopiona kopia zabiera swoją wadę)
+  const left = run.tiles.filter(x => x === id).length, fw = (run.flawed || []).filter(w => w.id === id);
+  for (let k = left; k < fw.length; k++) run.flawed.splice(run.flawed.lastIndexOf(fw[k]), 1);
+  run.tiles.push(t.next);
+  const after = statsOf(run).maxHp;
+  run.hp = Math.max(1, after > before ? run.hp + (after - before) : Math.min(run.hp, after));
+  run.stats.upgrades = (run.stats.upgrades || 0) + 1;
+  (cur(run).upgrades = cur(run).upgrades || []).push({ from: id, to: t.next });
+  return { ok: true, upgraded: { from: id, to: t.next } };
 }
 
 // ---------- Lombard Lisa ----------
@@ -419,7 +443,17 @@ export function choose(run, i) {
     if (!b || !BADGES[b]) return fail('Nie ma takiej Odznaki.', 'index');
     addBadge(run, b);
     run.pending = null;
-    return afterFight(run, P.bonus);
+    return afterFight(run, P.bonus, P.loot);
+  }
+  if (run.phase === 'loot' && P && P.kind === 'loot') {
+    const id = P.offer[i], t = id && TILE_BY_ID[id];
+    if (!t) return fail('Nie ma takiego łupu.', 'index');
+    const e = applyTile(run, t);
+    if (e) return e;
+    if (run.log.length) run.log[run.log.length - 1].loot = id;
+    run.stats.loot = (run.stats.loot || 0) + 1;
+    run.pending = null;
+    return Object.assign(afterFight(run, P.bonus, false), { looted: id });
   }
   if (run.phase !== 'event' || !P || (P.kind !== 'contract' && P.kind !== 'shrine')) return fail('Teraz nie ma wyboru.', 'phase');
   if (!(i >= 0 && i <= 2)) return fail('Nie ma takiej opcji.', 'index');
@@ -443,8 +477,17 @@ function addBadge(run, b) {
   run.stats.badges = run.badges.length;
   if (run.log.length) (run.log[run.log.length - 1].badges = run.log[run.log.length - 1].badges || []).push(b);
 }
+// Łup z bossa: wybór 1 z lootSize legendarnych statystyk (z ziarna runu, najpierw te, których jeszcze nie masz).
+const lootTiles = run => { const all = TILES.filter(t => t.boss && t.type === 'stat'); const fresh = all.filter(t => !run.tiles.includes(t.id)); return fresh.length >= RULES.lootSize ? fresh : all; };
+function startLoot(run, bonus) {
+  const rr = makeRng(mix(run.seed, run.round, hash('loot'))), pool = lootTiles(run).map(t => t.id), offer = [];
+  while (offer.length < Math.min(RULES.lootSize, pool.length)) { const id = rr.pick(pool); if (!offer.includes(id)) offer.push(id); }
+  run.phase = 'loot'; run.pending = { kind: 'loot', offer, bonus }; run.offer = []; run.fight = null;
+  return { ok: true, loot: true };
+}
 // Po wygranej walce (i ewentualnej Odznace): oferta bonusowa po bossie albo następna runda.
-function afterFight(run, bonus) {
+function afterFight(run, bonus, loot) {
+  if (loot) return startLoot(run, bonus);
   if (bonus) { run.phase = 'bonus'; run.offer = makeOffer(run, 300, { size: RULES.bonusSize, minRarity: 1, noEvents: true }); run.fight = null; return { ok: true, bonus: true }; }
   return nextRound(run);
 }
@@ -596,7 +639,7 @@ export function fightFinish(run, inputs) {
   const setup = buildSetup(run), res = runFight(setup, inputs);
   const S = statsOf(run), gm = garnekMods(run.garnek), c = cur(run), coinsBefore = run.coins, hpBefore = setup.hero.hp;
   const entry = () => ({ r: run.round, zone: setup.zone, boss: setup.boss, elite: setup.elite, tpl: setup.tpl || null, enemies: setup.enemies.map(e => ({ n: e.name, hp: e.hp, atk: e.atk })),
-    offer: c.offer, picked: c.picked, bought: c.bought, rerolls: c.rerolls, rested: c.rested || 0, event: c.event, bet: c.bet || null,
+    offer: c.offer, picked: c.picked, bought: c.bought, upgrades: c.upgrades || [], rerolls: c.rerolls, rested: c.rested || 0, event: c.event, bet: c.bet || null,
     hero: { maxHp: S.maxHp, atk: S.atk, aspd: S.aspd, armor: S.armor, crit: S.crit, evade: S.evade, regen: S.regen }, tiles: run.tiles.length, skills: run.skills.map(s => s.id + (s.lvl > 1 ? '*' : '')),
     coinsBefore, coinsAfter: run.coins, hpBefore, hpAfter: res.hp, win: res.win, ticks: res.ticks, dealt: res.dealt, taken: res.taken, maxHit: res.maxHit, skillsUsed: res.skillsUsed, stolen: res.stolen, revived: res.usedRevive, timeout: res.timeout });
   setCoins(run, run.coins - Math.min(run.coins, res.stolen) + (res.coinsWon || 0));
@@ -666,17 +709,19 @@ export function fightFinish(run, inputs) {
 
   if (run.round >= MODES[run.mode].rounds) { endRun(run, 'win'); out.ended = 'win'; return out; }
   const bonus = MODES[run.mode].bonusAfter.includes(run.round) || (setup.door && run.door.reward === 'rare');
+  const loot = !!setup.boss;   // ostatni boss kończy run wcześniej (return powyżej)
   const avail = BADGE_POOL.filter(b => !(run.badges || []).includes(b));
   run.fight = null;
   if ((setup.boss || setup.elite) && avail.length) {
     const rr = makeRng(mix(run.seed, run.round, hash('badge')));
     const offer = []; while (offer.length < Math.min(BADGE_OFFER, avail.length)) { const b = rr.pick(avail); if (!offer.includes(b)) offer.push(b); }
-    run.phase = 'badge'; run.pending = { kind: 'badge', offer, bonus }; run.offer = [];
+    run.phase = 'badge'; run.pending = { kind: 'badge', offer, bonus, loot }; run.offer = [];
     out.badge = true;
     return out;
   }
-  const r2 = afterFight(run, bonus);
+  const r2 = afterFight(run, bonus, loot);
   if (r2.bonus) out.bonus = true;
+  if (r2.loot) out.loot = true;
   return out;
 }
 
@@ -717,7 +762,7 @@ export function view(run) {
     boss: M.bosses[run.round] || null, elite: !over && isElite(run), hero: S,
     decree: over ? null : decreeOf(run), priceMul: priceMul(run), grow: run.grow || {}, flawAt: run.phase === 'offer' ? run.flawAt : -1,
     flawed: (run.flawed || []).map(w => ({ id: w.id, flaw: w.on ? w.flaw : null, on: w.on })),
-    pawned: run.pawned ? { ...run.pawned, cost: redeemCost(run.pawned), canRedeem: run.round === run.pawned.round + 1 } : null, foxDebt: run.foxDebt || 0, lostPawn: run.lostPawn || null,
+    up: run.phase === 'offer' ? upgradable(run) : [], pawned: run.pawned ? { ...run.pawned, cost: redeemCost(run.pawned), canRedeem: run.round === run.pawned.round + 1 } : null, foxDebt: run.foxDebt || 0, lostPawn: run.lostPawn || null,
     door: run.door, doors: (M.doors || []).filter(r => !M.bosses[r] && !M.elite.includes(r)), will: run.will && !run.willUsed && run.round === 1 ? run.will : null,
     nemesis: run.nemesis ? { name: nemesisName(run.nemesis), enemy: run.nemesis.enemy, affix: run.nemesis.affix, tile: run.nemesis.tile, lvl: run.nemesis.lvl || 1, round: run.nemesis.round, beaten: run.nemesis.beaten } : null,
     // Tablica Zarządu (faktury za pokonane piętra): tylko liczby z dziennika wygranych walk, bez składu przyszłych pięter.

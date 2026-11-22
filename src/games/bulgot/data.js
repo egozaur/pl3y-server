@@ -12,9 +12,9 @@ export const TYPES = { stat: 'Statystyka', skill: 'Umiejętność', item: 'Przed
 // grow: o ile rośnie życie i atak wrogów z każdą rundą (mnożnik). bosses: runda -> boss. bonusAfter: po tych bossach dodatkowa oferta.
 // elite: rundy z elitą (nagroda: Odznaka). zoneMul: dodatkowy mnożnik życia/ataku zwykłych wrogów w strefie (%, null = brak).
 export const MODES = {
-  quick: { name: 'Zupka Chińska', rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.18, atk: 1.12 }, bossPct: { hp: 80, atk: 90 },
+  quick: { name: 'Zupka Chińska', rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.17, atk: 1.113 }, bossPct: { hp: 80, atk: 90 },
     zones: [{ upTo: 5, zone: 0 }, { upTo: 10, zone: 1 }], elite: [4, 8], doors: [2, 6, 9] },
-  full: { name: 'Bulion Babci', rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 135, atk: 80 }, grow: { hp: 1.155, atk: 1.10 }, bossPct: { hp: 100, atk: 100 },
+  full: { name: 'Bulion Babci', rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 135, atk: 80 }, grow: { hp: 1.14, atk: 1.087 }, bossPct: { hp: 100, atk: 100 },
     zones: [{ upTo: 6, zone: 0 }, { upTo: 12, zone: 1 }, { upTo: 20, zone: 2 }], elite: [4, 10, 16], zoneMul: [null, null, { hp: 130, atk: 112 }], doors: [2, 5, 8, 11, 14, 17] },
 };
 // doors: piętra z Rozwidleniem Korytarza (wybór: zwykłe piętro albo wróg z cechą elity za nagrodę).
@@ -33,6 +33,8 @@ export const RULES = {
   interestPer: 10, interestMax: 3,
   // Rozwidlenie Korytarza: ryzykowne drzwi = pierwszy wróg z cechą elity (życie/atak w %), nagroda: Ziarna albo wybór rzadkiego kafelka.
   doorCoins: 8, doorHp: 165, doorAtk: 125,
+  // Łup z bossa: po pokonaniu bossa (poza ostatnim) wybierasz 1 z `lootSize` legendarnych statystyk (kafelki z flagą boss).
+  lootSize: 3,
   // Lombard Lisa: zastaw = pełna cena rzadkości teraz, wykup na następnym piętrze za `pawnBack`% ceny; przepadek wzmacnia Lisy o `pawnFox`%.
   pawnBack: 150, pawnFox: 25,
   // Wadliwa Partia: szansa (%) na kafelek z wadą w ofercie i o ile (%) mocniejsze są jego dodatnie efekty.
@@ -71,7 +73,7 @@ export const CHARS = {
     fx: [{ k: 'atkPct', v: 60 }, { k: 'aspdPct', v: -30 }, { k: 'crit', v: 10 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-indor' },
   zjarany: { id: 'zjarany', name: 'Zjarany Kurczak', style: 'Oparzenie i luz', secret: true,
     text: 'Podpala wrogów (30% Oparzenia, limit +4, leczy się od płonących), ale jest najarany od rana: -45% szybkości ataku i -10% Ataku. Co 4 s Chmura Dymu: Oparzenie i spowolnienie wrogów.', base: BASE,
-    fx: [{ k: 'burnHit', v: 30 }, { k: 'burnMax', v: 4 }, { k: 'regen', v: 2 }, { k: 'burnHeal', v: 3 }, { k: 'aspdPct', v: -45 }, { k: 'atkPct', v: -10 }, { k: 'smoke', v: 40 }],
+    fx: [{ k: 'burnHit', v: 30 }, { k: 'burnMax', v: 4 }, { k: 'regen', v: 20 }, { k: 'burnHeal', v: 3 }, { k: 'aspdPct', v: -45 }, { k: 'atkPct', v: -10 }, { k: 'smoke', v: 40 }],
     startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-420' },
 };
 
@@ -148,20 +150,74 @@ export const SETS = {
   korpo: { name: 'Korporacyjne', b2: 'Odpoczynek tańszy o 2 Ziarna', b3: 'Dokupowanie kafelków 25% taniej', b4: 'Odsetki: po każdej wygranej +10% posiadanych Ziaren (maks. 5)' },
 };
 
+// ---------- Rodziny statystyk ----------
+// Każda rodzina ma 3 poziomy zwykłe (1 Zwykły, 2 Rzadki, 3 Epicki; poziom 3 ma STARE id, więc profile i Księga się nie psują)
+// i poziom 4 legendarny (rarity 3, `boss: true`): nie występuje w ofertach, tylko jako łup z bossa (faza `loot`).
+// `next` = kafelek, w który zlewają się 3 kopie (akcja `upgrade`, rules.js). Regeneracja jest liczona w dziesiątych częściach (10 = 1 / s).
+const tenths = v => String(v / 10).replace('.', ',');
+const STAT_FAMILIES = [
+  { fam: 'zycie', k: 'hpFlat', fmt: v => `+${v} maks. Życia`, lv: [
+    ['grzebien-z-tasmy', 'Grzebień z Taśmy', 5, 'Wyszedł z taśmy lekko krzywy, ale czerwony.'],
+    ['grzebien-hodowlany', 'Grzebień Hodowlany', 12, 'Z hodowli, gdzie każdy grzebień ma metrykę.'],
+    ['twardy-grzebien', 'Grzebień Barberski', 20, 'Im czerwieńszy, tym trudniej go zgasić.'],
+    ['grzebien-rosolowego-krola', 'Grzebień Rosołowego Króla', 35, 'Korona założona przed pierwszą zupą. Do dziś ciepła.']] },
+  { fam: 'atak', k: 'atkFlat', fmt: v => `+${v} Atak`, lv: [
+    ['ziarenko-z-podlogi', 'Ziarenko z Podłogi', 2, 'Spadło ze stołu. Zasada pięciu sekund obowiązuje także w kurniku.'],
+    ['ziarno-selekcjonowane', 'Ziarno Selekcjonowane', 4, 'Wybrane przez komisję, która nie przyjmowała odwołań.'],
+    ['ziarno-mocy', 'Ziarno Mocy', 6, 'Jedno ziarno, a w nim cała sprawiedliwość.'],
+    ['ziarno-pierwszego-jajka', 'Ziarno Pierwszego Jajka', 10, 'Z niego wszystko się zaczęło. Kura wolałaby, żebyś o to nie pytał.']] },
+  { fam: 'obrazenia', k: 'dmg', fmt: v => `+${v}% obrażeń`, lv: [
+    ['nadpilowany-dziob', 'Nadpiłowany Dziób', 3, 'Ktoś zaczął go piłować i się znudził.'],
+    ['dziob-szlifowany', 'Dziób Szlifowany', 7, 'Szlif końcowy robi dział jakości, po godzinach.'],
+    ['ostry-dziob', 'Ostry Dziób', 12, 'Naostrzony na kamieniu, na którym ostrzy się cennik.'],
+    ['dziob-prezesa', 'Dziób Prezesa', 20, 'Podpisuje wyroki szybciej niż zarządzenia.']] },
+  { fam: 'szybkosc', k: 'aspdPct', fmt: v => `+${v}% szybkości ataku`, lv: [
+    ['dziob-po-kawie', 'Dziób po Kawie', 3, 'Pierwsza kawa z automatu, pierwsze drgania.'],
+    ['dziob-po-espresso', 'Dziób po Espresso', 6, 'Drgania zaczynają być zauważalne dla ubezpieczyciela.'],
+    ['szybki-dziob', 'Szybki Dziób', 10, 'Stuk, stuk, stuk. Księgowość nie nadąża.'],
+    ['dziob-maszynowy', 'Dziób Maszynowy', 18, 'Stuka tak szybko, że księgowość wezwała mechanika.']] },
+  { fam: 'pancerz', k: 'armor', fmt: v => `+${v} Pancerza`, lv: [
+    ['puch-zbity-w-kule', 'Puch Zbity w Kulę', 2, 'Wygląda jak pompon. Chroni jak pompon z ambicjami.'],
+    ['pierze-prasowane', 'Pierze Prasowane', 4, 'Prasowane na gorąco, jak kołnierzyk dyrektora.'],
+    ['pancerz-z-pierza', 'Pancerz z Pierza', 6, 'Miękki w dotyku, twardy w boju.'],
+    ['zbroja-wyroczni-kurnika', 'Zbroja Wyroczni Kurnika', 10, 'Wyrocznia przewidziała ciosy. Zbroja już je zna.']] },
+  { fam: 'krytyk', k: 'crit', fmt: v => `+${v}% szansy na trafienie krytyczne`, lv: [
+    ['zezowate-oko', 'Zezowate Oko', 2, 'Patrzy w dwie strony naraz. Czasem trafia w obie.'],
+    ['oko-kontrolera-jakosci', 'Oko Kontrolera Jakości', 5, 'Odrzuca wszystko, w tym twoich wrogów.'],
+    ['czujne-oko', 'Czujne Oko', 8, 'Widzi słabe punkty. Szczególnie Prezesa.'],
+    ['oko-cyklopa-z-chlodni', 'Oko Cyklopa z Chłodni', 14, 'Jedno oko, zero litości, temperatura minus dwadzieścia.']] },
+  { fam: 'unik', k: 'evade', fmt: v => `+${v}% uniku`, lv: [
+    ['slieskie-nozki', 'Śliskie Nóżki', 2, 'Posmarowane tłuszczem po wczorajszym rosole.'],
+    ['nogi-akrobaty', 'Nogi Akrobaty', 4, 'Cyrk wyjechał, nogi zostały.'],
+    ['zwinne-nogi', 'Zwinne Nogi', 6, 'Kto biega, ten się nie gotuje.'],
+    ['cien-skrzydla', 'Cień Skrzydła', 10, 'Nie widać go nawet po fakcie.']] },
+  { fam: 'regeneracja', k: 'regen', fmt: v => `+${tenths(v)} Regeneracji / s`, lv: [
+    ['sloma-z-wczoraj', 'Słoma z Wczoraj', 5, 'Trochę wilgotna, ale własna.'],
+    ['gniazdko-z-siana', 'Gniazdko z Siana', 12, 'Siano pachnie latem, którego tu nie było.'],
+    ['cieple-gniazdko', 'Ciepłe Gniazdko', 20, 'Nawet w fabryce znajdzie się kąt na drzemkę.'],
+    ['wieczny-ogien-kuchenki', 'Wieczny Ogień Kuchenki', 35, 'Nikt nie pamięta, kto go zapalił. Nikt go nie gasi.']] },
+  { fam: 'szczescie', k: 'luck', fmt: v => `+${v} Szczęścia (lepsze kafelki w ofertach)`, lv: [
+    ['trojlistna-koniczyna', 'Trójlistna Koniczyna', 3, 'Zwykła, ale ktoś ją pogłaskał.'],
+    ['koniczyna-z-kapliczki', 'Koniczyna z Kapliczki', 6, 'Wyrosła pod figurką świętego Rosołu.'],
+    ['czterolistna-koniczyna', 'Czterolistna Koniczyna', 10, 'Rzadkie jak kurczak, który wraca z ubojni.'],
+    ['piecio-koniczyna-zarzadu', 'Pięciolistna Koniczyna Zarządu', 16, 'Wyhodowana na koszt akcjonariuszy. Szczęście wypłacane w ratach.']] },
+];
+export const STAT_TILES = [];
+for (const F of STAT_FAMILIES) F.lv.forEach(([id, name, v, flavor], i) => {
+  const t = { id, name, type: 'stat', rarity: i, fam: F.fam, lvl: i + 1, repeat: true, text: F.fmt(v), fx: [{ k: F.k, v }], flavor };
+  if (i < 2) t.next = F.lv[i + 1][0];
+  if (i === 3) t.boss = true;
+  if (id === 'czterolistna-koniczyna') t.lock = 'u-koniczyna';
+  STAT_TILES.push(t);
+});
+export const STAT_FAMS = STAT_FAMILIES.map(F => ({ fam: F.fam, ids: F.lv.map(l => l[0]) }));
+
+
 // ---------- Kafelki ----------
 // rarity 0..3; type stat|skill|item|risk; fx = lista modyfikatorów statystyk (patrz stats.js); lock = id odblokowania (patrz UNLOCKS);
 // repeat = można brać wielokrotnie; event = kafelek-wydarzenie (obsługa w rules.js).
 export const TILES = [
-  // Statystyki
-  { id: 'ziarno-mocy', name: 'Ziarno Mocy', type: 'stat', rarity: 0, repeat: true, text: '+6 Atak', fx: [{ k: 'atkFlat', v: 6 }], flavor: 'Jedno ziarno, a w nim cała sprawiedliwość.' },
-  { id: 'ostry-dziob', name: 'Ostry Dziób', type: 'stat', rarity: 0, repeat: true, text: '+12% obrażeń', fx: [{ k: 'dmg', v: 12 }], flavor: 'Naostrzony na kamieniu, na którym ostrzy się cennik.' },
-  { id: 'twardy-grzebien', name: 'Twardy Grzebień', type: 'stat', rarity: 0, repeat: true, text: '+20 maks. Życia', fx: [{ k: 'hpFlat', v: 20 }], flavor: 'Im czerwieńszy, tym trudniej go zgasić.' },
-  { id: 'szybki-dziob', name: 'Szybki Dziób', type: 'stat', rarity: 0, repeat: true, text: '+10% szybkości ataku', fx: [{ k: 'aspdPct', v: 10 }], flavor: 'Stuk, stuk, stuk. Księgowość nie nadąża.' },
-  { id: 'pancerz-z-pierza', name: 'Pancerz z Pierza', type: 'stat', rarity: 0, repeat: true, text: '+6 Pancerza', fx: [{ k: 'armor', v: 6 }], flavor: 'Miękki w dotyku, twardy w boju.' },
-  { id: 'czujne-oko', name: 'Czujne Oko', type: 'stat', rarity: 1, repeat: true, text: '+8% szansy na trafienie krytyczne', fx: [{ k: 'crit', v: 8 }], flavor: 'Widzi słabe punkty. Szczególnie Prezesa.' },
-  { id: 'zwinne-nogi', name: 'Zwinne Nogi', type: 'stat', rarity: 1, repeat: true, text: '+6% uniku', fx: [{ k: 'evade', v: 6 }], flavor: 'Kto biega, ten się nie gotuje.' },
-  { id: 'cieple-gniazdko', name: 'Ciepłe Gniazdko', type: 'stat', rarity: 1, repeat: true, text: '+2 Regeneracji / s', fx: [{ k: 'regen', v: 2 }], flavor: 'Nawet w fabryce znajdzie się kąt na drzemkę.' },
-  { id: 'czterolistna-koniczyna', name: 'Czterolistna Koniczyna', type: 'stat', rarity: 2, repeat: true, lock: 'u-koniczyna', text: '+10 Szczęścia (lepsze kafelki w ofertach)', fx: [{ k: 'luck', v: 10 }], flavor: 'Rzadkie jak kurczak, który wraca z ubojni.' },
+  ...STAT_TILES,
   // Umiejętności aktywne
   { id: 'kukurydziany-grad', name: 'Kukurydziany Grad', type: 'skill', rarity: 0, skill: 'grad', text: 'Umiejętność: 5 pocisków po 60% Ataku, cooldown 6,5 s', flavor: 'Deszcz ziarna, który nikogo nie nakarmi.' },
   { id: 'pianie-grozy', name: 'Pianie Grozy', type: 'skill', rarity: 1, skill: 'pianie', text: 'Umiejętność: ogłusza wrogów na 2 s, cooldown 9 s', flavor: 'Kikiriki, które słychać na dwudziestym piętrze.' },
@@ -249,7 +305,7 @@ export const MILESTONES = {
   'pancerz-z-pierza': { name: 'Pierzasta Twierdza', text: '+6 Pancerza, +25 maks. Życia', fx: [{ k: 'armor', v: 6 }, { k: 'hpFlat', v: 25 }] },
   'czujne-oko': { name: 'Sokole Oko', text: '+30% siły trafienia krytycznego', fx: [{ k: 'critMult', v: 30 }] },
   'zwinne-nogi': { name: 'Taniec Kurczaka', text: '+5% uniku, +8% szybkości ataku', fx: [{ k: 'evade', v: 5 }, { k: 'aspdPct', v: 8 }] },
-  'cieple-gniazdko': { name: 'Kurza Drzemka', text: '+3 Regeneracji / s, +10 maks. Życia', fx: [{ k: 'regen', v: 3 }, { k: 'hpFlat', v: 10 }] },
+  'cieple-gniazdko': { name: 'Kurza Drzemka', text: '+3 Regeneracji / s, +10 maks. Życia', fx: [{ k: 'regen', v: 30 }, { k: 'hpFlat', v: 10 }] },
   'czterolistna-koniczyna': { name: 'Pięciolistna Koniczyna', text: '+15 Szczęścia, +2 Ziarna po każdej rundzie', fx: [{ k: 'luck', v: 15 }, { k: 'coinFlat', v: 2 }] },
 };
 
@@ -284,7 +340,7 @@ export const UNLOCKS = [
 export const UNLOCK_BY_ID = Object.fromEntries(UNLOCKS.map(u => [u.id, u]));
 
 // Kafelki dostępne od początku (bez blokady).
-export const STARTER_TILES = TILES.filter(t => !t.lock && !t.hatched && !t.hidden).map(t => t.id);
+export const STARTER_TILES = TILES.filter(t => !t.lock && !t.hatched && !t.hidden && !t.boss).map(t => t.id);
 
 // ---------- Wrogowie ----------
 // hp/atk to wartości bazowe w rundzie 1; skalowane mnożnikiem rundy (rules.js). aspd w % (100 = 1 cios/s).
@@ -342,7 +398,7 @@ export const BADGES = {
   'bhp': { name: 'Szkolenie BHP', text: '+10% maks. Życia, leczenie po rundzie +10 pkt proc.', fx: [{ k: 'hpPct', v: 10 }, { k: 'healBonus', v: 10 }] },
   'delegacja': { name: 'Delegacja', text: '+1 darmowy reroll w każdej rundzie, +1 Ziarno po rundzie', fx: [{ k: 'freeReroll', v: 1 }, { k: 'coinFlat', v: 1 }] },
   'team-building': { name: 'Team Building', text: 'Umiejętności mają o 15% krótszy cooldown', fx: [{ k: 'cdPct', v: 15 }] },
-  'karta-multisport': { name: 'Karta Multisport', text: '+3 Regeneracji / s, +5% uniku', fx: [{ k: 'regen', v: 3 }, { k: 'evade', v: 5 }] },
+  'karta-multisport': { name: 'Karta Multisport', text: '+3 Regeneracji / s, +5% uniku', fx: [{ k: 'regen', v: 30 }, { k: 'evade', v: 5 }] },
   'awans': { name: 'Awans', text: '+20% Ataku', fx: [{ k: 'atkPct', v: 20 }] },
   'kawa-z-ekspresu': { name: 'Kawa z Ekspresu', text: '+15% szybkości ataku', fx: [{ k: 'aspdPct', v: 15 }] },
   'nagana-z-wpisem': { name: 'Nagana z Wpisem', text: '+10% szansy na trafienie krytyczne; krytyki nakładają 2 stosy Krwawienia', fx: [{ k: 'crit', v: 10 }, { k: 'critBleed', v: 2 }] },
@@ -405,7 +461,7 @@ export function garnekMods(level) {
 }
 
 // Wagi rzadkości: [zwykły, rzadki, epicki, legendarny] dla trzech etapów runu (początek, środek, koniec).
-export const RARITY_WEIGHTS = [[70, 25, 5, 0], [50, 35, 13, 2], [35, 38, 22, 5]];
+export const RARITY_WEIGHTS = [[45, 35, 20, 0], [30, 36, 30, 2], [18, 34, 43, 5]];
 // Wagi typów kafelków w ofercie.
 export const TYPE_WEIGHTS = { stat: 40, skill: 20, item: 25, risk: 15 };
 

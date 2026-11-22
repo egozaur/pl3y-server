@@ -25,7 +25,7 @@ export class Fight {
     this.acc = 0;                                         // naładowanie ataku bohatera (1000 = cios)
     this.skills = this.loadout.skills.map(s => ({ id: s.id, lvl: s.lvl, mut: s.mut || 0, cd: fl(SKILLS[s.id].cd * 15 / 100), blockedUntil: 0 }));   // start z 15% cooldownu (nie zabija w 1. ticku, a umiejętność jest gotowa po ok. 1 s)
     if (this.S.firstReady && this.skills[0]) this.skills[0].cd = 0;
-    this.parasol = this.S.parasol; this.hburn = 0; this.hburnT = 0; this.hburnPer = 0;
+    this.parasol = this.S.parasol; this.hburn = 0; this.hburnT = 0; this.hburnPer = 0; this.regAcc = 0;
     this.hasteUntil = 0; this.invulnUntil = 0; this.slowUntil = 0; this.critUntil = 0; this.kontraUntil = 0; this.blindUntil = 0; this.coinsWon = 0; this.bleedExtra = 0;
     this.nextEgg = this.S.egg || 0;
     this.revive = !!h.revive; this.revived = false; this.okUsed = false;
@@ -421,7 +421,7 @@ export class Fight {
     if (this.S.selfBurn && t % 200 === 199) { this.hburn = Math.min(10, this.hburn + 3); this.hburnT = t + 40; this.hburnPer = Math.max(this.hburnPer, 1, fl(this.S.maxHp / 100)); this.push({ k: 'flaw', f: 'samozaplon' }); }
 
     if (t % 10 === 9) {
-      this.heal(this.S.regen);
+      this.regAcc += this.S.regen; const rg = fl(this.regAcc / 10); this.regAcc -= rg * 10; this.heal(rg);   // regeneracja w dziesiątych częściach Życia na sekundę
       this.dots();
       for (const e of this.enemies) if (!e.dead && e.regenPct && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + Math.max(1, fl(e.maxHp * e.regenPct / 100)));
       if (this.hburn) {
