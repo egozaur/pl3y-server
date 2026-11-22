@@ -228,7 +228,7 @@ export default {
       for (const k of ['char', 'garnek', 'nick']) { const v = (url.searchParams.get(k) || '').slice(0, 24); if (v) q.set(k, v); }
       return cors(origin, await env.BG_RANKS.get(env.BG_RANKS.idFromName('ranks')).fetch('https://bg/list?' + q.toString()));
     }
-    m = url.pathname.match(/^\/api\/bg\/(state|start|pick|reroll|buy|rest|shop|bet|bonus|choose|pawn|redeem|will|fightstart|fightfinish|abandon|history|analysis|skillorder)$/);
+    m = url.pathname.match(/^\/api\/bg\/(state|start|pick|reroll|buy|rest|shop|bet|bonus|choose|pawn|redeem|will|fightstart|fightfinish|abandon|history|analysis|skillorder|code)$/);
     if (m && req.method === 'POST') {
       if (!origin) return new Response('Forbidden', { status: 403 });
       const b = await readJson(req, 20000);
