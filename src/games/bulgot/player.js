@@ -133,7 +133,7 @@ export class BgPlayer {
     const o = this.out(profile, run);
     const body = { ok: true, ...o, ...extra };
     if (r.setup) body.setup = r.setup;
-    for (const k of ['healed', 'result', 'reward', 'boss', 'bonus', 'event', 'crate', 'bought', 'price', 'bet', 'won', 'tile', 'cost', 'left', 'badge', 'automat', 'chose', 'interest', 'doorCoins', 'grew', 'revealed', 'nemesis', 'pawned', 'redeemed', 'upgraded', 'loot', 'looted', 'will', 'door']) if (r[k] !== undefined) body[k] = r[k];
+    for (const k of ['healed', 'result', 'reward', 'boss', 'bonus', 'event', 'crate', 'bought', 'price', 'bet', 'won', 'tile', 'cost', 'left', 'badge', 'automat', 'chose', 'interest', 'doorCoins', 'grew', 'revealed', 'nemesis', 'pawned', 'redeemed', 'upgraded', 'loot', 'looted', 'dino', 'will', 'door']) if (r[k] !== undefined) body[k] = r[k];
     return json(body);
   }
 

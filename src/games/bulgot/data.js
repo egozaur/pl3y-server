@@ -12,7 +12,7 @@ export const TYPES = { stat: 'Statystyka', skill: 'Umiejętność', item: 'Przed
 // grow: o ile rośnie życie i atak wrogów z każdą rundą (mnożnik). bosses: runda -> boss. bonusAfter: po tych bossach dodatkowa oferta.
 // elite: rundy z elitą (nagroda: Odznaka). zoneMul: dodatkowy mnożnik życia/ataku zwykłych wrogów w strefie (%, null = brak).
 export const MODES = {
-  quick: { name: 'Zupka Chińska', rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.125, atk: 1.086 }, bossPct: { hp: 80, atk: 90 },
+  quick: { name: 'Zupka Chińska', rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.12, atk: 1.083 }, bossPct: { hp: 80, atk: 90 },
     zones: [{ upTo: 5, zone: 0 }, { upTo: 10, zone: 1 }], elite: [4, 8], doors: [2, 6, 9] },
   full: { name: 'Bulion Babci', rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 135, atk: 80 }, grow: { hp: 1.109, atk: 1.068 }, bossPct: { hp: 100, atk: 100 },
     zones: [{ upTo: 6, zone: 0 }, { upTo: 12, zone: 1 }, { upTo: 20, zone: 2 }], elite: [4, 10, 16], zoneMul: [null, null, { hp: 130, atk: 112 }], doors: [2, 5, 8, 11, 14, 17] },
@@ -325,6 +325,23 @@ export const TILES = [
   { id: 'umowa-etat', name: 'Umowa o Pracę', type: 'risk', rarity: 1, hidden: true, text: '+30% Ataku, -2 Ziarna po każdej rundzie', fx: [{ k: 'atkPct', v: 30 }, { k: 'coinFlat', v: -2 }], flavor: 'Etat, karta Multisport i wieczna lojalność.' },
   { id: 'umowa-b2b', name: 'Umowa B2B', type: 'risk', rarity: 1, hidden: true, text: '-15% maks. Życia (w zamian za 15 Ziaren od ręki)', fx: [{ k: 'hpPct', v: -15 }], flavor: 'Sam sobie sterem, żeglarzem i ZUS-em.' },
   { id: 'zakazana-pasza', name: 'Zakazana Pasza', type: 'risk', rarity: 3, lock: 'u-pasza', text: '+25% wszystkich statystyk, ale następny boss ma +30% Życia', fx: [{ k: 'allPct', v: 25 }], flavor: 'Smakuje jak moc. Kosztuje jak rachunek.' },
+
+  // Etap 3: ryzyko (nowe kafelki z ceną)
+  { id: 'pozyczka-chwilowka', name: 'Pożyczka Chwilówka', type: 'risk', rarity: 1, coinsNow: 15, noPawn: true, text: '+15 Ziaren teraz, ale -2 Ziarna po każdej wygranej rundzie (odsetki)', fx: [{ k: 'coinFlat', v: -2 }], flavor: 'RRSO jest drobnym drukiem. Bardzo drobnym.' },
+  { id: 'dopalacz-z-biedronki', name: 'Dopalacz z Biedronki', type: 'risk', rarity: 1, text: '+40% szybkości ataku, -25% maks. Życia', fx: [{ k: 'aspdPct', v: 40 }, { k: 'hpPct', v: -25 }], flavor: 'Promocja tygodnia. Serce też bije promocyjnie.' },
+  { id: 'nadgodziny-bez-doplaty', name: 'Nadgodziny Bez Dopłaty', type: 'risk', rarity: 1, text: '+30% obrażeń, ale Odpoczynek leczy o połowę mniej', fx: [{ k: 'dmg', v: 30 }, { k: 'restHalf', v: 1 }], flavor: 'Premia za zaangażowanie: twoje własne zaangażowanie.' },
+  { id: 'dieta-cud', name: 'Dieta Cud z Kantyny', type: 'risk', rarity: 0, text: '+15 Pancerza, ale -30% szybkości ataku', fx: [{ k: 'armor', v: 15 }, { k: 'aspdPct', v: -30 }], flavor: 'Kotlet w pancerzu z panierki. Ruszanie się nie wchodzi w menu.' },
+  { id: 'uklad-z-zarzadem', name: 'Układ z Zarządem', type: 'risk', rarity: 1, coinsNow: 12, bossBoost: 25, text: '+12 Ziaren teraz, ale następny boss ma +25% Życia', flavor: 'Uścisk dłoni trwa dłużej niż umowa.' },
+  { id: 'los-na-loterii', name: 'Los na Loterii', type: 'risk', rarity: 1, text: '+25 Szczęścia, ale -1 Ziarno po każdej wygranej rundzie', fx: [{ k: 'luck', v: 25 }, { k: 'coinFlat', v: -1 }], flavor: 'Szansa wygranej wynosi jeden do kogutów.' },
+  // Etap 3: legendarne przedmioty (legend: w ofertach dopiero od 60% runu, czyli od strefy III w trybie pełnym; rzadkość 3)
+  { id: 'zloty-rosolek', name: 'Złoty Rosołek', type: 'item', rarity: 3, legend: true, tags: ['ogien', 'lod', 'trucizna', 'krew'], text: 'Każde nałożenie efektu statusowego daje o 1 stos więcej', fx: [{ k: 'allStatus', v: 1 }], flavor: 'Złoty, bo Zarząd tak powiedział. Wciąż parzy.' },
+  { id: 'kogut-alfa', name: 'Kogut Alfa', type: 'item', rarity: 3, legend: true, text: 'Umiejętność w 1. slocie jest gotowa od początku walki i ma o 50% krótszy cooldown', fx: [{ k: 'firstReady', v: 1 }, { k: 'alphaCd', v: 50 }], flavor: 'Pierwszy do pianie, pierwszy do wszystkiego.' },
+  { id: 'jajko-dinozaura', name: 'Jajko Dinozaura', type: 'item', rarity: 3, legend: true, grow: { max: 5, per: 1 }, dino: true, text: 'Rośnie: po 5 wygranych piętrach wykluwa się Dinozaur (+60% Ataku i maks. Życia)', flavor: 'Leży w kurniku od mezozoiku. Nikt nie pytał dlaczego.' },
+  { id: 'plan-b', name: 'Plan B', type: 'item', rarity: 3, legend: true, text: 'W każdej walce, gdy spadniesz do zera, wstajesz z 30% Życia i 3 s nietykalności (raz na walkę)', fx: [{ k: 'planB', v: 1 }], flavor: 'Plan A był zbyt optymistyczny.' },
+  { id: 'akcje-zarzadu', name: 'Akcje Zarządu', type: 'item', rarity: 3, legend: true, tags: ['korpo'], text: 'Po każdej wygranej +25% posiadanych Ziaren (maks. 12)', fx: [{ k: 'bigInterest', v: 25 }], flavor: 'Giełda kurzych jaj notuje wzrosty. Zawsze o jedno piętro za późno.' },
+  { id: 'dziob-mistrza', name: 'Dziób Mistrza Ceremonii', type: 'item', rarity: 3, legend: true, text: 'Umiejętności mogą zadawać trafienia krytyczne; +15% szansy na trafienie krytyczne', fx: [{ k: 'skillCrit', v: 1 }, { k: 'crit', v: 15 }], flavor: 'Każde dziobnięcie to małe przedstawienie.' },
+  // Wykluty z Jajka Dinozaura (nie w ofertach)
+  { id: 'dinozaur', name: 'Dinozaur', type: 'item', rarity: 3, hatched: true, text: '+60% Ataku i +60% maks. Życia', fx: [{ k: 'atkPct', v: 60 }, { k: 'hpPct', v: 60 }], flavor: 'Wykluł się. Ptaki to przecież dinozaury. Prezes tego nie zauważył.' },
 ];
 // ---------- Wylęgarnia: przedmioty wyklute z dwóch innych ----------
 // Gdy gracz ma oba składniki przepisu, znikają i wykluwa się z nich legendarny przedmiot (ma efekty obu i premię, liczy się do ich zestawów).

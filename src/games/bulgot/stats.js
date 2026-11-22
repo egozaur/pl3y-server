@@ -88,6 +88,7 @@ export function heroStats(loadout, opt = {}) {
     shred: acc.shred || 0,
     // Etap 2: nowe efekty przedmiotów (sim.js)
     burnSpread: acc.burnSpread || 0, burnArmor: acc.burnArmor || 0, vsBurn: acc.vsBurn || 0, frostWeak: Math.min(75, acc.frostWeak || 0), firstFrost: acc.firstFrost || 0,
+    allStatus: acc.allStatus || 0, alphaCd: Math.min(70, acc.alphaCd || 0), planB: !!acc.planB, skillCrit: !!acc.skillCrit, bigInterest: acc.bigInterest || 0,
     surprise: acc.surprise || 0, cleave: Math.min(100, acc.cleave || 0), scare: acc.scare || 0, double: Math.min(100, acc.double || 0), medkit: acc.medkit || 0, skillReset: Math.min(60, acc.skillReset || 0),
     // wady (Wadliwa Partia)
     selfBurn: acc.selfBurn || 0, restHalf: !!acc.restHalf, furyBlast: acc.furyBlast || 0,

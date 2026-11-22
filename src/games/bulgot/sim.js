@@ -26,7 +26,7 @@ export class Fight {
     this.skills = this.loadout.skills.map(s => ({ id: s.id, lvl: s.lvl, mut: s.mut || 0, cd: fl(SKILLS[s.id].cd * 15 / 100), blockedUntil: 0 }));   // start z 15% cooldownu (nie zabija w 1. ticku, a umiejętność jest gotowa po ok. 1 s)
     if (this.S.firstReady && this.skills[0]) this.skills[0].cd = 0;
     this.parasol = this.S.parasol; this.hburn = 0; this.hburnT = 0; this.hburnPer = 0; this.regAcc = 0;
-    this.igniteUntil = 0; this.igniteN = 1; this.dmgUntil = 0; this.dmgBonus = 0; this.hotUntil = 0; this.hotPct = 0; this.ffDone = false; this.medUsed = false; this.nextSurprise = this.S.surprise || 0;
+    this.inSkill = false; this.planBUsed = false; this.igniteUntil = 0; this.igniteN = 1; this.dmgUntil = 0; this.dmgBonus = 0; this.hotUntil = 0; this.hotPct = 0; this.ffDone = false; this.medUsed = false; this.nextSurprise = this.S.surprise || 0;
     this.hasteUntil = 0; this.invulnUntil = 0; this.slowUntil = 0; this.critUntil = 0; this.kontraUntil = 0; this.blindUntil = 0; this.coinsWon = 0; this.bleedExtra = 0;
     this.nextEgg = this.S.egg || 0;
     this.revive = !!h.revive; this.revived = false; this.okUsed = false;
@@ -78,7 +78,7 @@ export class Fight {
     raw = fl(raw * (100 + this.S.dmg + this.skillBonus + (this.S.overtime && this.tick >= 200 ? this.S.overtime : 0) + (this.S.vsCold && (t.frost > 0 || this.tick < t.frozenUntil) ? this.S.vsCold : 0) + (this.S.vsBurn && t.burn > 0 ? this.S.vsBurn : 0) + (this.tick < this.dmgUntil ? this.dmgBonus : 0)) / 100);
     let crit = false;
     if (t.brittle) { t.brittle = false; crit = true; raw = fl(raw * this.S.critMult / 100); }   // Kruchość: trafienie zawsze krytyczne
-    else if (canCrit && (this.tick < this.critUntil || this.rng.int(100) < this.S.crit)) { crit = true; raw = fl(raw * this.S.critMult / 100); }
+    else if ((canCrit || (this.S.skillCrit && this.inSkill)) && (this.tick < this.critUntil || this.rng.int(100) < this.S.crit)) { crit = true; raw = fl(raw * this.S.critMult / 100); }
     let d = Math.max(1, fl(raw * 100 / (100 + Math.max(0, t.armor))));
     if (t.shieldHits > 0) { t.shieldHits--; this.push({ k: 'shield', to: t.uid }); return 0; }
     if (t.shield > 0) { const a = Math.min(t.shield, d); t.shield -= a; d -= a; this.push({ k: 'shieldhit', to: t.uid, d: a }); if (d <= 0) return a; }
@@ -104,6 +104,7 @@ export class Fight {
   // Nakłada n stosów efektu (burn|frost|poison|bleed) na wroga. Zwraca true, jeśli coś nałożono.
   applyStatus(t, kind, n) {
     if (!t || t.dead || t.immune || n <= 0) return false;
+    n += this.S.allStatus || 0;   // Złoty Rosołek
     if (t.resist && t.resist.includes(kind)) { this.push({ k: 'resist', to: t.uid, s: kind }); return false; }
     const def = STATUS[kind], S = this.S;
     const until = this.tick + fl(def.dur * (100 + (S.stDur || 0)) / 100) * (kind === 'frost' && this.decree === 'oszczednosci' ? 2 : 1);
@@ -200,7 +201,8 @@ export class Fight {
     const s = this.skills[slot];
     if (!s || this.over || this.tick < s.cd || this.tick < s.blockedUntil) return false;
     const def = SKILLS[s.id], pw = s.lvl >= 2 ? 130 : 100, m = s.lvl >= 3 ? (s.mut || 1) : 0;
-    s.cd = this.tick + fl((s.lvl >= 2 ? fl(def.cd * 80 / 100) : def.cd) * (100 - (this.S.cdPct || 0)) / 100);
+    s.cd = this.tick + fl((s.lvl >= 2 ? fl(def.cd * 80 / 100) : def.cd) * (100 - Math.min(80, (this.S.cdPct || 0) + (slot === 0 ? this.S.alphaCd || 0 : 0))) / 100);   // Kogut Alfa skraca cooldown 1. slotu
+    this.inSkill = true;   // Dziób Mistrza: trafienia umiejętności mogą być krytyczne
     this.used++;
     this.push({ k: 'skill', slot, id: s.id, mut: m });
     const alive = this.alive(), P = x => fl(x * pw / 100), tick = this.tick;
@@ -363,6 +365,7 @@ export class Fight {
       if (new Set(this.chainSlots).size >= 3) { this.chains++; this.push({ k: 'seria' }); this.stunAll(RULES.chainStun); }   // Pełna Kurza Seria: Popłoch
       this.chain = 0; this.chainSlots = [];
     }
+    this.inSkill = false;
     return true;
   }
   stunAll(d) {
@@ -406,6 +409,10 @@ export class Fight {
     if (this.revive && !this.revived) {
       this.revived = true; this.hp = fl(this.S.maxHp * this.S.revivePct / 100); this.push({ k: 'revive' });
       if (this.S.reviveBurn) for (const e of this.alive()) this.applyStatus(e, 'burn', this.S.reviveBurn);
+      return;
+    }
+    if (this.S.planB && !this.planBUsed) {   // Plan B: druga szansa w każdej walce
+      this.planBUsed = true; this.hp = Math.max(1, fl(this.S.maxHp * 30 / 100)); this.invulnUntil = Math.max(this.invulnUntil, this.tick + 30); this.push({ k: 'revive' });
       return;
     }
     this.hp = 0; this.over = true; this.win = false;

@@ -33,7 +33,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 4;
+export const RUN_V = 5;
 
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null }) {
   const M = MODES[mode], ch = CHARS[char];
@@ -60,7 +60,8 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null
 
 // ---------- Oferta kafelków ----------
 function tileAvailable(run, t) {
-  if (t.hatched || t.boss) return false;   // wyklute i legendarne z bossów nie trafiają do ofert
+  if (t.hatched || t.boss) return false;
+  if (t.legend && (run.round - 1) / MODES[run.mode].rounds < 0.6) return false;   // legendarne przedmioty dopiero od 60% runu (strefa III w trybie pełnym)   // wyklute i legendarne z bossów nie trafiają do ofert
   if (t.repeat) return true;
   if (RECIPES.some(r => r.of.includes(t.id) && run.tiles.includes(r.out))) return false;   // składnik już wyklutego przedmiotu
   if (t.type === 'skill') { const s = run.skills.find(x => x.id === t.skill); return !s || s.lvl < RULES.maxSkillLvl; }
@@ -164,6 +165,8 @@ function applyTile(run, t, slot, mut) {
     if (t.type === 'risk') run.stats.riskPicks++;
     if (t.id === 'pakt-z-lisem') run.stats.fox = 1;
     if (t.id === 'zakazana-pasza') run.flags.bossHpBonus = 30;
+    if (t.coinsNow) setCoins(run, run.coins + t.coinsNow);   // Pożyczka Chwilówka, Układ z Zarządem
+    if (t.bossBoost) run.flags.bossHpBonus = Math.max(run.flags.bossHpBonus || 0, t.bossBoost);
   }
   const after = statsOf(run).maxHp;
   run.hp = after > before ? run.hp + (after - before) : Math.min(run.hp, after);
@@ -374,6 +377,7 @@ export function pawn(run, id) {
   const t = TILE_BY_ID[id];
   if (!t || !run.tiles.includes(id)) return fail('Nie masz takiego kafelka.', 'index');
   if (t.type === 'skill' || t.hidden) return fail('Lis nie przyjmuje umiejętności ani umów.', 'kind');
+  if (t.noPawn) return fail('Lis nie przyjmuje pożyczek pod zastaw.', 'kind');
   if ((run.flawed || []).some(w => w.id === id)) return fail('Lis nie bierze towaru z wadą fabryczną.', 'flaw');
   const price = pawnPrice(t);
   run.tiles.splice(run.tiles.lastIndexOf(id), 1);
@@ -676,6 +680,7 @@ export function fightFinish(run, inputs) {
   let coins = (setup.boss ? RULES.coinsBoss + S.bossCoins : RULES.coinsRound) + S.coinFlat;
   coins = fl(coins * (100 + S.coinPct + (setup.elite ? RULES.eliteCoinsPct : 0)) / 100);
   if (S.interest) coins += Math.min(5, fl(run.coins * S.interest / 100));
+  if (S.bigInterest) coins += Math.min(12, fl(run.coins * S.bigInterest / 100));   // Akcje Zarządu
   if (decreeIs(run, 'premia')) coins += 3;
   // Odsetki w Spiżarni: +1 Ziarno za każde 10 niewydanych (po kradzieżach), najwyżej 3 (Kaczor 5).
   const interest = Math.min(CHARS[run.char].interestMax || RULES.interestMax, fl(run.coins / RULES.interestPer));
@@ -688,6 +693,13 @@ export function fightFinish(run, inputs) {
   gw('pierze-weterana', res.lowest * 100 < S.maxHp * 40 ? 1 : 0);
   gw('trofeum-z-pior', Math.min(4, res.kills));
   gw('skarbonka-piskleca', run.rested ? 0 : 1);
+  // Jajko Dinozaura: po 5 wygranych piętrach wykluwa się Dinozaur
+  gw('jajko-dinozaura', 1);
+  if (run.tiles.includes('jajko-dinozaura') && run.grow['jajko-dinozaura'] >= TILE_BY_ID['jajko-dinozaura'].grow.max) {
+    const hb = statsOf(run).maxHp; run.tiles.splice(run.tiles.indexOf('jajko-dinozaura'), 1, 'dinozaur'); delete run.grow['jajko-dinozaura'];
+    const ha = statsOf(run).maxHp; if (ha > hb) run.hp += ha - hb;
+    out.dino = true; (run.stats.hatched = run.stats.hatched || []);
+  }
   // Awans Wroga: pokonany Nemezis oddaje skradziony kafelek i daje Odznakę Sprawiedliwość Kurnika.
   if (setup.nemesis) {
     run.nemesis.beaten = true; out.nemesis = { tile: null };

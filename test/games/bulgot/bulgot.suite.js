@@ -1128,7 +1128,9 @@ test('Awans Wroga: zabójca zostaje Nemezis, kradnie kafelek, czeka w następnym
 test('BgPlayer: Testament Pyrtka (po przegranej, piąta karta następnego runu, inna postać) i Nemezis znika po pokonaniu', async () => {
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   let r = await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
-  const i = r.j.run.offer.findIndex(id => !D.TILE_BY_ID[id].event && D.TILE_BY_ID[id].rarity <= 1);
+  const okTile = id => !D.TILE_BY_ID[id].event && D.TILE_BY_ID[id].rarity <= 1 && D.TILE_BY_ID[id].type !== 'skill';
+  for (let k = 0; k < 40 && !r.j.run.offer.some(okTile); k++) { await post(o, 'abandon', { pl: PL }); r = await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' }); }   // oferta bez zwykłego/rzadkiego kafelka: losuj nowy run
+  const i = r.j.run.offer.findIndex(okTile);
   await post(o, 'pick', { pl: PL, i, slot: 0, mut: 1 });
   assert((await post(o, 'will', { pl: PL, i: 0 })).status === 409, 'testament dopiero po przegranej');
   r = await post(o, 'abandon', { pl: PL }); const opts = r.j.run.willOptions; assert(Array.isArray(opts) && opts.length >= 1, 'opcje testamentu');
@@ -1329,8 +1331,8 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
   eq(c.pending.offer.length, 3, 'nadal 3 propozycje, gdy zostało mniej niż 3 nowe');
 });
 
-test('RUN_V = 4: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 4, 'wersja reguł');
+test('RUN_V = 5: stary run (wersja 2) jest unieważniany', async () => {
+  eq(R.RUN_V, 5, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1434,4 +1436,65 @@ test('przedmioty etapu 2: Wywar Dnia, Tłusta Pokrywka, Szczypta Soli, Lodowa Sp
   // Spichlerz, Służbowy Samochód, Szczypta: statystyki
   eq(S(['spichlerz']).maxHp, 70 + 12, 'Spichlerz +12 Życia'); eq(S(['spichlerz']).coinPct, 20, 'Spichlerz +20% Ziaren');
   const car = fresh(); car.tiles = ['sluzbowy-samochod']; car.hp = 5; eq(R.restCost(car), 0, 'Służbowy Samochód: darmowy Odpoczynek'); eq(S(['sluzbowy-samochod']).restDisc, 4, 'restDisc'); eq(S(['sluzbowy-samochod']).healBonus, 10, 'leczenie po wygranej +10 pkt proc.');
+});
+
+// ---------- etap 3: ryzyko i legendarne przedmioty ----------
+test('etap 3: pula 134 kafelki, legendarne przedmioty (legend) dopiero od 60% runu, nigdy wyklęty Dinozaur w ofertach', () => {
+  eq(D.TILES.length, 134, 'pula kafelków');
+  const leg = D.TILES.filter(t => t.legend); eq(leg.length, 6, '6 legendarnych przedmiotów'); assert(leg.every(t => t.rarity === 3 && t.type === 'item'), 'rzadkość 3, przedmioty');
+  const risk = ['pozyczka-chwilowka', 'dopalacz-z-biedronki', 'nadgodziny-bez-doplaty', 'dieta-cud', 'uklad-z-zarzadem', 'los-na-loterii']; assert(risk.every(id => D.TILE_BY_ID[id] && D.TILE_BY_ID[id].type === 'risk'), '6 kafelków ryzyka');
+  const early = new Set(), late = new Set(); let dino = 0;
+  for (let seed = 1; seed < 600; seed++) {
+    const run = fresh({ seed, mode: 'full' });
+    for (const [round, set] of [[5, early], [14, late], [19, late]]) { run.round = round; for (const salt of [0, 101, 102]) for (const id of R.makeOffer(run, salt)) { if (D.TILE_BY_ID[id].legend) set.add(id); if (id === 'dinozaur') dino++; } }
+  }
+  eq(early.size, 0, 'w trybie pełnym legendarne przedmioty nie wypadają przed strefą III'); assert(late.size >= 4, 'od strefy III wypadają: ' + [...late].join()); eq(dino, 0, 'Dinozaur nie jest w ofertach');
+  const q = fresh({ seed: 3, mode: 'quick' }); q.round = 3; for (let i = 0; i < 40; i++) assert(!R.makeOffer(q, i).some(id => D.TILE_BY_ID[id].legend), 'tryb szybki: nie przed 60% runu');
+});
+
+test('kafelki ryzyka etapu 3: Pożyczka (Ziarna teraz, odsetki, nie do lombardu), Układ z Zarządem (boss +25%), Dopalacz, Nadgodziny, Dieta, Los', () => {
+  const run = fresh(); run.coins = 0; force(run, 'pozyczka-chwilowka', 'dieta-cud', 'los-na-loterii', 'dopalacz-z-biedronki');
+  assert(R.pickTile(run, 0).ok && run.coins === 15 && run.stats.riskPicks === 1 && R.statsOf(run).coinFlat === -2, 'Pożyczka: +15 Ziaren, odsetki -2 po rundzie');
+  run.phase = 'offer'; eq(R.pawn(run, 'pozyczka-chwilowka').code, 'kind', 'Lis nie bierze pożyczki');
+  const w = fresh(); w.tiles = ['pozyczka-chwilowka']; w.phase = 'fight'; w.fight = { started: true }; w.hp = 70; w.coins = 0; const before = w.coins; R.fightFinish(w, []); assert(w.coins >= 0 && w.coins <= before + 4 - 2 + 2, 'odsetki obniżają nagrodę (4 - 2)');
+  const b = fresh(); force(b, 'uklad-z-zarzadem', 'dieta-cud', 'los-na-loterii', 'dopalacz-z-biedronki'); b.coins = 1; R.pickTile(b, 0); eq([b.coins, b.flags.bossHpBonus], [13, 25], 'Układ: +12 Ziaren, boss +25% Życia');
+  const S = ids => heroStats(loadout({ tiles: ids }));
+  eq([S(['dopalacz-z-biedronki']).aspd, S(['dopalacz-z-biedronki']).maxHp], [140, Math.floor(70 * 75 / 100)], 'Dopalacz: +40% szybkości, -25% Życia');
+  const ng = fresh(); ng.tiles = ['nadgodziny-bez-doplaty']; ng.hp = 10; eq(R.restPctOf(ng), 10, 'Nadgodziny: Odpoczynek leczy o połowę mniej'); eq(S(['nadgodziny-bez-doplaty']).dmg, 30, '+30% obrażeń');
+  eq([S(['dieta-cud']).armor, S(['dieta-cud']).aspd], [15, 70], 'Dieta: +15 Pancerza, -30% szybkości'); eq([S(['los-na-loterii']).luck, S(['los-na-loterii']).coinFlat], [25, -1], 'Los na Loterii');
+});
+
+test('legendarne przedmioty: Złoty Rosołek, Kogut Alfa, Plan B, Dziób Mistrza, Akcje Zarządu', () => {
+  const big = (o = {}) => foe({ hp: 100000, atk: 1, aspd: 10, ...o });
+  // Złoty Rosołek: +1 stos przy każdym nałożeniu
+  let f = new Fight(setup({ lo: { tiles: ['zloty-rosolek'] }, enemies: [big()] })); f.applyStatus(f.enemies[0], 'burn', 2); eq(f.enemies[0].burn, 3, 'Złoty Rosołek: 2 → 3 stosy');
+  f = new Fight(setup({ lo: { tiles: [] }, enemies: [big()] })); f.applyStatus(f.enemies[0], 'burn', 2); eq(f.enemies[0].burn, 2, 'bez przedmiotu 2');
+  // Kogut Alfa: 1. slot gotowy od początku i krótszy cooldown, 2. slot bez zmian
+  f = new Fight(setup({ lo: { tiles: ['kogut-alfa'], skills: [sk('grad'), sk('granat')] }, enemies: [big()] })); eq(f.skills[0].cd, 0, 'Kogut Alfa: 1. slot gotowy'); f.step([0]); const base = new Fight(setup({ lo: { skills: [sk('grad'), sk('granat')] }, enemies: [big()] })); base.skills[0].cd = 0; base.step([0]);
+  assert(f.skills[0].cd - f.tick <= (base.skills[0].cd - base.tick) / 2 + 1, 'cooldown 1. slotu o 50% krótszy');
+  f.skills[1].cd = 0; f.step([1]); eq(f.skills[1].cd - (f.tick - 1), 80, '2. slot: cooldown bez zmian');
+  // Plan B: raz na walkę wstajesz z 30% i 3 s nietykalności
+  f = new Fight(setup({ lo: { tiles: ['plan-b'] }, enemies: [foe({ hp: 100000, atk: 100, aspd: 10 })] })); f.hp = 10; f.enemyHit(f.enemies[0], 100); assert(f.hp === Math.floor(70 * 30 / 100) && !f.over && f.invulnUntil > f.tick, 'Plan B: wstajesz z 30% Życia'); f.invulnUntil = 0; f.hp = 5; f.enemyHit(f.enemies[0], 100); assert(f.over && !f.win, 'tylko raz na walkę');
+  // Dziób Mistrza: umiejętności mogą krytykować
+  const crit = tiles => { let n = 0; const x = new Fight(setup({ lo: { tiles, skills: [sk('granat')] }, enemies: [big()] })); x.hasCrit = 0; for (let i = 0; i < 40; i++) { x.skills[0].cd = 0; x.step([0]); n += x.ev.filter(e => e.k === 'hit' && e.crit && e.kind === 'granat').length; } return n; };
+  assert(crit(Array(7).fill('dziob-mistrza')) > 0 && crit([]) === 0, 'Dziób Mistrza: krytyki z umiejętności (bez niego zero)');
+  eq(heroStats(loadout({ tiles: ['dziob-mistrza'] })).crit, 20, '+15% krytyka'); assert(heroStats(loadout({ tiles: ['dziob-mistrza'] })).skillCrit, 'flaga skillCrit');
+  // Akcje Zarządu: +25% Ziaren (maks. 12)
+  const a = fresh(); a.tiles = ['akcje-zarzadu']; a.coins = 20; a.hp = 70; a.phase = 'fight'; a.fight = { started: true }; R.fightFinish(a, []); assert(a.coins >= 20 + 4 + 2 + 5 - 1, 'Akcje: +25% z 20 = 5 (oraz odsetki i nagroda)');
+  const a2 = fresh(); a2.tiles = ['akcje-zarzadu']; a2.coins = 100; a2.hp = 70; a2.phase = 'fight'; a2.fight = { started: true }; R.fightFinish(a2, []); assert(a2.coins <= 100 + 4 + 3 + 12, 'limit +12');
+});
+
+test('Jajko Dinozaura: po 5 wygranych piętrach wykluwa się Dinozaur (+60% Ataku i Życia), licznik w grow, widok i odpowiedź', async () => {
+  const run = fresh(); run.tiles = ['jajko-dinozaura', ...Array(8).fill('twardy-grzebien'), 'ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy']; run.hp = R.statsOf(run).maxHp;
+  let out = null;
+  for (let i = 1; i <= 5; i++) {
+    run.round = 2; run.phase = 'fight'; run.fight = { started: true }; run.hp = R.statsOf(run).maxHp; run.door = null;
+    out = R.fightFinish(run, []); assert(out.ok && out.result.win, 'wygrana ' + i);
+    if (i < 5) { eq(run.grow['jajko-dinozaura'], i, 'licznik ' + i); assert(run.tiles.includes('jajko-dinozaura') && !out.dino, 'jeszcze jajo'); }
+    if (run.phase !== 'offer' && run.phase !== 'door') { run.pending = null; }
+  }
+  assert(out.dino && run.tiles.includes('dinozaur') && !run.tiles.includes('jajko-dinozaura') && !('jajko-dinozaura' in run.grow), 'po 5 wygranych wykluwa się Dinozaur');
+  const eggless = fresh(); eggless.tiles = run.tiles.filter(x => x !== 'dinozaur'); const atk0 = R.statsOf(eggless).atk;
+  assert(R.statsOf(run).atk >= Math.floor(atk0 * 1.55), 'Dinozaur: +60% Ataku');
+  eq(R.view(run).tiles.includes('dinozaur'), true, 'widok zawiera Dinozaura');
 });
