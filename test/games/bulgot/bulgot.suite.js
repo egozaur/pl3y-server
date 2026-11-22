@@ -839,7 +839,8 @@ test('BgPlayer: żądania jednego gracza wykonują się po kolei (bez zgubionych
   await post(o, 'start', { pl: PL, mode: 'full', char: 'pyrtek' });
   const rs = await Promise.all([post(o, 'reroll', { pl: PL }), post(o, 'reroll', { pl: PL }), post(o, 'pick', { pl: PL, i: 0, slot: 0 })]);
   const st = (await post(o, 'state', { pl: PL })).j.run;
-  assert(rs.filter(x => x.j.ok).length >= 1 && st.phase !== 'offer', 'jedno z żądań wybrało kafelek, kolejne dostały odmowę');
+  // Wybór mógł zostać odrzucony (Automat z paszą w slocie 0 kosztuje 5 Ziaren, a gracz ma 0), ale przyjęty wybór musi być widoczny w stanie (żaden zapis nie zginął).
+  assert(rs.filter(x => x.j.ok).length >= 1 && (!rs[2].j.ok || st.phase !== 'offer'), 'przyjęty wybór kafelka jest widoczny w stanie, odrzucone żądania nic nie psują');
 });
 test('BgRanks: jeden wpis na gracza (najlepszy), sortowanie, brak klucza gracza, walidacja', async () => {
   const rk = new BgRanks({ storage: mkStorage() }, {});
