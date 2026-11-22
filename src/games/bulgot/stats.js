@@ -16,6 +16,7 @@ export function heroStats(loadout, opt = {}) {
   const acc = {};
   const add = (k, v) => { acc[k] = (acc[k] || 0) + v; };
   for (const f of ch.fx) add(f.k, f.v);
+  if (ch.perFloor) add('allPct', Math.min(ch.perFloorMax || 60, ch.perFloor * (loadout.floors || 0)));   // Kurczak Stażysta: rośnie z każdym wygranym piętrem
   const ids = loadout.tiles.filter((_, i) => i !== opt.off);
   const has = id => ids.includes(id);
   for (const id of ids) { const t = TILE_BY_ID[id]; if (t && t.fx) for (const f of t.fx) add(f.k, f.v); }

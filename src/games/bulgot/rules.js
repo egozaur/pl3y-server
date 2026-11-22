@@ -2,7 +2,7 @@
 // Wszystkie losowania biorą ziarno z run.seed, więc ten sam run daje te same oferty i spotkania.
 // Każda funkcja zwraca { ok: true, ... } albo { err, code }. Stan zapisuje i autoryzuje BgPlayer (player.js).
 import { mix, hash, makeRng } from './rng.js';
-import { TILES, RECIPES, BADGES, BADGE_OFFER, BADGE_POOL, AFFIXES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, FLOOR_TPL, RARITY_WEIGHTS, TYPE_WEIGHTS, DECREES, FLAWS, NEMESIS_TITLES, NEMESIS_NAMES, garnekMods, formFor } from './data.js';
+import { SKILLS, TILES, RECIPES, BADGES, BADGE_OFFER, BADGE_POOL, AFFIXES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, FLOOR_TPL, RARITY_WEIGHTS, TYPE_WEIGHTS, DECREES, FLAWS, NEMESIS_TITLES, NEMESIS_NAMES, garnekMods, formFor } from './data.js';
 import { heroStats, setCounts } from './stats.js';
 import { runFight } from './sim.js';
 
@@ -12,7 +12,7 @@ const fail = (err, code) => ({ err, code });
 export const loadoutOf = run => ({
   char: run.char, tiles: run.tiles, skills: run.skills, coins: run.coins,
   bonusAtk: run.flags.bonusAtk, noRegen: garnekMods(run.garnek).noRegen, badges: run.badges || [],
-  grow: run.grow || {}, flawed: run.flawed || [], decree: decreeOf(run),
+  grow: run.grow || {}, flawed: run.flawed || [], decree: decreeOf(run), floors: run.done || 0,
 });
 
 // ---------- Okólniki Zarządu ----------
@@ -33,7 +33,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 5;
+export const RUN_V = 6;
 
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null }) {
   const M = MODES[mode], ch = CHARS[char];
@@ -49,6 +49,8 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null
     grow: {}, flawed: [], flawAt: -1, pawned: null, foxDebt: 0, door: null, nemesis: null, will: null, willUsed: false,
   };
   run.decrees = decreesOf(run.seed);
+  if (ch.startTiles) run.tiles = ch.startTiles.slice();   // Dinozaur zaczyna z Jajkiem
+  if (ch.randomSkill) run.skills = [{ id: makeRng(mix(run.seed, hash('mutskill'))).pick(Object.keys(SKILLS)), lvl: 1 }];   // Kurczak Mutant: losowa umiejętność na start
   if (nemesis && ENEMIES[nemesis.enemy]) run.nemesis = { ...nemesis, round: nemesisRound(run, nemesis), beaten: false };
   if (will && TILE_BY_ID[will]) run.will = will;
   run.hp = statsOf(run).maxHp;
@@ -698,7 +700,7 @@ export function fightFinish(run, inputs) {
   if (run.tiles.includes('jajko-dinozaura') && run.grow['jajko-dinozaura'] >= TILE_BY_ID['jajko-dinozaura'].grow.max) {
     const hb = statsOf(run).maxHp; run.tiles.splice(run.tiles.indexOf('jajko-dinozaura'), 1, 'dinozaur'); delete run.grow['jajko-dinozaura'];
     const ha = statsOf(run).maxHp; if (ha > hb) run.hp += ha - hb;
-    out.dino = true; (run.stats.hatched = run.stats.hatched || []);
+    out.dino = true; run.stats.dino = 1;
   }
   // Awans Wroga: pokonany Nemezis oddaje skradziony kafelek i daje Odznakę Sprawiedliwość Kurnika.
   if (setup.nemesis) {

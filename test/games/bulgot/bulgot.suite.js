@@ -821,6 +821,18 @@ test('profil: odblokowania postaci i kafelków, liczniki, najlepszy wynik, kolej
   nr.stats.earned = D.RULES.u420; evaluate(p, nr); assert(p.chars.includes('zjarany'), 'Zjarany Kurczak: 420 Ziaren zdobytych w jednym runie');
   assert(['garnek-cisnieniowy', 'szron', 'premia-kwartalna'].every(id => p.tiles.includes(id)), 'Garnek, Szron, Premia Kwartalna');
   assert(['kogucia-kontra', 'dziobanie-premii', 'egzekucja-ostroga'].every(id => p.tiles.includes(id)), 'Kontra, Premia, Egzekucja');
+  // nowe postacie: każda ma swój warunek
+  const chk = (id, cond) => { const pp = newProfile(), rr = fresh(); rr.stats.v2 = 1; cond(pp, rr); evaluate(pp, rr); return pp.chars.includes(id); };
+  assert(!chk('barista', () => {}) && chk('barista', (pp, rr) => { rr.stats.fastWin = 9; }) && !chk('barista', (pp, rr) => { rr.stats.fastWin = 10; }), 'Barista: walka w mniej niż sekundę');
+  assert(chk('ges', (pp, rr) => { rr.stats.maxCoins = 200; }) && !chk('ges', (pp, rr) => { rr.stats.maxCoins = 199; }), 'Gęś: 200 Ziaren naraz');
+  assert(chk('lodziarz', (pp, rr) => { rr.stats.freezes = 8; }) && !chk('lodziarz', (pp, rr) => { rr.stats.freezes = 7; }), 'Lodziarz: 8 zamrożeń');
+  assert(chk('pielegniarka', (pp, rr) => { rr.stats.lowWin = true; }) && !chk('pielegniarka', () => {}), 'Pielęgniarka: wygrana na włosku');
+  assert(chk('rzeznik', pp => { pp.bosses.skubarka = 1; }) && !chk('rzeznik', () => {}), 'Rzeźnik: Skubarka pokonana');
+  assert(chk('wrozka', (pp, rr) => { rr.stats.badges = 3; }) && !chk('wrozka', (pp, rr) => { rr.stats.badges = 2; }), 'Wróżka: 3 Odznaki');
+  assert(chk('stazysta', pp => { pp.counters.runs = 5; pp.counters.wins = 0; }) && !chk('stazysta', pp => { pp.counters.runs = 5; pp.counters.wins = 1; }), 'Stażysta: 5 przegranych runów');
+  assert(chk('mutant', (pp, rr) => { rr.stats.muts = 3; }) && !chk('mutant', (pp, rr) => { rr.stats.muts = 2; }), 'Mutant: 3 mutacje');
+  assert(chk('dinozaur', (pp, rr) => { rr.stats.dino = 1; }) && !chk('dinozaur', () => {}), 'Dinozaur: wyklucie');
+  nr.stats.fastWin = 5; nr.stats.v2 = 1; nr.stats.maxCoins = 200; nr.stats.muts = 3; nr.stats.lowWin = true; nr.stats.dino = 1; p.counters.runs = 99; p.counters.wins = 1; p.bosses.skubarka = 1; evaluate(p, nr);
   assert(p.unlocked.length === D.UNLOCKS.length, 'wszystkie odblokowania sprawdzalne');
 });
 
@@ -1331,8 +1343,8 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
   eq(c.pending.offer.length, 3, 'nadal 3 propozycje, gdy zostało mniej niż 3 nowe');
 });
 
-test('RUN_V = 5: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 5, 'wersja reguł');
+test('RUN_V = 6: stary run (wersja 2) jest unieważniany', async () => {
+  eq(R.RUN_V, 6, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1497,4 +1509,37 @@ test('Jajko Dinozaura: po 5 wygranych piętrach wykluwa się Dinozaur (+60% Atak
   const eggless = fresh(); eggless.tiles = run.tiles.filter(x => x !== 'dinozaur'); const atk0 = R.statsOf(eggless).atk;
   assert(R.statsOf(run).atk >= Math.floor(atk0 * 1.55), 'Dinozaur: +60% Ataku');
   eq(R.view(run).tiles.includes('dinozaur'), true, 'widok zawiera Dinozaura');
+});
+
+// ---------- nowe postacie ----------
+test('nowe postacie: 14 postaci, każda ma blokadę i odblokowanie, tylko Zjarany ma hasło, Dinozaur jest sekretny', () => {
+  eq(Object.keys(D.CHARS).length, 14, '14 postaci');
+  for (const id of ['barista', 'ges', 'lodziarz', 'pielegniarka', 'rzeznik', 'wrozka', 'stazysta', 'mutant', 'dinozaur']) {
+    const c = D.CHARS[id]; assert(c && c.lock && D.UNLOCK_BY_ID[c.lock] && D.UNLOCK_BY_ID[c.lock].kind === 'char' && D.UNLOCK_BY_ID[c.lock].target === id, 'blokada ' + id);
+    assert(R.newRun({ mode: 'quick', char: id, garnek: 0, pool: ALL, seed: 11 }).ok, 'start runu ' + id);
+  }
+  assert(D.CHARS.dinozaur.secret && D.UNLOCK_BY_ID['u-dino'].secret && !D.CHARS.barista.secret, 'sekretny tylko Dinozaur (i Zjarany)');
+  eq(Object.values(D.CHARS).filter(c => c.hasCode).map(c => c.id), ['zjarany'], 'hasło tylko do Zjaranego');
+});
+
+test('postacie: Barista, Gęś, Lodziarz, Pielęgniarka, Rzeźnik, Wróżka — statystyki i start', () => {
+  const S = ch => heroStats(loadout({ char: ch }));
+  let s = S('barista'); eq([s.aspd, s.maxHp, s.atk], [135, 49, 7], 'Barista: +35% szybkości, -30% Życia, -10% Ataku');
+  const g = R.newRun({ mode: 'quick', char: 'ges', garnek: 0, pool: ALL, seed: 5 }).run; eq([g.coins, R.statsOf(g).coinFlat, R.view(g).interestMax], [15, 1, 6], 'Gęś: 15 Ziaren, +1 po rundzie, Odsetki do 6');
+  s = S('lodziarz'); eq([s.frostHit, s.frostWeak, s.aspd], [20, 10, 80], 'Lodziarz'); eq(R.newRun({ mode: 'quick', char: 'lodziarz', garnek: 0, pool: ALL, seed: 5 }).run.skills, [{ id: 'lodowy', lvl: 1 }], 'Lodziarz zaczyna z Lodowym Dziobem');
+  s = S('pielegniarka'); eq([s.regen, s.healBonus, s.atk], [20, 10, 6], 'Pielęgniarka'); eq(R.newRun({ mode: 'quick', char: 'pielegniarka', garnek: 0, pool: ALL, seed: 5 }).run.skills[0].id, 'zagrzebanie', 'zaczyna z Zagrzebaniem');
+  s = S('rzeznik'); eq([s.bleed, s.bleedMax, s.maxHp, s.atk], [1, 1, 59, 7], 'Rzeźnik'); eq(R.newRun({ mode: 'quick', char: 'rzeznik', garnek: 0, pool: ALL, seed: 5 }).run.skills[0].id, 'darcie', 'zaczyna z Darciem Pierza');
+  const w = R.newRun({ mode: 'quick', char: 'wrozka', garnek: 0, pool: ALL, seed: 5 }).run; eq([R.statsOf(w).luck, w.freeLeft, R.statsOf(w).maxHp], [20, 1, 63], 'Wróżka: 20 Szczęścia, darmowy reroll, -10% Życia');
+});
+
+test('Kurczak Stażysta rośnie z piętrami (+6% wszystkich statystyk, maks. +60%), Mutant zaczyna z losową umiejętnością (deterministycznie), Dinozaur z Jajkiem', () => {
+  const st = R.newRun({ mode: 'quick', char: 'stazysta', garnek: 0, pool: ALL, seed: 8 }).run; const atk = [0, 1, 5, 10, 20].map(n => { st.done = n; return R.statsOf(st).atk; });
+  assert(atk[0] <= atk[1] && atk[1] < atk[2] && atk[2] < atk[3] && atk[3] === atk[4], 'Atak rośnie z piętrami i ma limit: ' + atk.join());
+  st.done = 0; const hp0 = R.statsOf(st).maxHp; st.done = 10; assert(R.statsOf(st).maxHp > hp0 * 1.8, 'Życie też rośnie (z -25% do +35%)');
+  st.done = 3; eq(R.buildSetup(st).hero.loadout.floors, 3, 'setup walki zawiera piętra');
+  const m1 = R.newRun({ mode: 'quick', char: 'mutant', garnek: 0, pool: ALL, seed: 21 }).run, m2 = R.newRun({ mode: 'quick', char: 'mutant', garnek: 0, pool: ALL, seed: 21 }).run;
+  eq(m1.skills, m2.skills, 'ta sama umiejętność dla tego samego ziarna'); assert(m1.skills.length === 1 && D.SKILLS[m1.skills[0].id], 'jedna losowa umiejętność');
+  const kinds = new Set(); for (let sd = 1; sd < 60; sd++) kinds.add(R.newRun({ mode: 'quick', char: 'mutant', garnek: 0, pool: ALL, seed: sd }).run.skills[0].id); assert(kinds.size >= 8, 'różne umiejętności dla różnych ziaren: ' + kinds.size);
+  eq([heroStats(loadout({ char: 'mutant' })).cdPct, heroStats(loadout({ char: 'mutant' })).maxHp], [25, 56], 'Mutant: -25% cooldownu, -20% Życia');
+  const d = R.newRun({ mode: 'quick', char: 'dinozaur', garnek: 0, pool: ALL, seed: 3 }).run; eq(d.tiles, ['jajko-dinozaura'], 'Dinozaur zaczyna z Jajkiem Dinozaura'); eq(d.hp, R.statsOf(d).maxHp, 'pełne życie na start');
 });
