@@ -134,6 +134,11 @@ export class BgPlayer {
         tiles: run.tiles, skills: run.skills, finalStats: statsOf(run), log: run.log });
       while (hist.length > 30) hist.shift();
       await st.put('history', hist);
+      // Automatyczna kopia do kolekcji analiz (bez klikania „Wyślij do analizy”); porzucone runy bez żadnego piętra pomijamy. Błąd nie psuje gry.
+      if (run.done > 0 && this.env && this.env.BG_RANKS) {
+        const entry = { ...hist[hist.length - 1], n: pl.n, note: '', tags: [], auto: true, sentAt: this.now() };
+        try { await this.env.BG_RANKS.get(this.env.BG_RANKS.idFromName('ranks')).fetch('https://bg/analysis-put', { method: 'POST', body: JSON.stringify({ entry }) }); } catch (e) {}
+      }
     } catch (e) {}
   }
 

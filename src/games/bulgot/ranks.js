@@ -8,7 +8,7 @@
 // GET /list?mode=quick|full[&char=<id>][&garnek=<0-5>][&nick=<nick>] → { mode, list, char, garnek, nick, total }.
 import { MODES, CHARS } from './data.js';
 
-const KEEP = 100, SHOW = 100, AN_KEEP = 500;
+const KEEP = 100, SHOW = 100, AN_KEEP = 1000;
 const cKey = (mode, char, g) => 'c:' + mode + ':' + char + ':' + g;
 const better = (a, c) => c.score - a.score || a.at - c.at;
 const pub = ({ n, ...x }) => x;
