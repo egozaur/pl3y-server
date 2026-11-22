@@ -233,13 +233,13 @@ test('efekty: Oparzenie kumuluje się do limitu i bije co sekundę mimo pancerza
   eq(f.enemies[0].burn, D.STATUS.burn.max, 'stosy na limicie');
 });
 
-test('Zjarany Kurczak: statystyki, Chmura Dymu co 4,2 s (Oparzenie i spowolnienie), inne postacie bez zmian', () => {
+test('Zjarany Kurczak: statystyki, Chmura Dymu co 4 s (Oparzenie i spowolnienie), inne postacie bez zmian', () => {
   const S = heroStats(loadout({ char: 'zjarany' }));
-  eq([S.atk, S.aspd, S.regen, S.burnHit, S.burnMax, S.smoke], [7, 75, 2, 25, 4, 42], 'Zjarany: statystyki');
+  eq([S.atk, S.aspd, S.regen, S.burnHit, S.burnMax, S.smoke], [7, 55, 2, 30, 4, 40], 'Zjarany: statystyki');
   eq(heroStats(loadout({ char: 'indor' })).smoke, 0, 'Indor bez Chmury');
   const f = new Fight(setup({ lo: { char: 'zjarany' }, enemies: [foe({ hp: 100000, atk: 1, aspd: 100 }), foe({ hp: 100000, atk: 1, aspd: 100 })] }));
   const smokes = []; for (let i = 0; i < 90; i++) { f.step(); for (const e of f.ev) if (e.k === 'smoke') smokes.push(f.tick - 1); }
-  eq(smokes, [41, 83], 'Chmura Dymu w 42. i 84. ticku');
+  eq(smokes, [39, 79], 'Chmura Dymu w 40. i 80. ticku');
   assert(f.enemies.every(e => e.burn >= D.RULES.smokeBurn), 'wrogowie podpaleni Chmurą');
   // spowolnienie: wróg w dymie atakuje rzadziej niż ten sam wróg bez dymu
   const hits = lo => { const g = new Fight(setup({ lo, hp: 100000, enemies: [foe({ hp: 100000, atk: 1, aspd: 100 })] })); let n = 0; for (let i = 0; i < 200; i++) { g.step(); n += g.ev.filter(e => e.k === 'hurt' && e.from).length; } return n; };
@@ -278,7 +278,7 @@ test('efekty: Mróz spowalnia, 5 stosów zamraża (przerywa szarżę), boss zama
   const b = new Fight(setup({ enemies: [foe({ hp: 1000, boss: 'brojler' })] }));
   b.applyStatus(b.enemies[0], 'frost', 5);
   eq(b.enemies[0].frozenUntil, Math.floor(D.STATUS.frost.freeze / 2), 'boss o połowę krócej');
-  // spowolnienie: 3 stosy Mrozu = -24% tempa ataku wroga
+  // spowolnienie: 3 stosy Mrozu = -24% szybkości ataku wroga
   const g = new Fight(setup({ enemies: [foe({ hp: 100000, atk: 1, aspd: 100 })] }));
   g.applyStatus(g.enemies[0], 'frost', 3); g.enemies[0].frostT = 1e9; g.step();
   eq(g.enemies[0].acc, 76, 'tempo wroga 76%');
@@ -815,7 +815,7 @@ test('profil: odblokowania postaci i kafelków, liczniki, najlepszy wynik, kolej
   assert(p.tiles.includes('tajemnicza-skrzynka'), 'Skrzynka: 5 zakończonych runów');
   const nr = fresh(); nr.stats.tankWin = true; nr.stats.maxCoins = 40; nr.stats.muts = 1; nr.stats.maxBurn = 250; nr.stats.freezes = 8; nr.stats.richBoss = true; nr.stats.badges = 3;
   nr.stats.earned = D.RULES.u420 - 1; evaluate(p, nr); assert(!p.chars.includes('zjarany'), 'Zjarany Kurczak: o jedno Ziarno za mało');
-  nr.stats.earned = D.RULES.u420; evaluate(p, nr); assert(p.chars.includes('zjarany'), 'Zjarany Kurczak: 425 Ziaren zdobytych w jednym runie');
+  nr.stats.earned = D.RULES.u420; evaluate(p, nr); assert(p.chars.includes('zjarany'), 'Zjarany Kurczak: 420 Ziaren zdobytych w jednym runie');
   assert(['garnek-cisnieniowy', 'szron', 'premia-kwartalna'].every(id => p.tiles.includes(id)), 'Garnek, Szron, Premia Kwartalna');
   assert(['kogucia-kontra', 'dziobanie-premii', 'egzekucja-ostroga'].every(id => p.tiles.includes(id)), 'Kontra, Premia, Egzekucja');
   assert(p.unlocked.length === D.UNLOCKS.length, 'wszystkie odblokowania sprawdzalne');
@@ -1221,4 +1221,14 @@ test('osiągnięcia: warunki, brak powtórek, procent ukończenia gry', async ()
   // run ze starej wersji (bez v2) nie przyznaje osiągnięć stylu
   const old = fresh(); delete old.stats.v2; old.ended = 'win'; old.phase = 'over'; const p2 = newProfile(); onRunEnd(p2, old);
   assert(!A.evaluateAch(p2, old).some(a => a.id === 'a-bez-synergii'), 'brak danych = brak osiągnięcia');
+});
+
+test('Hasło do ukrytej postaci (code): tylko „dzioby”, odblokowuje Zjaranego Kurczaka i zostaje w profilu', async () => {
+  const env = mkEnv(), o = new BgPlayer({ storage: mkStorage() }, env);
+  let r = await post(o, 'code', { pl: PL, text: 'kurczak' }); assert(r.j.code === 'code' && !r.j.profile.chars.includes('zjarany'), 'złe hasło nie odblokowuje');
+  r = await post(o, 'code', { pl: PL }); assert(r.j.code === 'code', 'puste hasło');
+  r = await post(o, 'code', { pl: PL, text: '  DziObY ' }); assert(r.j.ok && r.j.profile.chars.includes('zjarany') && r.j.unlocks && r.j.unlocks[0].target === 'zjarany', 'dzioby (bez wielkości liter) odblokowuje');
+  r = await post(o, 'state', { pl: PL }); assert(r.j.profile.chars.includes('zjarany'), 'zostaje w profilu');
+  r = await post(o, 'code', { pl: PL, text: 'dzioby' }); assert(r.j.ok && !r.j.unlocks, 'drugi raz nic nie zmienia');
+  r = await post(o, 'start', { pl: PL, mode: 'quick', char: 'zjarany' }); assert(r.j.ok, 'można zacząć run Zjaranym');
 });

@@ -2,12 +2,12 @@
 // i aktywny run. Całą logikę gry liczy serwer: oferty, rerolle, zakupy, walki (powtórka z wejść gracza).
 //
 // Gracz przychodzi już sprawdzony przez Worker (index.js → playerFromToken): body.pl = { n, nick, avatar }.
-// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /will /fightstart /fightfinish /abandon /history /analysis /skillorder.
+// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /will /fightstart /fightfinish /abandon /history /analysis /skillorder /code.
 // Odpowiedź: { ok, profile, run, ...wynik akcji } albo { err, code } z kodem 400/409.
 import { mix, hash } from './rng.js';
 import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, swapSkills, view, statsOf, pawn, redeem, willOptions, RUN_V } from './rules.js';
 import { newProfile, poolFor, evaluate, evaluateAchievements, onBossKill, onRunEnd, onNemesisBeaten, markSeen, publicProfile } from './profile.js';
-import { MODES, CHARS, TILE_BY_ID } from './data.js';
+import { MODES, CHARS, TILE_BY_ID, UNLOCK_BY_ID } from './data.js';
 
 export class BgPlayer {
   constructor(ctx, env, now = () => Date.now()) { this.ctx = ctx; this.env = env; this.now = now; this.chain = Promise.resolve(); }
@@ -74,6 +74,17 @@ export class BgPlayer {
       case 'fightfinish': r = need(run) || fightFinish(run, Array.isArray(b.inputs) ? b.inputs : []); break;
       case 'abandon': r = need(run) || abandon(run); break;
       case 'skillorder': r = need(run) || swapSkills(run, Number(b.a), Number(b.b)); break;
+      case 'code': {   // Hasło do ukrytej postaci (tylko z ekranu wyboru postaci). Hasło zna wyłącznie serwer.
+        const word = String(b.text || '').trim().toLowerCase().slice(0, 40);
+        if (word !== 'dzioby') return json({ err: 'To nie jest dobre hasło.', code: 'code', ...this.out(profile, run) }, 409);
+        const u = UNLOCK_BY_ID['u-420'];
+        if (!profile.unlocked.includes(u.id)) {
+          profile.unlocked.push(u.id);
+          if (!profile.chars.includes(u.target)) profile.chars.push(u.target);
+          extra.unlocks = [{ id: u.id, kind: u.kind, target: u.target, text: u.text }];
+        }
+        break;
+      }
       case 'history': break;
       case 'analysis': {   // „Wyślij do analizy”: kopia zakończonego runu (z dziennika historii) trafia do kolekcji w BgRanks
         const hist = (await st.get('history')) || [], h = hist.find(x => x.id === String(b.id || ''));
