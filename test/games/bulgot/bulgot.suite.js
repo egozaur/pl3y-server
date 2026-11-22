@@ -851,7 +851,8 @@ test('BgPlayer: pokonanie bossa zwraca jego id, zapisuje w profilu i odblokowuje
 test('BgPlayer: żądania jednego gracza wykonują się po kolei (bez zgubionych zapisów)', async () => {
   const env = mkEnv(), o = new BgPlayer({ storage: mkStorage() }, env);
   await post(o, 'start', { pl: PL, mode: 'full', char: 'pyrtek' });
-  const rs = await Promise.all([post(o, 'reroll', { pl: PL }), post(o, 'reroll', { pl: PL }), post(o, 'pick', { pl: PL, i: 0, slot: 0 })]);
+  const pi = Math.max(0, (await post(o, 'state', { pl: PL })).j.run.offer.findIndex(id => id !== 'automat-z-pasza'));   // Automat z paszą kosztuje 5 Ziaren, a gracz ma 0
+  const rs = await Promise.all([post(o, 'reroll', { pl: PL }), post(o, 'reroll', { pl: PL }), post(o, 'pick', { pl: PL, i: pi, slot: 0 })]);
   const st = (await post(o, 'state', { pl: PL })).j.run;
   // Wybór mógł zostać odrzucony (Automat z paszą w slocie 0 kosztuje 5 Ziaren, a gracz ma 0), ale przyjęty wybór musi być widoczny w stanie (żaden zapis nie zginął).
   assert(rs.filter(x => x.j.ok).length >= 1 && (!rs[2].j.ok || st.phase !== 'offer'), 'przyjęty wybór kafelka jest widoczny w stanie, odrzucone żądania nic nie psują');
