@@ -1,6 +1,6 @@
 // Bulgot: warunki osiągnięć (tylko serwer). Sprawdzane po zakończeniu runu na profilu i zakończonym runie.
 // Statystyki walk (`r.stats.v2`) zbieramy od wersji z osiągnięciami; starsze runy w toku nie przyznają osiągnięć „stylu” (brak danych).
-import { ACHIEVEMENTS, CHARS, TILES, RECIPES, REACTIONS, MODES } from './data.js';
+import { ACHIEVEMENTS, CHARS, TILES, RECIPES, REACTIONS, MODES, KURNIK, KURNIK_MAX } from './data.js';
 
 const win = r => !!r && r.ended === 'win';
 const v2 = r => !!r && !!r.stats && !!r.stats.v2;
@@ -75,6 +75,15 @@ const CHECKS = {
   'a-weteran': p => p.counters.runs >= 10,
   'a-staly': p => p.counters.runs >= 25,
   'a-rekord': (p, r) => !!r && r.score >= 20000,
+  'a-klatwa': (p, r) => win(r) && (r.curses || []).length >= 1,
+  'a-klatwy3': (p, r) => win(r) && (r.curses || []).length >= 3,
+  'a-dogrywka': (p, r) => !!r && r.endless && r.cleared != null && r.done - r.cleared >= 5,
+  'a-dogrywka15': (p, r) => !!r && r.endless && r.cleared != null && r.done - r.cleared >= 15,
+  'a-duch': (p, r) => !!r && (st(r).arenaWins || 0) >= 1,
+  'a-towarzysz': (p, r) => win(r) && !!r.companion && r.companion.lvl >= 3,
+  'a-trasy': (p, r) => !!r && (st(r).routes || 0) >= 2,
+  'a-kurnik': p => (p.counters.kurnikBuys || 0) >= 10,
+  'a-kurnik-max': p => Object.keys(KURNIK).every(k => ((p.kurnik || {})[k] | 0) >= KURNIK_MAX),
   'a-pelna-gra': p => completion(p).pct >= 100,
 };
 

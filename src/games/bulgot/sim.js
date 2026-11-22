@@ -5,12 +5,13 @@
 // Każdy tick zostawia w this.ev listę zdarzeń do animacji. runFight(setup, inputs) puszcza całą walkę naraz.
 // Zasada: żadnego Math.random, Date ani funkcji trygonometrycznych.
 import { makeRng } from './rng.js';
-import { SKILLS, TILE_BY_ID, STATUS, REACTIONS, RULES } from './data.js';
+import { SKILLS, TILE_BY_ID, STATUS, REACTIONS, RULES, COMPANIONS } from './data.js';
 import { heroStats } from './stats.js';
 
 export const MAX_TICKS = 900;      // 90 s
 export const FURY_FROM = 450;      // po 45 s wrogowie wpadają w Furię (Okólnik „Tryb Pilny”: setup.fury = 300)
 const fl = Math.floor;
+const has = (e, m) => !!e.mech && e.mech.includes(m);   // czy boss ma daną mechanikę (data.js → BOSSES.*.mech)
 
 export class Fight {
   constructor(setup) {
@@ -29,6 +30,10 @@ export class Fight {
     this.inSkill = false; this.planBUsed = false; this.igniteUntil = 0; this.igniteN = 1; this.dmgUntil = 0; this.dmgBonus = 0; this.hotUntil = 0; this.hotPct = 0; this.ffDone = false; this.medUsed = false; this.nextSurprise = this.S.surprise || 0;
     this.hasteUntil = 0; this.invulnUntil = 0; this.slowUntil = 0; this.critUntil = 0; this.kontraUntil = 0; this.blindUntil = 0; this.coinsWon = 0; this.bleedExtra = 0;
     this.nextEgg = this.S.egg || 0;
+    this.heroBlindUntil = 0; this.heroBlindPct = 0;
+    const cmp = this.loadout.companion && COMPANIONS[this.loadout.companion.id];   // Towarzysz: czynność co L.every ticków
+    this.comp = cmp ? { id: cmp.id, L: cmp.lv[Math.min(3, Math.max(1, this.loadout.companion.lvl | 0)) - 1] } : null;
+    if (this.comp) this.comp.next = this.comp.L.every || 0;
     this.revive = !!h.revive; this.revived = false; this.okUsed = false;
     this.uid = 0;
     this.enemies = setup.enemies.map(e => this.mk(e));
@@ -44,9 +49,11 @@ export class Fight {
     const o = { ...e, uid: ++this.uid, idleUntil: e.idle || 0, maxHp: e.hp, baseArmor: e.armor, acc: 0, stunUntil: 0, windup: null, nextSpec: e.spec ? e.spec.every : 0,
       dead: false, aspdPct: 100, burn: 0, burnT: 0, frost: 0, frostT: 0, poison: 0, poisonT: 0, bleed: 0, bleedT: 0, frozenUntil: 0, resist: e.resist || null, p2: false, p3: false, shield: e.shield ? fl(e.hp * e.shield / 100) : 0, shieldHits: e.shieldHits || 0 };
     if (o.audit) o.nextAudit = o.audit;
-    if (o.boss === 'brojler') o.nextSummon = 100;
-    if (o.boss === 'skubarka') o.nextSkub = 1e9;
-    if (o.boss === 'prezes') o.nextBlock = 1e9;
+    if (has(o, 'summon')) o.nextSummon = fl(o.summon.every * 2 / 3);
+    if (has(o, 'plucker')) o.nextSkub = 1e9;
+    if (has(o, 'block')) o.nextBlock = 1e9;
+    if (has(o, 'night')) o.nextNight = o.night.every;
+    if (has(o, 'blizzard')) o.nextBlizz = o.blizzard.every;
     return o;
   }
 
@@ -74,6 +81,7 @@ export class Fight {
     if (t.dead) return 0;
     if (t.immune) { this.push({ k: 'immune', to: t.uid }); return 0; }
     if (t.evade && this.rng.int(100) < t.evade) { this.push({ k: 'miss', to: t.uid }); return 0; }
+    if (kind === 'atk' && this.tick < this.heroBlindUntil && this.rng.int(100) < this.heroBlindPct) { this.push({ k: 'miss', to: t.uid }); return 0; }   // Szef Nocnej Zmiany: oślepienie
     let raw = fl(this.S.atk * pct / 100);
     raw = fl(raw * (100 + this.S.dmg + this.skillBonus + (this.S.overtime && this.tick >= 200 ? this.S.overtime : 0) + (this.S.vsCold && (t.frost > 0 || this.tick < t.frozenUntil) ? this.S.vsCold : 0) + (this.S.vsBurn && t.burn > 0 ? this.S.vsBurn : 0) + (this.tick < this.dmgUntil ? this.dmgBonus : 0)) / 100);
     let crit = false;
@@ -193,7 +201,7 @@ export class Fight {
     if (t.poison > 0) { const nx = this.enemies.find(e => !e.dead && !e.immune); if (nx) this.applyStatus(nx, 'poison', Math.max(1, fl(t.poison * (STATUS.poison.spread + (this.S.spreadPct || 0)) / 100))); }
     if (this.tick < (t.feverUntil || 0)) for (const x of this.alive()) if (!x.immune) this.applyStatus(x, 'poison', REACTIONS.goraczka.spread);   // Gorączka przechodzi
     if (t.explode && this.hp > 0 && !this.over) { this.push({ k: 'boom', uid: t.uid }); this.enemyHit(t, t.explode); }
-    if (t.boss === 'brojler') for (const m of this.enemies) if (m.minion && !m.dead) { m.dead = true; m.hp = 0; this.push({ k: 'kill', uid: m.uid }); }
+    if (has(t, 'summon')) for (const m of this.enemies) if (m.minion && !m.dead) { m.dead = true; m.hp = 0; this.push({ k: 'kill', uid: m.uid }); }
   }
 
   // ---------- umiejętności ----------
@@ -381,7 +389,7 @@ export class Fight {
     if (this.tick < this.blindUntil && this.rng.int(100) < this.blindPct) { this.push({ k: 'dodge', from: e.uid }); return; }
     if (this.S.evade && this.rng.int(100) < this.S.evade) { this.push({ k: 'dodge', from: e.uid }); return; }
     let pct = 100 + this.furyExtra();
-    if (e.boss === 'prezes' && e.p3) pct += 2 * fl((this.tick - e.p3At) / 10);
+    if (has(e, 'tyrant') && e.p3) pct += 2 * fl((this.tick - e.p3At) / 10);
     let raw = fl(e.atk * mult / 100);
     raw = fl(raw * pct / 100);
     let crit = false;
@@ -424,30 +432,30 @@ export class Fight {
     for (const e of this.enemies) {
       if (e.dead || !e.boss) continue;
       const pctHp = e.hp * 100 / e.maxHp;
-      if (e.boss === 'brojler' && !e.p2 && pctHp < 50) { e.p2 = true; e.aspdPct = 130; this.push({ k: 'phase', uid: e.uid, n: 2 }); }
-      if (e.boss === 'skubarka') {
+      if (has(e, 'rage') && !e.raged && pctHp < e.rage.at) { e.raged = true; e.p2 = true; e.aspdPct = e.rage.aspd; this.push({ k: 'phase', uid: e.uid, n: 2 }); }
+      if (has(e, 'plucker')) {
         if (!e.p2 && pctHp < 40) { e.p2 = true; e.spec = { every: 100, windup: 20, mult: 300 }; e.nextSpec = this.tick + 50; this.push({ k: 'phase', uid: e.uid, n: 2 }); }
         if (!e.p3 && pctHp < 20) { e.p3 = true; e.nextSkub = this.tick + 20; this.push({ k: 'phase', uid: e.uid, n: 3 }); }
       }
-      if (e.boss === 'prezes') {
-        if (!e.p2 && pctHp < 66) { e.p2 = true; e.nextBlock = this.tick + 50; this.push({ k: 'phase', uid: e.uid, n: 2 }); }
-        if (!e.p3 && pctHp < 33) { e.p3 = true; e.p3At = this.tick; this.push({ k: 'phase', uid: e.uid, n: 3 }); }
+      if (has(e, 'block')) {
+        if (!e.pb2 && pctHp < 66) { e.pb2 = true; e.p2 = true; e.nextBlock = this.tick + 50; this.push({ k: 'phase', uid: e.uid, n: 2 }); }
       }
+      if (has(e, 'tyrant') && !e.p3 && pctHp < 33) { e.p3 = true; e.p3At = this.tick; this.push({ k: 'phase', uid: e.uid, n: 3 }); }
     }
   }
 
   bossAct(e) {
-    if (e.boss === 'brojler' && this.tick >= e.nextSummon) {
-      e.nextSummon = this.tick + 150;
+    if (has(e, 'summon') && this.tick >= e.nextSummon) {
+      e.nextSummon = this.tick + e.summon.every;
       const m = this.setup.minion;
       let n = this.enemies.filter(x => x.minion && !x.dead).length;
-      for (let i = 0; i < 2 && n < 4 && m; i++, n++) {
+      for (let i = 0; i < e.summon.n && n < e.summon.max && m; i++, n++) {
         const o = this.mk({ ...m, minion: true });
         this.enemies.unshift(o);
         this.push({ k: 'summon', uid: o.uid });
       }
     }
-    if (e.boss === 'skubarka' && this.tick >= e.nextSkub) {
+    if (has(e, 'plucker') && this.tick >= e.nextSkub) {
       e.nextSkub = this.tick + 200;
       const cand = []; this.loadout.tiles.forEach((id, i) => { const t = TILE_BY_ID[id]; if (t && t.fx && i !== this.off) cand.push(i); });
       if (cand.length) {
@@ -458,13 +466,23 @@ export class Fight {
         this.push({ k: 'skubanie', tile: this.loadout.tiles[idx] });
       }
     }
-    if (e.boss === 'prezes' && this.tick >= e.nextBlock) {
+    if (has(e, 'block') && this.tick >= e.nextBlock) {
       e.nextBlock = this.tick + 150;
       if (this.skills.length) {
         const slot = this.rng.int(this.skills.length);
         this.skills[slot].blockedUntil = this.tick + 80;
         this.push({ k: 'blockslot', slot });
       }
+    }
+    if (has(e, 'night') && this.tick >= e.nextNight) {   // Szef Nocnej Zmiany: gasi światło
+      e.nextNight = this.tick + e.night.every;
+      this.heroBlindUntil = this.tick + e.night.dur; this.heroBlindPct = e.night.pct;
+      this.push({ k: 'night', dur: e.night.dur });
+    }
+    if (has(e, 'blizzard') && this.tick >= e.nextBlizz) {   // Wielka Chłodnia i Prezes Zero: zamieć spowalnia ataki bohatera
+      e.nextBlizz = this.tick + e.blizzard.every;
+      this.slowUntil = Math.max(this.slowUntil, this.tick + e.blizzard.dur);
+      this.push({ k: 'blizzard', dur: e.blizzard.dur });
     }
   }
 
@@ -478,7 +496,10 @@ export class Fight {
       this.push({ k: 'audit', uid: e.uid });
     }
     if (e.windup) {
-      if (this.tick >= e.windup.end) { e.windup = null; e.nextSpec = this.tick + e.spec.every; this.enemyHit(e, e.spec.mult); }
+      if (this.tick >= e.windup.end) {
+        e.windup = null; e.nextSpec = this.tick + e.spec.every; this.enemyHit(e, e.spec.mult);
+        if (has(e, 'crash') && !this.over) { e.stunUntil = Math.max(e.stunUntil, this.tick + 25); this.push({ k: 'stun', uid: e.uid }); this.push({ k: 'crash', uid: e.uid }); }   // Wózek Prototyp: po szarży się przegrzewa
+      }
       return;
     }
     if (e.spec && this.tick >= e.nextSpec) { e.windup = { end: this.tick + e.spec.windup }; this.push({ k: 'telegraph', uid: e.uid, end: e.windup.end }); return; }
@@ -494,7 +515,7 @@ export class Fight {
     const t = this.tick;
     for (const s of inputs) this.useSkill(s);
     if (this.off >= 0 && t >= this.offUntil) { this.off = -1; this.S = heroStats(this.loadout); this.push({ k: 'skubanie-end' }); if (this.S.egg && !this.nextEgg) this.nextEgg = t + this.S.egg; }
-    for (const e of this.enemies) if (e.boss === 'prezes') e.immune = this.enemies.some(g => g.guard && !g.dead);
+    for (const e of this.enemies) if (has(e, 'guarded')) e.immune = this.enemies.some(g => g.guard && !g.dead);
     if (t === this.furyFrom) {
       this.push({ k: 'fury' });
       // Wada „Wybuchowa Usterka”
@@ -541,6 +562,8 @@ export class Fight {
       this.push({ k: 'smoke' });
       for (const e of this.alive()) { this.applyStatus(e, 'burn', RULES.smokeBurn); if (!e.immune) e.smokeUntil = t + RULES.smokeTicks; }
     }
+    // Towarzysz
+    if (this.comp && this.comp.L.every && t >= this.comp.next) { this.comp.next = t + this.comp.L.every; this.compAct(); }
     // atak bohatera
     this.acc += this.heroAspd();
     while (this.acc >= 1000) {
@@ -556,6 +579,14 @@ export class Fight {
     for (const e of this.enemies.slice()) { if (!e.dead && !this.over) this.enemyAct(e); }
     this.tick++;
     if (!this.over && this.tick >= MAX_TICKS) { this.over = true; this.win = false; this.timeout = true; this.push({ k: 'timeout' }); }
+  }
+
+  compAct() {
+    const L = this.comp.L, tg = this.target();
+    if (L.act === 'peck' && tg) { this.push({ k: 'comp', c: this.comp.id }); this.heroHit(tg, L.v, false, 'comp'); }
+    else if (L.act === 'heal' && this.hp < this.S.maxHp) { this.push({ k: 'comp', c: this.comp.id }); this.heal(Math.max(1, fl(this.S.maxHp * L.v / 100))); }
+    else if ((L.act === 'burn' || L.act === 'frost') && tg) { this.push({ k: 'comp', c: this.comp.id }); this.applyStatus(tg, L.act, L.v); }
+    else if (L.act === 'honk' && this.alive().length) { this.push({ k: 'comp', c: this.comp.id }); this.stunAll(L.v); }
   }
 
   result() {

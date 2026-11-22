@@ -2,7 +2,7 @@
 // Wszystkie losowania biorą ziarno z run.seed, więc ten sam run daje te same oferty i spotkania.
 // Każda funkcja zwraca { ok: true, ... } albo { err, code }. Stan zapisuje i autoryzuje BgPlayer (player.js).
 import { mix, hash, makeRng } from './rng.js';
-import { SKILLS, TILES, RECIPES, BADGES, BADGE_OFFER, BADGE_POOL, AFFIXES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, FLOOR_TPL, garnekRamp, RARITY_WEIGHTS, TYPE_WEIGHTS, DECREES, FLAWS, NEMESIS_TITLES, NEMESIS_NAMES, garnekMods, formFor } from './data.js';
+import { SKILLS, TILES, RECIPES, BADGES, BADGE_OFFER, BADGE_POOL, AFFIXES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, FLOOR_TPL, garnekRamp, RARITY_WEIGHTS, TYPE_WEIGHTS, DECREES, FLAWS, NEMESIS_TITLES, NEMESIS_NAMES, garnekMods, formFor, BOSS_POOL, SUPER_BOSSES, ROUTES, CURSES, CURSE_MAX, cursePct, COMPANIONS, COMPANION_OFFER, KURNIK, KURNIK_MAX } from './data.js';
 import { heroStats, setCounts } from './stats.js';
 import { runFight } from './sim.js';
 
@@ -13,6 +13,7 @@ export const loadoutOf = run => ({
   char: run.char, tiles: run.tiles, skills: run.skills, coins: run.coins,
   bonusAtk: run.flags.bonusAtk, noRegen: garnekMods(run.garnek).noRegen, badges: run.badges || [],
   grow: run.grow || {}, flawed: run.flawed || [], decree: decreeOf(run), floors: run.done || 0,
+  companion: run.companion || null, kurnik: run.kurnik || {}, curses: run.curses || [],
 });
 
 // ---------- Okólniki Zarządu ----------
@@ -27,18 +28,42 @@ export const decreeOf = run => (run.decrees || (run.seed === undefined ? [] : de
 const decreeIs = (run, id) => decreeOf(run) === id;
 export const statsOf = run => heroStats(loadoutOf(run));
 
+// ---------- Klątwy, Kurnik, bossowie z puli, trasy ----------
+const hasCurse = (run, id) => (run.curses || []).includes(id);
+export const maxSkillsOf = run => RULES.maxSkills - (hasCurse(run, 'ciasne-gniazdo') ? 1 : 0);
+const kLv = (run, id) => (run.kurnik && run.kurnik[id]) | 0;
+// Boss tego piętra: wariant z puli miejsca (losowany z ziarna, oryginał ma wagę 2) albo super-boss Dogrywki (co RULES.superEvery pięter po limicie trybu).
+export function bossFor(mode, seed, round) {
+  const M = MODES[mode], slot = M.bosses[round];
+  if (slot) { const pool = BOSS_POOL[slot]; return pool ? pool[makeRng(mix(seed, hash('bossvar'), hash(slot))).weighted(pool.map((_, i) => i === 0 ? 2 : 1))] : slot; }
+  if (round > M.rounds && (round - M.rounds) % RULES.superEvery === 0) return SUPER_BOSSES[((round - M.rounds) / RULES.superEvery - 1) % SUPER_BOSSES.length];
+  return null;
+}
+export const bossAt = (run, round = run.round) => bossFor(run.mode, run.seed, round);
+const bossSlotOf = id => id && BOSSES[id] ? (BOSSES[id].slot || id) : id;
+export const routeOf = run => { const r = run.routes && run.routes[zoneOf(run.mode, run.round)]; return r && ROUTES[r] ? ROUTES[r] : null; };
+// Czy na początku tego piętra wybiera się trasę: pierwsze piętro strefy II i III (nie boss, nie Dogrywka).
+const needsRoute = run => run.round > 1 && run.round <= MODES[run.mode].rounds && run.round === zoneStart(run.mode, run.round) && !bossAt(run) && !(run.routes && run.routes[zoneOf(run.mode, run.round)]);
+export function routeOptions(run) {
+  const rr = makeRng(mix(run.seed, run.round, hash('route'))), keys = Object.keys(ROUTES), out = [];
+  while (out.length < 2) { const k = rr.pick(keys); if (!out.includes(k)) out.push(k); }
+  return out;
+}
+export const compLevel = run => Math.min(3, 1 + ((run.kurnik && run.kurnik.pisklecarnia) >= 2 ? 1 : 0) + (run.bossWins | 0));
+
 // Notatki bieżącej rundy (do historii gier): co zaoferowano, co wybrano, co dokupiono, ile rerolli.
 const freshCur = run => ({ offer: run.offer.slice(), picked: null, rerolls: 0, bought: [], event: null });
 const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 7;
+export const RUN_V = 8;
 
-export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null }) {
+export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null, curses = [], kurnik = {} }) {
   const M = MODES[mode], ch = CHARS[char];
   if (!M) return fail('Nieznany tryb.', 'mode');
   if (!ch) return fail('Nieznana postać.', 'char');
+  if (!Array.isArray(curses) || curses.length > CURSE_MAX || new Set(curses).size !== curses.length || curses.some(c => !CURSES[c])) return fail('Nieprawidłowe Klątwy Prezesa.', 'curses');
   const run = {
     v: RUN_V, id: String(seed), mode, char, garnek: garnek | 0, seed: seed >>> 0, round: 1, phase: 'offer',
     hp: 1, coins: ch.coins, tiles: [], skills: ch.startSkills.map(([id, lvl]) => ({ id, lvl })), offer: [], rerolls: 0, paid: 0, freeLeft: ch.freeRerolls,
@@ -46,16 +71,20 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null
     flags: { bonusAtk: 0, bossHpBonus: 0, revived: false },
     stats: { riskPicks: 0, fox: 0, maxCoins: ch.coins, maxHit: 0, lowWin: false, maxRound: 1, bossKills: [], picks: 0, rerolls: 0, v2: 1, syn: false, rests: 0, skillUses: 0, flawless: 0, bossFlawless: false, maxChainsFight: 0, longWin: 0 },
     log: [],
+    curses: curses.slice(), kurnik: Object.fromEntries(Object.keys(KURNIK).filter(k => (kurnik[k] | 0) > 0).map(k => [k, Math.min(KURNIK_MAX, kurnik[k] | 0)])), routes: [null, null, null], companion: null, bossWins: 0, arena: null, endless: false, cleared: null,
     grow: {}, flawed: [], flawAt: -1, pawned: null, foxDebt: 0, door: null, nemesis: null, will: null, willUsed: false,
   };
   run.decrees = decreesOf(run.seed);
+  run.coins += 2 * kLv(run, 'spizarnia');   // Kurnik: Spiżarnia
+  if (kLv(run, 'pisklecarnia') >= 1) { const ks = Object.keys(COMPANIONS); run.companion = { id: makeRng(mix(run.seed, hash('startcomp'))).pick(ks), lvl: compLevel(run) }; }   // Kurnik: Pisklęcarnia
   if (ch.startTiles) run.tiles = ch.startTiles.slice();   // Dinozaur zaczyna z Jajkiem
   if (ch.randomSkill) run.skills = [{ id: makeRng(mix(run.seed, hash('mutskill'))).pick(Object.keys(SKILLS)), lvl: 1 }];   // Kurczak Mutant: losowa umiejętność na start
   if (nemesis && ENEMIES[nemesis.enemy]) run.nemesis = { ...nemesis, round: nemesisRound(run, nemesis), beaten: false };
   if (will && TILE_BY_ID[will]) run.will = will;
+  run.stats.maxCoins = Math.max(run.stats.maxCoins, run.coins);
   run.hp = statsOf(run).maxHp;
   setOffer(run, 0);
-  run.freeLeft = ch.freeRerolls;
+  run.freeLeft = freeRerolls(run) + kLv(run, 'kantyna');
   run.cur = freshCur(run);
   return { ok: true, run };
 }
@@ -63,6 +92,8 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null
 // ---------- Oferta kafelków ----------
 function tileAvailable(run, t) {
   if (t.hatched || t.boss) return false;
+  if (t.minRound && run.round < t.minRound) return false;   // np. Arena Duchów dopiero od 3. piętra
+  if (t.event === 'arena' && (bossAt(run) || isElite(run) || isNemesisRound(run) || riskyDoor(run))) return false;
   if (t.legend && (run.round - 1) / MODES[run.mode].rounds < 0.6) return false;   // legendarne przedmioty dopiero od 60% runu (strefa III w trybie pełnym)   // wyklute i legendarne z bossów nie trafiają do ofert
   if (t.repeat) return true;
   if (RECIPES.some(r => r.of.includes(t.id) && run.tiles.includes(r.out))) return false;   // składnik już wyklutego przedmiotu
@@ -76,7 +107,7 @@ export function makeOffer(run, salt, opt = {}) {
   const S = statsOf(run), M = MODES[run.mode], ch = CHARS[run.char];
   const prog = (run.round - 1) / M.rounds;
   const w = RARITY_WEIGHTS[prog < 0.3 ? 0 : prog < 0.6 ? 1 : 2].slice();
-  const L = Math.max(0, S.luck);
+  const L = Math.max(0, S.luck + (routeOf(run) ? routeOf(run).luck || 0 : 0));
   w[0] = Math.max(10, w[0] - L); w[1] += fl(L / 2); w[2] += fl(L / 3); w[3] += fl(L / 6);
   const cands = run.pool.map(id => TILE_BY_ID[id]).filter(t => t && tileAvailable(run, t) && (!opt.noEvents || !t.event));
   const out = [], tc = {};
@@ -129,11 +160,12 @@ function afterTake(run, i, id) {
 }
 
 export const priceMul = run => run && decreeIs(run, 'audyt') ? 150 : 100;   // Okólnik „Audyt Wydatków”: dokupowanie o 50% droższe
-export const shopPrice = (t, run) => { const p = Math.ceil(RULES.prices[t.rarity] * priceMul(run) / 100); const d = run ? statsOf(run).buyDisc : 0; return d ? Math.max(1, fl(p * (100 - d) / 100)) : p; };
+export const shopPrice = (t, run) => { const p = Math.ceil(RULES.prices[t.rarity] * priceMul(run) / 100); const d = run ? Math.min(90, statsOf(run).buyDisc + ((routeOf(run) || {}).priceDisc || 0)) : 0; return d ? Math.max(1, fl(p * (100 - d) / 100)) : p; };
 export const restCost = run => Math.max(0, RULES.restCost - statsOf(run).restDisc);
-const freeRerolls = run => CHARS[run.char].freeRerolls + statsOf(run).freeReroll;
+const freeRerolls = run => CHARS[run.char].freeRerolls + statsOf(run).freeReroll + ((routeOf(run) || {}).freeReroll || 0);
 const auditFree = run => decreeIs(run, 'audyt') && run.rerolls < 2;   // Audyt: dwa pierwsze rerolle na piętrze za darmo
 export function rerollCost(run) {
+  if (hasCurse(run, 'zakaz-wymian')) return null;
   if (run.freeLeft > 0 || auditFree(run)) return 0;
   return RULES.rerollBase + garnekMods(run.garnek).rerollExtra + run.paid;
 }
@@ -157,9 +189,9 @@ function applyTile(run, t, slot, mut) {
       if (mut !== 1 && mut !== 2) return fail('Wybierz gałąź Mutacji.', 'mut');
       own.lvl = 3; own.mut = mut; run.stats.muts = (run.stats.muts || 0) + 1;
     } else if (own) own.lvl++;
-    else if (run.skills.length < RULES.maxSkills) run.skills.push({ id: t.skill, lvl: 1 });
+    else if (run.skills.length < maxSkillsOf(run)) run.skills.push({ id: t.skill, lvl: 1 });
     else if (Number.isInteger(slot) && slot >= 0 && slot < run.skills.length) run.skills[slot] = { id: t.skill, lvl: 1 };
-    else return fail('Wszystkie 3 sloty są zajęte. Wybierz slot do zastąpienia.', 'slot');
+    else return fail('Wszystkie ' + maxSkillsOf(run) + ' sloty są zajęte. Wybierz slot do zastąpienia.', 'slot');
     if (!run.tiles.includes(t.id)) run.tiles.push(t.id);
   } else {
     run.tiles.push(t.id);
@@ -195,11 +227,26 @@ function hatch(run) {
 function nextRound(run) {
   run.round++;
   const M = MODES[run.mode];
-  if (run.round > M.rounds) return endRun(run, 'win');
+  if (run.round > M.rounds && !run.endless) return endRun(run, 'win');
   run.stats.maxRound = Math.max(run.stats.maxRound, run.round);
-  run.phase = 'offer'; run.pending = null; run.rested = false; run.rerolls = 0; run.paid = 0; run.freeLeft = freeRerolls(run); run.door = null;
+  run.phase = 'offer'; run.pending = null; run.rested = false; run.rerolls = 0; run.paid = 0; run.door = null; run.arena = null;
   // Lombard Lisa: niewykupiony zastaw przepada, a Lisy Windykatory rosną w siłę.
   if (run.pawned && run.round > run.pawned.round + 1) { run.foxDebt = (run.foxDebt || 0) + 1; run.lostPawn = run.pawned.id; run.pawned = null; }
+  // Wybór trasy na początku strefy II i III.
+  if (needsRoute(run)) {
+    run.phase = 'route'; run.offer = []; run.flawAt = -1; run.freeLeft = 0;
+    run.pending = { kind: 'route', opts: routeOptions(run) };
+    run.cur = freshCur(run);
+    return { ok: true, route: true };
+  }
+  return startFloor(run);
+}
+// Początek piętra po ewentualnym wyborze trasy: Rozwidlenie albo zwykła oferta.
+function startFloor(run) {
+  run.phase = 'offer'; run.pending = null;
+  const M = MODES[run.mode];
+  const zoneFirst = run.round === 1 || run.round === zoneStart(run.mode, run.round);
+  run.freeLeft = freeRerolls(run) + (zoneFirst ? kLv(run, 'kantyna') : 0);
   if (isDoor(run)) {
     const rr = makeRng(mix(run.seed, run.round, hash('door')));
     run.phase = 'door'; run.offer = []; run.flawAt = -1;
@@ -234,16 +281,17 @@ function enterFight(run) { run.phase = 'fight'; run.offer = []; run.pending = nu
 
 export function liveScore(run) {
   const base = RULES.scoreRound * run.done + RULES.scoreCoin * run.coins + run.timeBonus;
-  return fl(base * (100 + RULES.garnekScore * run.garnek) / 100);
+  return fl(base * (100 + RULES.garnekScore * run.garnek) / 100 * (100 + cursePct(run.curses)) / 100);
 }
 
 export function endRun(run, outcome) {
+  if (outcome === 'lose' && run.cleared !== null && run.cleared !== undefined) { outcome = 'win'; run.fell = !!run.endless; }   // po pokonaniu Prezesa porażka w Dogrywce nadal jest wygraną
   run.phase = 'over'; run.ended = outcome; run.score = liveScore(run); run.offer = []; run.pending = null;
   return { ok: true, ended: outcome };
 }
 
 // ---------- Akcje gracza ----------
-export function pickTile(run, i, slot, mut) {
+export function pickTile(run, i, slot, mut, ctx = {}) {
   if (run.phase !== 'offer') return fail('Teraz nie wybierasz kafelka.', 'phase');
   const id = run.offer[i];
   const t = id && TILE_BY_ID[id];
@@ -264,6 +312,17 @@ export function pickTile(run, i, slot, mut) {
     run.stats.riskPicks++;
     enterFight(run);
     return { ok: true, automat: got };
+  }
+  if (t.event === 'schronisko') {
+    const rr = makeRng(mix(run.seed, run.round, hash('adopt'))), keys = Object.keys(COMPANIONS), opts = [];
+    const n = Math.min(keys.length, COMPANION_OFFER + (kLv(run, 'pisklecarnia') >= 3 ? 1 : 0));
+    while (opts.length < n) { const k = rr.pick(keys); if (!opts.includes(k)) opts.push(k); }
+    run.pending = { kind: 'adopt', opts }; run.phase = 'event'; run.offer = [];
+    return { ok: true, event: 'adopt' };
+  }
+  if (t.event === 'arena') {
+    run.pending = { kind: 'arena', ghost: ctx.ghost || mirrorGhost(run) }; run.phase = 'event'; run.offer = []; run.stats.riskPicks++;
+    return { ok: true, event: 'arena' };
   }
   if (t.event === 'kontrakt') { run.pending = { kind: 'contract' }; run.phase = 'event'; run.offer = []; run.stats.riskPicks++; return { ok: true, event: 'contract' }; }
   if (t.event === 'kapliczka') {
@@ -294,6 +353,7 @@ export function pickTile(run, i, slot, mut) {
 
 export function reroll(run) {
   if (run.phase !== 'offer') return fail('Teraz nie ma rerolla.', 'phase');
+  if (hasCurse(run, 'zakaz-wymian')) return fail('Klątwa „Zakaz Wymian”: reroll jest niemożliwy.', 'curse');
   const cost = rerollCost(run);
   if (run.coins < cost) return fail('Za mało Ziaren na reroll.', 'coins');
   if (cost === 0) { if (!auditFree(run)) run.freeLeft--; } else { run.paid++; setCoins(run, run.coins - cost); }
@@ -323,6 +383,7 @@ export function buyOffer(run, i, slot, mut) {
 // Odpoczynek: za Ziarna leczysz część życia, raz na rundę, przed walką (nie w jej trakcie).
 export function rest(run) {
   if (run.phase !== 'offer' && run.phase !== 'fight') return fail('Teraz nie można odpoczywać.', 'phase');
+  if (hasCurse(run, 'zakaz-drzemek')) return fail('Klątwa „Zakaz Drzemek”: odpoczynek jest wyłączony.', 'curse');
   if (run.phase === 'fight' && run.fight) return fail('Walka już się zaczęła.', 'fighting');
   if (run.rested) return fail('W tej rundzie już odpoczywałeś.', 'rested');
   const S = statsOf(run);
@@ -461,6 +522,34 @@ export function choose(run, i) {
     run.pending = null;
     return Object.assign(afterFight(run, P.bonus, false), { looted: id });
   }
+  if (run.phase === 'route' && P && P.kind === 'route') {   // trasa na całą strefę
+    const k = P.opts[i];
+    if (!k) return fail('Nie ma takiej trasy.', 'index');
+    run.routes = run.routes || [null, null, null]; run.routes[zoneOf(run.mode, run.round)] = k;
+    run.stats.routes = (run.stats.routes || 0) + 1; run.pending = null;
+    const r = startFloor(run); cur(run).route = k;
+    return Object.assign(r, { chose: i });
+  }
+  if (run.phase === 'victory' && P && P.kind === 'victory') {   // po Prezesie: Dogrywka albo koniec
+    if (i === 1) { endRun(run, 'win'); return { ok: true, chose: 1, ended: 'win' }; }
+    if (i !== 0) return fail('Nie ma takiego wyboru.', 'index');
+    run.endless = true; run.stats.endless = 1; run.pending = null;
+    return Object.assign(nextRound(run), { chose: 0 });
+  }
+  if (run.phase === 'event' && P && P.kind === 'adopt') {   // Schronisko dla Piskląt
+    if (i === -1) { enterFight(run); return { ok: true, chose: -1 }; }
+    const id = P.opts[i];
+    if (!id) return fail('Nie ma takiego towarzysza.', 'index');
+    run.companion = { id, lvl: compLevel(run) }; run.stats.adopts = (run.stats.adopts || 0) + 1; cur(run).adopt = id;
+    enterFight(run);
+    return { ok: true, chose: i, companion: run.companion };
+  }
+  if (run.phase === 'event' && P && P.kind === 'arena') {   // Arena Duchów: walka albo odwrót
+    if (i !== 0 && i !== 1) return fail('Nie ma takiego wyboru.', 'index');
+    if (i === 0) { run.arena = { ghost: P.ghost, round: run.round }; run.stats.arenaFights = (run.stats.arenaFights || 0) + 1; cur(run).arena = P.ghost.nick; }
+    enterFight(run);
+    return { ok: true, chose: i };
+  }
   if (run.phase !== 'event' || !P || (P.kind !== 'contract' && P.kind !== 'shrine')) return fail('Teraz nie ma wyboru.', 'phase');
   if (!(i >= 0 && i <= 2)) return fail('Nie ma takiej opcji.', 'index');
   const S0 = statsOf(run);
@@ -509,10 +598,26 @@ export function bonusPick(run, i, slot, mut) {
   return nextRound(run);
 }
 
+// ---------- Arena Duchów ----------
+// Duch = build gracza z końca jego runu. curve[i] = statystyki bohatera na (i+1). piętrze: [maxHp, atk, aspd, armor, crit, evade]; w walce Duch ma statystyki z piętra bieżącej rundy
+// (albo z ostatniego, jeśli jego run był krótszy). Gdy serwer nie ma cudzego ducha, pojawia się Odbicie: bieżące statystyki gracza.
+export function ghostOf(run) {
+  const curve = (run.log || []).filter(e => e.hero).map(e => [e.hero.maxHp, e.hero.atk, e.hero.aspd, e.hero.armor, e.hero.crit, e.hero.evade]);
+  return curve.length >= 3 ? { char: run.char, mode: run.mode, garnek: run.garnek, floors: run.done, win: run.ended === 'win', score: run.score, curve, tiles: run.tiles.slice(0, 40) } : null;
+}
+function mirrorGhost(run) { const S = statsOf(run); return { nick: 'Twoje Odbicie', mirror: true, avatar: 0, char: run.char, floors: run.done, curve: [[S.maxHp, S.atk, S.aspd, S.armor, S.crit, S.evade]], tiles: run.tiles.slice(0, 40) }; }
+export function ghostStats(g, round) {
+  const [maxHp, atk, aspd, armor, crit, evade] = g.curve[Math.min(g.curve.length - 1, Math.max(0, round - 1))];
+  return { hp: Math.max(1, fl(maxHp * RULES.ghostPct / 100)), atk: Math.max(1, fl(atk * RULES.ghostPct / 100 * RULES.ghostAtk / 100)), aspd: Math.max(20, aspd), armor, crit: Math.min(60, crit), evade: Math.min(50, evade) };
+}
+const ghostEnemy = run => { const g = run.arena.ghost, st = ghostStats(g, run.round); return { id: 'duch', name: 'Duch: ' + g.nick, ...st, art: 'ghost', ghost: true, gchar: g.char }; };
+const arenaOn = run => !!(run.arena && run.arena.round === run.round);
+
 // ---------- Walka ----------
 function scale(mode, round) {
-  const g = MODES[mode].grow; let h = 1, a = 1;
+  const M = MODES[mode], g = M.grow; let h = 1, a = 1;
   for (let i = 1; i < round; i++) { h *= g.hp; a *= g.atk; }
+  if (round > M.rounds) { const x = round - M.rounds; h *= 1 + RULES.endlessHp * x / 100; a *= 1 + RULES.endlessAtk * x / 100; }   // Dogrywka: wrogowie rosną szybciej
   return { h, a };
 }
 // Strefa (0..2) dla tła i wrogów. Prezes zawsze rezyduje w Biurze Zarządu (strefa III), także w trybie szybkim.
@@ -525,7 +630,7 @@ const riskyDoor = run => !!(run.door && run.door.risky);
 // więc nie zmienia losowania zwykłych wrogów.
 export function floorTemplate(run) {
   const M = MODES[run.mode], r = run.round;
-  if (M.bosses[r] || r <= M.early.rounds || isElite(run) || riskyDoor(run) || isNemesisRound(run)) return null;
+  if (bossAt(run, r) || r <= M.early.rounds || isElite(run) || riskyDoor(run) || isNemesisRound(run)) return null;
   const zi = zoneOf(run.mode, r), keys = Object.keys(FLOOR_TPL).filter(k => k !== 'zwiad' || zi < 2);
   let tot = 0; for (const k of keys) tot += FLOOR_TPL[k].w;
   let x = makeRng(mix(run.seed, r, hash('tpl'))).int(tot);
@@ -536,7 +641,8 @@ const soloPool = zone => Object.values(ENEMIES).filter(e => e.zone === zone && !
 
 export function encounterIds(run) {
   const M = MODES[run.mode], r = run.round;
-  if (M.bosses[r]) return [M.bosses[r]];
+  const bid = bossAt(run, r);
+  if (bid) return [bid];
   if (r === 1) return ['szczur-pasz'];
   const zi = zoneOf(run.mode, r), k = r - zoneStart(run.mode, r) + 1;
   const pool = Object.values(ENEMIES).filter(e => e.zone === zi && !e.minion).map(e => e.id);
@@ -580,24 +686,26 @@ function concrete(def, s, gm, extra = {}, early = null) {
   let atk = Math.max(1, Math.round(def.atk * s.a * (100 + gm.enemyAtk) / 100));
   if (early) { hp = Math.max(1, Math.round(hp * early.hp / 100)); atk = Math.max(1, Math.round(atk * early.atk / 100)); }
   const e = { id: def.id, name: def.name, hp, atk, aspd: def.aspd, armor: def.armor, evade: def.evade, crit: def.crit, art: def.art };
-  for (const k of ['steal', 'slow', 'spec', 'shieldHits', 'shield', 'minion', 'ignite', 'rise', 'resist', 'audit']) if (def[k]) e[k] = def[k];
+  for (const k of ['steal', 'slow', 'spec', 'shieldHits', 'shield', 'minion', 'ignite', 'rise', 'resist', 'audit', 'vamp', 'mech', 'summon', 'rage', 'night', 'blizzard', 'tint']) if (def[k]) e[k] = def[k];
   return Object.assign(e, extra);
 }
 
 export function buildSetup(run) {
   const M = MODES[run.mode], gm0 = garnekMods(run.garnek), s = scale(run.mode, run.round);
   const rp = garnekRamp(run.mode, run.round), gm = { ...gm0, enemyHp: fl(gm0.enemyHp * rp / 100), enemyAtk: fl(gm0.enemyAtk * rp / 100), bossHp: fl(gm0.bossHp * rp / 100) };   // premie palnika rosną z piętrem
-  const ids = encounterIds(run), boss = M.bosses[run.round] || null, elite = isElite(run);
+  const arena = arenaOn(run), ids = arena ? [] : encounterIds(run), boss = arena ? null : bossAt(run), elite = !arena && isElite(run);
   let enemies;
-  if (boss) {
+  if (arena) enemies = [ghostEnemy(run)];
+  else if (boss) {
     const def = BOSSES[boss];
     const be = concrete(def, s, gm, { boss, title: def.title, aspd: fl(def.aspd * (100 + gm.bossAspd) / 100) });
     if (run.flags.bossHpBonus) be.hp = fl(be.hp * (100 + run.flags.bossHpBonus) / 100);
     if (gm.bossHp) be.hp = fl(be.hp * (100 + gm.bossHp) / 100);   // wyższe palniki: mocniejsi bossowie
+    if (def.auditEvery) be.audit = def.auditEvery;
     enemies = [be];
-    if (boss === 'prezes') {
+    if (def.guards) {
       const g = ENEMIES['kot-ochroniarz'];
-      const guards = [0, 1].map(() => concrete(g, s, gm, { name: 'Ochroniarz', guard: true }));
+      const guards = Array.from({ length: def.guards }, () => concrete(g, s, gm, { name: 'Ochroniarz', guard: true }));
       enemies = [...guards, be];
       for (const e of enemies) e.idle = 30;   // Zebranie Zarządu: przez pierwsze 3 s nikt nie atakuje, gracz zdąży użyć umiejętności
     }
@@ -626,12 +734,23 @@ export function buildSetup(run) {
     // Lombard Lisa: każdy przepadły zastaw wzmacnia Lisy Windykatory.
     if (run.foxDebt) for (const e of enemies) if (e.id === 'lis-windykator') { const m = 100 + RULES.pawnFox * run.foxDebt; e.hp = fl(e.hp * m / 100); e.atk = fl(e.atk * m / 100); e.steal = { n: 1, max: 3 + run.foxDebt }; }
   }
+  // Trasa strefy: modyfikatory zwykłych wrogów (bez bossów i Ducha).
+  const rt = routeOf(run);
+  if (rt && !boss && !arena) for (const e of enemies) {
+    if (rt.enemyHp) e.hp = Math.max(1, fl(e.hp * (100 + rt.enemyHp) / 100));
+    if (rt.enemyAtk) e.atk = Math.max(1, fl(e.atk * (100 + rt.enemyAtk) / 100));
+    if (rt.slow && !e.slow) e.slow = rt.slow;
+    if (rt.ignite && !e.ignite) e.ignite = rt.ignite;
+    if (rt.shieldHits) e.shieldHits = (e.shieldHits || 0) + rt.shieldHits;
+  }
+  // Klątwa „Przegrzany Piec”: wszyscy wrogowie +15% Życia i Ataku.
+  if (hasCurse(run, 'przegrzany-piec')) for (const e of enemies) { e.hp = Math.max(1, fl(e.hp * 115 / 100)); e.atk = Math.max(1, fl(e.atk * 115 / 100)); }
   // Okólnik „Premia Motywacyjna”: wrogowie mają +15% Życia.
   if (decreeIs(run, 'premia')) for (const e of enemies) e.hp = fl(e.hp * 115 / 100);
   const S = statsOf(run);
   return {
     v: 1, round: run.round, mode: run.mode, seed: mix(run.seed, run.round, hash('fight')), boss, elite, zone: zoneOf(run.mode, run.round),
-    door: riskyDoor(run), nemesis: isNemesisRound(run), tpl: floorTemplate(run) || undefined, fury: decreeIs(run, 'pilny') ? 300 : undefined,
+    door: riskyDoor(run) && !arena, nemesis: isNemesisRound(run) && !arena, arena: arena || undefined, tpl: arena ? undefined : floorTemplate(run) || undefined, fury: decreeIs(run, 'pilny') || hasCurse(run, 'pospiech') ? 300 : undefined,
     hero: { loadout: loadoutOf(run), hp: Math.min(run.hp, S.maxHp), revive: S.revive && !run.flags.revived },
     enemies, minion: concrete(ENEMIES['pisklak-stazysta'], s, gm, { minion: true }),
   };
@@ -671,17 +790,20 @@ export function fightFinish(run, inputs) {
   if (setup.boss && run.flags.bossHpBonus) run.flags.bossHpBonus = 0;
   if (res.maxHit > run.stats.maxHit) run.stats.maxHit = res.maxHit;
   run.hp = res.hp;
-  const out = { ok: true, result: res, reward: 0, boss: res.boss, round: run.round };
+  const out = { ok: true, result: res, reward: 0, boss: bossSlotOf(res.boss), bossVar: res.boss, round: run.round };
+  if (setup.arena) out.arena = { n: run.arena.ghost.n || null, nick: run.arena.ghost.nick, mirror: !!run.arena.ghost.mirror, won: !!res.win };
   if (revealed.length) out.revealed = revealed;
   if (!res.win) {
     // Awans Wroga: zwykły wróg, który zakończył run, awansuje (albo Nemezis awansuje wyżej).
     if (setup.nemesis) run.killer = { enemy: run.nemesis.enemy, nemesis: true };
     else if (!setup.boss) { const k = setup.enemies.filter(e => !e.minion && !e.guard && ENEMIES[e.id]).sort((a, b) => b.atk - a.atk)[0]; if (k) run.killer = { enemy: k.id, nemesis: false, next: makeNemesis(run, k.id) }; }
-    run.log.push(entry()); endRun(run, 'lose'); out.ended = 'lose'; return out;
+    run.arena = null;
+    run.log.push(entry()); endRun(run, 'lose'); out.ended = run.ended; return out;
   }
 
   // Wygrana: nagrody, leczenie, rozliczenie wyniku.
-  let coins = (setup.boss ? RULES.coinsBoss + S.bossCoins : RULES.coinsRound) + S.coinFlat - (gm.coinMinus || 0);
+  const rt = routeOf(run);
+  let coins = (setup.boss ? RULES.coinsBoss + S.bossCoins + kLv(run, 'skarbiec') : RULES.coinsRound) + S.coinFlat - (gm.coinMinus || 0) - (hasCurse(run, 'podatek') ? 2 : 0) + ((rt && rt.coins) || 0) + (setup.arena ? RULES.arenaCoins : 0);
   coins = fl(coins * (100 + S.coinPct + (setup.elite ? RULES.eliteCoinsPct : 0)) / 100);
   if (S.interest) coins += Math.min(5, fl(run.coins * S.interest / 100));
   if (S.bigInterest) coins += Math.min(12, fl(run.coins * S.bigInterest / 100));   // Akcje Zarządu
@@ -715,17 +837,30 @@ export function fightFinish(run, inputs) {
   run.stats.maxBurn = Math.max(run.stats.maxBurn || 0, res.burnDealt || 0);
   run.stats.freezes = (run.stats.freezes || 0) + (res.freezes || 0);
   setCoins(run, run.coins + coins); out.reward = coins;
-  run.hp = Math.min(statsOf(run).maxHp, run.hp + fl(S.maxHp * Math.max(0, gm.healPct + S.healBonus - (decreeIs(run, 'homeoffice') ? 10 : 0)) / 100));
+  run.hp = Math.min(statsOf(run).maxHp, run.hp + fl(S.maxHp * Math.max(0, gm.healPct + S.healBonus + ((rt && rt.heal) || 0) - (decreeIs(run, 'homeoffice') ? 10 : 0)) / 100));
   if (res.hp * 10 < S.maxHp) run.stats.lowWin = true;
   if (res.taken > S.maxHp) run.stats.tankWin = true;
   if (run.tiles.includes('siewnik')) run.flags.bonusAtk++;
   run.done++;
   run.timeBonus += fl(RULES.scoreTimeMax * Math.max(0, 600 - res.ticks) / (MODES[run.mode].rounds * 600)) * (decreeIs(run, 'pilny') ? 2 : 1);
-  if (res.boss && !run.stats.bossKills.includes(res.boss)) run.stats.bossKills.push(res.boss);
+  if (res.boss) {
+    const slot = bossSlotOf(res.boss);
+    if (!run.stats.bossKills.includes(slot)) run.stats.bossKills.push(slot);
+    (run.stats.bossVars = run.stats.bossVars || []).includes(res.boss) || run.stats.bossVars.push(res.boss);
+    run.bossWins = (run.bossWins | 0) + 1;
+    if (run.companion) { const L = compLevel(run); if (L > run.companion.lvl) { run.companion.lvl = L; out.compUp = L; } }   // towarzysz ewoluuje po bossie
+  }
+  if (setup.arena) { run.stats.arenaWins = (run.stats.arenaWins || 0) + 1; run.arena = null; }
+  if (run.endless) run.stats.endlessFloors = (run.stats.endlessFloors || 0) + 1;
   run.log.push({ ...entry(), reward: coins, hpHealed: run.hp, coinsAfter: run.coins });
 
-  if (run.round >= MODES[run.mode].rounds) { endRun(run, 'win'); out.ended = 'win'; return out; }
-  const bonus = MODES[run.mode].bonusAfter.includes(run.round) || (setup.door && run.door.reward === 'rare');
+  if (run.round >= MODES[run.mode].rounds && !run.endless) {   // Prezes pokonany: wygrana jest już zaliczona, gracz wybiera: kończy albo gra dalej (Dogrywka)
+    run.cleared = run.done; run.fight = null; run.offer = [];
+    run.phase = 'victory'; run.pending = { kind: 'victory' };
+    out.victory = true;
+    return out;
+  }
+  const bonus = MODES[run.mode].bonusAfter.includes(run.round) || (setup.door && run.door.reward === 'rare') || !!setup.arena;
   const loot = !!setup.boss && lootRoll(run);   // szansa RULES.lootChance %; ostatni boss kończy run wcześniej (return powyżej)
   const avail = BADGE_POOL.filter(b => !(run.badges || []).includes(b));
   run.fight = null;
@@ -766,17 +901,26 @@ export function abandon(run) {
 }
 
 // ---------- Widok dla klienta ----------
-export const hideFoes = run => (run.garnek | 0) >= 1;
+export const hideFoes = run => (run.garnek | 0) >= 1 || hasCurse(run, 'mgla');
+// Oczyszczony pending: Duch bez krzywej statystyk i bez klucza gracza, za to z liczbami na bieżące piętro.
+function viewPending(run) {
+  const P = run.pending;
+  if (!P || P.kind !== 'arena') return P;
+  const g = P.ghost;
+  return { kind: 'arena', ghost: { nick: g.nick, avatar: g.avatar | 0, char: g.char, floors: g.floors, mirror: !!g.mirror, win: !!g.win, tiles: g.tiles || [], stats: ghostStats(g, run.round) } };
+}
 // Bez ziarna runu: oferty i spotkania z przyszłości nie dają się wyliczyć po stronie przeglądarki.
 export function view(run) {
   if (!run) return null;
   const M = MODES[run.mode], S = statsOf(run), over = run.phase === 'over';
   const v = {
     id: run.id, mode: run.mode, char: run.char, garnek: run.garnek, round: run.round, rounds: M.rounds, phase: run.phase,
-    hp: run.hp, maxHp: S.maxHp, coins: run.coins, tiles: run.tiles, skills: run.skills, offer: run.offer, pending: run.pending,
+    hp: run.hp, maxHp: S.maxHp, coins: run.coins, tiles: run.tiles, skills: run.skills, offer: run.offer, pending: viewPending(run),
+    curses: run.curses || [], routes: run.routes || [null, null, null], route: (run.routes && run.routes[zoneOf(run.mode, run.round)]) || null, companion: run.companion || null, kurnik: run.kurnik || {},
+    endless: !!run.endless, cleared: run.cleared === undefined ? null : run.cleared, fell: !!run.fell, maxSkills: maxSkillsOf(run), cursePct: cursePct(run.curses), arenaNow: !!(run.arena && run.arena.round === run.round),
     rerollCost: run.phase === 'offer' ? rerollCost(run) : null, freeLeft: run.freeLeft, rested: run.rested, restCost: restCost(run), restPct: RULES.restPct + S.restBonus, badges: run.badges || [], affixes: !over && isElite(run) && !hideFoes(run) ? eliteAffixes(run) : null, buyDisc: S.buyDisc, stats: run.stats, flags: { bossHpBonus: run.flags.bossHpBonus, revived: run.flags.revived, bonusAtk: run.flags.bonusAtk },
     score: over ? run.score : liveScore(run), done: run.done, timeBonus: run.timeBonus, ended: run.ended, killer: over && run.killer ? { enemy: run.killer.enemy, nemesis: !!run.killer.nemesis } : null, form: formFor(run.mode, run.round).id, zone: zoneOf(run.mode, run.round),
-    boss: M.bosses[run.round] || null, elite: !over && isElite(run), hero: S,
+    boss: bossAt(run), bossSlot: bossSlotOf(bossAt(run)), elite: !over && isElite(run), hero: S,
     decree: over ? null : decreeOf(run), priceMul: priceMul(run), grow: run.grow || {}, flawAt: run.phase === 'offer' ? run.flawAt : -1,
     flawed: (run.flawed || []).map(w => ({ id: w.id, flaw: w.on ? w.flaw : null, on: w.on })),
     up: run.phase === 'offer' ? upgradable(run) : [], pawned: run.pawned ? { ...run.pawned, cost: redeemCost(run.pawned), canRedeem: run.round === run.pawned.round + 1 } : null, foxDebt: run.foxDebt || 0, lostPawn: run.lostPawn || null,
@@ -789,7 +933,7 @@ export function view(run) {
   // Podgląd wrogów: na Garnku 0 widać skład piętra i szablon; od Garnka 1 tylko zapowiedź bossa (reszta ukryta po stronie serwera).
   if (!over) {
     if (!hideFoes(run)) { v.enemies = encounterIds(run); v.tpl = floorTemplate(run); }
-    else { v.enemies = M.bosses[run.round] ? encounterIds(run) : null; v.tpl = null; v.hidden = !M.bosses[run.round]; }
+    else { v.enemies = bossAt(run) ? encounterIds(run) : null; v.tpl = null; v.hidden = !bossAt(run); }
   }
   return v;
 }

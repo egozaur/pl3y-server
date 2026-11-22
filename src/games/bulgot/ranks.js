@@ -5,10 +5,14 @@
 //  • per gracz: wszystkie jego wpisy z kluczy „c:…” (każda kombinacja postaci i Garnka osobno).
 // Kolekcja „do analizy” (partie wysłane przez graczy): POST /analysis-put { entry }, GET /analysis-list, POST /analysis-del { ids }.
 // POST /submit { mode, entry: { n, nick, avatar, score, rounds, win, char, garnek, at } } → { rank, crank };
-// GET /list?mode=quick|full[&char=<id>][&garnek=<0-5>][&nick=<nick>] → { mode, list, char, garnek, nick, total }.
+// GET /list?mode=quick|full[&char=<id>][&garnek=<0-5>][&nick=<nick>][&kind=deep] → { mode, list, char, garnek, nick, total } (kind=deep: ranking Dogrywki wg liczby pięter ponad limit trybu).
+// Arena Duchów: POST /ghost-put { n, nick, avatar, ghost, at } (jeden duch na gracza i tryb, klucz „g:<tryb>:<n>”), /ghost-pick { n, mode, round, salt } → { ghost },
+// /ghost-result { n, mode, ghostWon }, /ghost-get { n } → { ghosts: { quick, full } } (licznik zwycięstw i porażek ducha).
 import { MODES, CHARS } from './data.js';
+import { makeRng } from './rng.js';
 
-const KEEP = 100, SHOW = 100, AN_KEEP = 1000;
+const KEEP = 100, SHOW = 100, AN_KEEP = 1000, GHOST_KEEP = 300;
+const betterDeep = (a, c) => (c.deep | 0) - (a.deep | 0) || c.score - a.score || a.at - c.at;
 const cKey = (mode, char, g) => 'c:' + mode + ':' + char + ':' + g;
 const better = (a, c) => c.score - a.score || a.at - c.at;
 const pub = ({ n, ...x }) => x;
@@ -38,6 +42,7 @@ export class BgRanks {
       const mode = url.searchParams.get('mode');
       if (!MODES[mode]) return json({ err: 'Nieznany tryb.' }, 400);
       await this.migrate();
+      if (url.searchParams.get('kind') === 'deep') { const list = (await this.ctx.storage.get('d:' + mode)) || []; return json({ mode, kind: 'deep', total: list.length, list: list.slice(0, SHOW).map(pub) }); }
       const char = url.searchParams.get('char') || '', nick = (url.searchParams.get('nick') || '').trim().slice(0, 16).toLowerCase();
       const gs = url.searchParams.get('garnek'), garnek = gs === null || gs === '' ? -1 : Number(gs);
       if (char && !CHARS[char]) return json({ err: 'Nieznana postać.' }, 400);
@@ -69,7 +74,12 @@ export class BgRanks {
       if (!b || !MODES[b.mode] || !e || typeof e.n !== 'string' || !Number.isFinite(e.score)) return json({ err: 'Nieprawidłowe dane.' }, 400);
       await this.migrate();
       const st = this.ctx.storage;
-      const row = { n: e.n, nick: String(e.nick || '').slice(0, 16), avatar: e.avatar | 0, score: e.score | 0, rounds: e.rounds | 0, win: !!e.win, char: String(e.char || ''), garnek: e.garnek | 0, at: e.at | 0 };
+      const row = { n: e.n, nick: String(e.nick || '').slice(0, 16), avatar: e.avatar | 0, score: e.score | 0, rounds: e.rounds | 0, win: !!e.win, char: String(e.char || ''), garnek: e.garnek | 0, deep: e.deep | 0, at: e.at | 0 };
+      if (row.deep > 0) {   // ranking Dogrywki: jeden wpis na gracza (najgłębszy, potem najlepszy wynik)
+        let dl = (await st.get('d:' + b.mode)) || [];
+        const od = dl.find(x => x.n === row.n);
+        if (!od || betterDeep(od, row) > 0) { dl = dl.filter(x => x.n !== row.n); dl.push(row); dl.sort(betterDeep); await st.put('d:' + b.mode, dl.slice(0, KEEP)); }
+      }
       // Wpis w liście: zostaje tylko najlepszy wynik gracza (w ogólnej – w ogóle, w kombinacji – dla tej postaci i Garnka).
       const put = async (key) => {
         let list = (await st.get(key)) || [];
@@ -83,6 +93,42 @@ export class BgRanks {
       const rank = await put('r:' + b.mode);
       const crank = CHARS[row.char] ? await put(cKey(b.mode, row.char, row.garnek)) : 0;
       return json({ rank, crank });
+    }
+    if (url.pathname.startsWith('/ghost-') && req.method === 'POST') {
+      let b; try { b = await req.json(); } catch { return json({ err: 'Nieprawidłowe dane.' }, 400); }
+      const st = this.ctx.storage;
+      if (!b || typeof b.n !== 'string') return json({ err: 'Nieprawidłowe dane.' }, 400);
+      if (url.pathname === '/ghost-put') {
+        const g = b.ghost;
+        if (!g || !MODES[g.mode] || !Array.isArray(g.curve) || g.curve.length < 3 || g.curve.length > 60 || !CHARS[g.char]) return json({ err: 'Nieprawidłowe dane.' }, 400);
+        const curve = g.curve.map(r => Array.isArray(r) ? r.slice(0, 6).map(x => Number.isFinite(x) ? Math.max(0, Math.min(99999, Math.floor(x))) : 0) : [1, 1, 100, 0, 0, 0]);
+        await st.put('g:' + g.mode + ':' + b.n, { n: b.n, nick: String(b.nick || '').slice(0, 16), avatar: b.avatar | 0, char: g.char, mode: g.mode, garnek: g.garnek | 0, floors: g.floors | 0, win: !!g.win, score: g.score | 0, curve, tiles: Array.isArray(g.tiles) ? g.tiles.slice(0, 40).map(x => String(x).slice(0, 40)) : [], at: b.at | 0, wins: 0, losses: 0 });
+        const all = await st.list({ prefix: 'g:' });
+        if (all.size > GHOST_KEEP) { const old = [...all.entries()].sort((a, c) => (a[1].at || 0) - (c[1].at || 0)).slice(0, all.size - GHOST_KEEP).map(x => x[0]); await st.delete(old); }
+        return json({ ok: true });
+      }
+      if (url.pathname === '/ghost-pick') {
+        if (!MODES[b.mode]) return json({ err: 'Nieznany tryb.' }, 400);
+        const round = b.round | 0, all = await st.list({ prefix: 'g:' + b.mode + ':' });
+        let c = [...all.values()].filter(g => g.n !== b.n);
+        const near = c.filter(g => g.curve.length >= Math.min(round, 4));   // Duch z krótkiego runu nie nadaje się na późne piętra
+        if (near.length) c = near;
+        if (!c.length) return json({ ghost: null });
+        c.sort((a, d) => a.n < d.n ? -1 : 1);
+        return json({ ghost: c[makeRng(b.salt >>> 0).int(c.length)] });
+      }
+      if (url.pathname === '/ghost-result') {
+        if (!MODES[b.mode]) return json({ err: 'Nieznany tryb.' }, 400);
+        const key = 'g:' + b.mode + ':' + b.n, g = await st.get(key);
+        if (g) { if (b.ghostWon) g.wins = (g.wins | 0) + 1; else g.losses = (g.losses | 0) + 1; await st.put(key, g); }
+        return json({ ok: true });
+      }
+      if (url.pathname === '/ghost-get') {
+        const out = {};
+        for (const mode of Object.keys(MODES)) { const g = await st.get('g:' + mode + ':' + b.n); if (g) out[mode] = { floors: g.floors, win: g.win, char: g.char, wins: g.wins | 0, losses: g.losses | 0, at: g.at }; }
+        return json({ ghosts: out });
+      }
+      return json({ err: 'Nie znaleziono.' }, 404);
     }
     if (url.pathname === '/analysis-put' && req.method === 'POST') {
       let b; try { b = await req.json(); } catch { return json({ err: 'Nieprawidłowe dane.' }, 400); }

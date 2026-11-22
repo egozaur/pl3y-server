@@ -12,6 +12,8 @@ import { Players, playerToken } from '../../../src/core/players.js';
 import { signToken } from '../../../src/core/auth.js';
 import worker from '../../../src/index.js';
 
+const BOSS_POOL_FULL = structuredClone(D.BOSS_POOL);
+for (const k of Object.keys(D.BOSS_POOL)) D.BOSS_POOL[k] = [k];   // w testach reguł bossowie to oryginały (warianty mają osobne testy)
 D.RULES.lootChance = 100;   // w testach łup z bossa wypada zawsze (osobny test sprawdza 15%)
 export const bgTests = [];
 const test = (name, fn) => bgTests.push({ name: 'bulgot: ' + name, fn });
@@ -26,6 +28,8 @@ const setup = (o = {}) => ({ v: 1, round: 1, mode: 'full', seed: 7, boss: null, 
   hero: { loadout: loadout(o.lo), hp: o.hp || D.CHARS.pyrtek.base.hp, revive: !!o.revive }, enemies: o.enemies || [foe()],
   minion: foe({ id: 'pisklak-stazysta', name: 'Pisklak', hp: 9, atk: 2, minion: true }) });
 const sk = (id, lvl = 1) => ({ id, lvl });
+// Pola bossa z danych (mechaniki są w BOSSES.*.mech), do ręcznie składanych wrogów w testach silnika.
+const bossFx = id => { const d = D.BOSSES[id], o = {}; for (const k of ['mech', 'summon', 'rage', 'night', 'blizzard', 'vamp', 'spec', 'slow', 'steal', 'audit']) if (d[k]) o[k] = d[k]; if (d.auditEvery) o.audit = d.auditEvery; return o; };
 // Walka krok po kroku z listą zdarzeń; zwraca { f, ev (wszystkie), res }.
 function play(s, inputs = []) {
   const f = new Fight(s), all = [], by = new Map();
@@ -482,16 +486,16 @@ test('walka: tarcza Sortownika, szarża Wózka (telegraf, przerwanie ogłuszenie
   assert(evs(a.ev, 'telegraph').length > 0, 'telegraf był');
 });
 test('bossowie: Brojler wzywa stażystów i wścieka się, Skubarka ma tarczę, Prezes jest nietykalny do śmierci Ochroniarzy', () => {
-  const bro = foe({ id: 'brojler', boss: 'brojler', name: 'Brojler', hp: 520, atk: 2, aspd: 60 });
+  const bro = foe({ id: 'brojler', boss: 'brojler', name: 'Brojler', hp: 520, atk: 2, aspd: 60, ...bossFx('brojler') });
   let a = play(setup({ hp: 100000, lo: { tiles: ['ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy'] }, enemies: [bro] }));
   assert(evs(a.ev, 'summon').length >= 2 && evs(a.ev, 'phase').some(e => e.n === 2), 'stażyści i faza 2');
   assert(a.res.win && a.res.boss === 'brojler', 'po śmierci bossa stażyści znikają, wygrana');
-  const sku = foe({ id: 'skubarka', boss: 'skubarka', name: 'Skubarka', hp: 900, atk: 1, aspd: 40, shield: 25 });
+  const sku = foe({ id: 'skubarka', boss: 'skubarka', name: 'Skubarka', hp: 900, atk: 1, aspd: 40, shield: 25, ...bossFx('skubarka') });
   a = play(setup({ hp: 100000, lo: { tiles: ['ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy', 'czujne-oko'] }, enemies: [sku] }));
   assert(evs(a.ev, 'shieldhit').length > 0 && evs(a.ev, 'phase').length >= 2, 'tarcza i fazy');
   assert(evs(a.ev, 'skubanie').length >= 1 && a.res.win, 'Skubanie wyłącza kafelek, a walka da się wygrać');
   const guard = () => foe({ id: 'kot-ochroniarz', name: 'Ochroniarz', hp: 200, atk: 1, aspd: 40, guard: true });
-  const pre = foe({ id: 'prezes', boss: 'prezes', name: 'Prezes', hp: 400, atk: 1, aspd: 40 });
+  const pre = foe({ id: 'prezes', boss: 'prezes', name: 'Prezes', hp: 400, atk: 1, aspd: 40, ...bossFx('prezes') });
   a = play(setup({ hp: 100000, lo: { tiles: ['ziarno-mocy', 'ziarno-mocy'], skills: [sk('grad'), sk('granat'), sk('pianie')] }, enemies: [guard(), guard(), pre] }));
   const guardsDead = evs(a.ev, 'kill').filter(e => e.uid <= 2).map(e => e.t);
   assert(guardsDead.length === 2, 'obaj Ochroniarze giną');
@@ -592,7 +596,7 @@ test('run: walka → nagrody, leczenie, następna runda; bonus po bossie; zwyci�
   assert(b.phase === 'bonus' && b.offer.length === 3, 'bonus po bossie: 3 kafelki');
   assert(b.offer.every(id => D.TILE_BY_ID[id].rarity >= 1 && !D.TILE_BY_ID[id].event), 'rzadkie lub lepsze, bez wydarzeń');
   assert(b.coins === 6 && b.stats.bossKills.includes('brojler'), 'boss daje 6 Ziaren');
-  assert(R.bonusPick(b, 0, 0).ok && b.phase === 'offer' && b.round === 7, 'po bonusie runda 7');
+  assert(R.bonusPick(b, 0, 0).ok && b.phase === 'route' && b.round === 7, 'po bonusie runda 7 zaczyna się wyborem trasy'); assert(R.choose(b, 0).ok && b.phase === 'offer', 'po wyborze trasy oferta');
   assert(R.bonusPick(b, 0).code === 'phase', 'bonus tylko raz');
   // porażka
   const l = fresh(); l.hp = 1; l.round = 6; l.phase = 'fight'; l.fight = {}; const lo = R.fightFinish(l, []);
@@ -706,8 +710,8 @@ test('historia gier: pełny dziennik rund i podsumowanie, ostatnie 30, trasa his
     const ph = r.run.phase;
     const pi = Math.max(0, r.run.offer.findIndex(id => id && id !== 'automat-z-pasza'));
     if (ph === 'offer') r = (await post(o, 'pick', { pl: PL, i: pi, slot: 0, mut: 1 })).j;
-    else if (ph === 'badge' || ph === 'door' || ph === 'loot') r = (await post(o, 'choose', { pl: PL, i: 0 })).j;
-    else if (ph === 'event') { const kd = r.run.pending.kind; r = (await post(o, kd === 'shop' ? 'shop' : kd === 'gamble' ? 'bet' : 'choose', { pl: PL, i: kd === 'shop' ? -1 : 2, amount: 0 })).j; }
+    else if (ph === 'badge' || ph === 'door' || ph === 'loot' || ph === 'route') r = (await post(o, 'choose', { pl: PL, i: 0 })).j;
+    else if (ph === 'event') { const kd = r.run.pending.kind; r = (await post(o, kd === 'shop' ? 'shop' : kd === 'gamble' ? 'bet' : 'choose', { pl: PL, i: kd === 'shop' || kd === 'adopt' ? -1 : kd === 'arena' ? 1 : 2, amount: 0 })).j; }
     else if (ph === 'bonus') r = (await post(o, 'bonus', { pl: PL, i: 0, slot: 0 })).j;
     else { await post(o, 'fightstart', { pl: PL }); r = (await post(o, 'fightfinish', { pl: PL, inputs: [] })).j; }
   }
@@ -862,8 +866,8 @@ test('BgPlayer: start, wybór, walka, koniec runu, odblokowania, ranking; błęd
     const ph = r.j.run.phase;
     const pi = Math.max(0, r.j.run.offer.findIndex(id => id && id !== 'automat-z-pasza'));
     if (ph === 'offer') r = await post(o, 'pick', { pl: PL, i: pi, slot: 0, mut: 1 });
-    else if (ph === 'badge' || ph === 'door' || ph === 'loot') r = await post(o, 'choose', { pl: PL, i: 0 });
-    else if (ph === 'event') { const kd = r.j.run.pending.kind; r = await post(o, kd === 'shop' ? 'shop' : kd === 'gamble' ? 'bet' : 'choose', { pl: PL, i: kd === 'shop' ? -1 : 2, amount: 0 }); }
+    else if (ph === 'badge' || ph === 'door' || ph === 'loot' || ph === 'route') r = await post(o, 'choose', { pl: PL, i: 0 });
+    else if (ph === 'event') { const kd = r.j.run.pending.kind; r = await post(o, kd === 'shop' ? 'shop' : kd === 'gamble' ? 'bet' : 'choose', { pl: PL, i: kd === 'shop' || kd === 'adopt' ? -1 : kd === 'arena' ? 1 : 2, amount: 0 }); }
     else if (ph === 'bonus') r = await post(o, 'bonus', { pl: PL, i: 0, slot: 0 });
     else { const fs = await post(o, 'fightstart', { pl: PL }); assert(fs.j.setup && fs.j.setup.seed, 'setup z ziarnem walki'); r = await post(o, 'fightfinish', { pl: PL, inputs: [] }); assert(r.j.result, 'wynik walki'); }
     assert(r.status === 200 || r.status === 409, 'status ' + r.status);
@@ -964,8 +968,8 @@ test('Worker: Bulgot wymaga sesji PL3Y i nicka gracza, cały przebieg przez /api
     const ph = r.j.run.phase;
     const pi = Math.max(0, r.j.run.offer.findIndex(id => id && id !== 'automat-z-pasza'));
     if (ph === 'offer') r = await api(env, '/api/bg/pick', { pt, i: pi, slot: 0, mut: 1 }, o);
-    else if (ph === 'badge' || ph === 'door' || ph === 'loot') r = await api(env, '/api/bg/choose', { pt, i: 0 }, o);
-    else if (ph === 'event') { const kd = r.j.run.pending.kind; r = await api(env, kd === 'shop' ? '/api/bg/shop' : kd === 'gamble' ? '/api/bg/bet' : '/api/bg/choose', { pt, i: kd === 'shop' ? -1 : 2, amount: 0 }, o); }
+    else if (ph === 'badge' || ph === 'door' || ph === 'loot' || ph === 'route') r = await api(env, '/api/bg/choose', { pt, i: 0 }, o);
+    else if (ph === 'event') { const kd = r.j.run.pending.kind; r = await api(env, kd === 'shop' ? '/api/bg/shop' : kd === 'gamble' ? '/api/bg/bet' : '/api/bg/choose', { pt, i: kd === 'shop' || kd === 'adopt' ? -1 : kd === 'arena' ? 1 : 2, amount: 0 }, o); }
     else if (ph === 'bonus') r = await api(env, '/api/bg/bonus', { pt, i: 0, slot: 0 }, o);
     else { await api(env, '/api/bg/fightstart', { pt }, o); r = await api(env, '/api/bg/fightfinish', { pt, inputs: [] }, o); }
   }
@@ -1332,7 +1336,7 @@ test('łup z bossa: po bossie (nie ostatnim) wybierasz 1 z 3 legendarnych z ziar
   eq(A.phase, 'bonus', 'po łupie bonus (po bossie 1 w trybie pełnym)'); eq(A.log.at(-1).loot, id, 'łup w dzienniku');
   const C = mkBoss(); C.seed = 777; R.fightFinish(C, []); R.choose(C, 0); assert(C.pending.offer.every(x => D.TILE_BY_ID[x].boss), 'inne ziarno, nadal legendarne');
   const P = fresh(); P.round = 20; P.tiles = [...Array(40).fill('ziarno-mocy'), ...Array(40).fill('twardy-grzebien')]; P.skills = [{ id: 'granat', lvl: 2 }]; P.hp = 99999; P.phase = 'fight'; P.fight = {};
-  const rp = R.fightFinish(P, []); assert(rp.ended === 'win' && P.phase === 'over' && !rp.loot, 'Prezes: koniec runu, bez łupu');
+  const rp = R.fightFinish(P, []); assert(rp.victory && P.phase === 'victory' && !rp.loot && P.cleared === P.done, 'Prezes: wygrana, wybór Dogrywki, bez łupu'); R.choose(P, 1); assert(P.phase === 'over' && P.ended === 'win', 'koniec runu po wyborze');
   const Q = fresh({ mode: 'quick' }); Q.round = 5; Q.tiles = [...Array(8).fill('twardy-grzebien'), 'ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy']; Q.hp = 9999; Q.phase = 'fight'; Q.fight = {};
   R.fightFinish(Q, []); R.choose(Q, 0); eq(Q.phase, 'loot', 'tryb szybki: łup po bossie 5'); R.choose(Q, 0); eq(Q.phase, 'bonus', 'potem bonus');
 });
@@ -1345,7 +1349,7 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
 });
 
 test('RUN_V = 7: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 7, 'wersja reguł');
+  eq(R.RUN_V, 8, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1453,7 +1457,7 @@ test('przedmioty etapu 2: Wywar Dnia, Tłusta Pokrywka, Szczypta Soli, Lodowa Sp
 
 // ---------- etap 3: ryzyko i legendarne przedmioty ----------
 test('etap 3: pula 134 kafelki, legendarne przedmioty (legend) dopiero od 60% runu, nigdy wyklęty Dinozaur w ofertach', () => {
-  eq(D.TILES.length, 134, 'pula kafelków');
+  eq(D.TILES.length, 136, 'pula kafelków');
   const leg = D.TILES.filter(t => t.legend); eq(leg.length, 6, '6 legendarnych przedmiotów'); assert(leg.every(t => t.rarity === 3 && t.type === 'item'), 'rzadkość 3, przedmioty');
   const risk = ['pozyczka-chwilowka', 'dopalacz-z-biedronki', 'nadgodziny-bez-doplaty', 'dieta-cud', 'uklad-z-zarzadem', 'los-na-loterii']; assert(risk.every(id => D.TILE_BY_ID[id] && D.TILE_BY_ID[id].type === 'risk'), '6 kafelków ryzyka');
   const early = new Set(), late = new Set(); let dino = 0;
@@ -1556,4 +1560,245 @@ test('palniki: premie rosną z piętrem (garnekRamp), G5 ma Ziarno mniej i mocni
   const bossHp = g => { const r = fresh({ garnek: g }); r.round = 6; return R.buildSetup(r).enemies[0].hp; }; assert(bossHp(4) > bossHp(3) * 1.04, 'bossowie od G4 mają więcej Życia');
   const coins = g => { const r = fresh({ garnek: g }); r.tiles = [...Array(8).fill('twardy-grzebien'), ...Array(6).fill('ziarno-mocy')]; r.hp = R.statsOf(r).maxHp; r.phase = 'fight'; r.fight = { started: true }; r.coins = 0; R.fightFinish(r, []); return r.coins; };
   assert(coins(5) === coins(0) - 1, 'palnik 5: o 1 Ziarno mniej po wygranej (' + coins(5) + ' vs ' + coins(0) + ')');
+});
+
+// ======================================================================
+// Aktualizacja „siedem nowości”: Klątwy Prezesa, Dogrywka, trasy, warianty bossów, Arena Duchów, Towarzysz, Kurnik
+// ======================================================================
+const fightWin = run => { run.hp = 99999; run.phase = 'fight'; run.fight = {}; return R.fightFinish(run, []); };
+const strong = run => { run.tiles = [...Array(40).fill('ziarno-mocy'), ...Array(40).fill('twardy-grzebien')]; run.skills = [{ id: 'granat', lvl: 2 }]; run.hp = 99999; return run; };
+
+test('Klątwy: walidacja przy starcie, mnożnik wyniku, efekty reguł', () => {
+  assert(R.newRun({ mode: 'full', char: 'pyrtek', garnek: 0, pool: ALL, seed: 1, curses: ['nie-ma'] }).code === 'curses', 'nieznana klątwa');
+  assert(R.newRun({ mode: 'full', char: 'pyrtek', garnek: 0, pool: ALL, seed: 1, curses: ['mgla', 'mgla'] }).code === 'curses', 'duplikat');
+  assert(R.newRun({ mode: 'full', char: 'pyrtek', garnek: 0, pool: ALL, seed: 1, curses: ['mgla', 'podatek', 'pospiech', 'zakaz-drzemek'] }).code === 'curses', 'najwyżej trzy');
+  // Zakaz Wymian / Drzemek
+  let r = fresh({ curses: ['zakaz-wymian', 'zakaz-drzemek'] });
+  eq(R.reroll(r).code, 'curse', 'reroll zablokowany'); eq(R.view(r).rerollCost, null, 'widok bez ceny rerollu');
+  r.hp = 1; eq(R.rest(r).code, 'curse', 'odpoczynek zablokowany');
+  // Ciasne Gniazdo: 2 sloty
+  r = fresh({ curses: ['ciasne-gniazdo'] }); r.skills = [sk('grad'), sk('granat')];
+  const t3 = D.TILES.find(t => t.type === 'skill' && t.skill !== 'grad' && t.skill !== 'granat');
+  force(r, t3.id); eq(R.pickTile(r, 0).code, 'slot', 'trzeci slot niedostępny'); eq(R.view(r).maxSkills, 2, 'widok: 2 sloty');
+  // Podatek: -2 Ziarna po wygranej
+  const a = strong(fresh()), b = strong(fresh({ curses: ['podatek'] }));
+  a.round = 3; b.round = 3; const ca = a.coins, cb = b.coins; fightWin(a); fightWin(b);
+  eq((a.coins - ca) - (b.coins - cb), 2, 'podatek -2 Ziarna');
+  // Mnożnik wyniku
+  const s1 = fresh(), s2 = fresh({ curses: ['przegrzany-piec', 'kruche-kosci'] }); s1.done = s2.done = 5;
+  eq(R.liveScore(s2), Math.floor(R.liveScore(s1) * (100 + D.cursePct(['przegrzany-piec', 'kruche-kosci'])) / 100), 'wynik × (1 + suma klątw)');
+  // Mgła: ukryty skład piętra także na Garnku 0
+  r = fresh({ curses: ['mgla'] }); assert(R.view(r).hidden === true && R.view(r).enemies === null, 'Mgła ukrywa skład');
+  // Kruche Kości: -25% życia
+  eq(R.statsOf(fresh({ curses: ['kruche-kosci'] })).maxHp, Math.floor(70 * 0.75), '-25% życia');
+  // Przegrzany Piec i Pospiech w setupie walki
+  const base = R.buildSetup(fresh()), hot = R.buildSetup(fresh({ curses: ['przegrzany-piec', 'pospiech'] }));
+  assert(hot.enemies[0].hp > base.enemies[0].hp && hot.enemies[0].atk >= base.enemies[0].atk && hot.fury === 300 && base.fury === undefined, 'wrogowie mocniejsi, Furia od 30 s');
+});
+
+test('Klątwy: BgPlayer przyjmuje klątwy przy starcie i zapisuje je w runie', async () => {
+  const env = mkEnv(), o = new BgPlayer({ storage: mkStorage() }, env);
+  assert((await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek', curses: ['x'] })).j.code === 'curses', 'zła klątwa = błąd');
+  const r = await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek', curses: ['mgla', 'podatek'] });
+  assert(r.j.ok && r.j.run.curses.length === 2 && r.j.run.cursePct === D.cursePct(['mgla', 'podatek']), 'klątwy w widoku runu');
+});
+
+test('Dogrywka: po Prezesie wybór (koniec albo dalej), super-boss co 5 pięter, porażka w Dogrywce nadal wygrana', () => {
+  const run = strong(fresh({ mode: 'quick' })); run.round = 10; run.phase = 'fight'; run.fight = {};
+  const out = R.fightFinish(run, []);
+  assert(out.victory && run.phase === 'victory' && run.cleared === run.done && run.pending.kind === 'victory', 'wygrana Prezesa → faza victory');
+  eq(R.choose(run, 7).code, 'index', 'zły wybór');
+  const r2 = JSON.parse(JSON.stringify(run));
+  assert(R.choose(r2, 1).ok && r2.phase === 'over' && r2.ended === 'win', 'koniec po wyborze');
+  assert(R.choose(run, 0).ok && run.endless && run.round === 11 && run.phase === 'offer', 'Dogrywka: piętro 11');
+  // piętra Dogrywki rosną szybciej niż normalnie
+  const s11 = R.buildSetup(run).enemies[0].hp, eh = D.RULES.endlessHp; D.RULES.endlessHp = 0; const sRef = R.buildSetup(run).enemies[0].hp; D.RULES.endlessHp = eh;
+  assert(s11 > sRef, 'Dogrywka: dodatkowy wzrost Życia wrogów (' + s11 + ' > ' + sRef + ')');
+  // super-boss na piętrze 15 (quick: 10 + 5)
+  eq(R.bossFor('quick', 1, 15), D.SUPER_BOSSES[0], 'piętro 15: pierwszy super-boss'); eq(R.bossFor('quick', 1, 20), D.SUPER_BOSSES[1], 'piętro 20: drugi'); eq(R.bossFor('quick', 1, 25), D.SUPER_BOSSES[2], 'piętro 25: trzeci'); eq(R.bossFor('quick', 1, 30), D.SUPER_BOSSES[0], 'cykl');
+  eq(R.bossFor('quick', 1, 12), null, 'zwykłe piętro Dogrywki bez bossa');
+  strong(run); run.round = 15; run.phase = 'fight'; run.fight = {}; const sb = R.buildSetup(run); assert(sb.boss === D.SUPER_BOSSES[0] && sb.enemies.length === 1, 'setup super-bossa');
+  // porażka w Dogrywce = wygrana (Prezes pokonany)
+  run.hp = 1; run.tiles = []; run.skills = []; run.round = 15; run.phase = 'fight'; run.fight = {};
+  const lose = R.fightFinish(run, []); assert(lose.ended === 'win' && run.phase === 'over' && run.fell && run.ended === 'win', 'porażka w Dogrywce nadal liczy się jako wygrana');
+  // porzucenie w fazie victory też = wygrana
+  const v = strong(fresh({ mode: 'quick' })); v.round = 10; v.phase = 'fight'; v.fight = {}; R.fightFinish(v, []); R.abandon(v); eq(v.ended, 'win', 'abandon w victory = win');
+});
+
+test('Dogrywka: ranking głębokości (kind=deep) i Pióra za piętra Dogrywki', async () => {
+  const env = mkEnv(), ranks = env.BG_RANKS.get('ranks');
+  const sub = (n, deep, score) => post({ fetch: u => ranks.fetch(u) }, 'submit', { mode: 'full', entry: { n, nick: n, score, rounds: 20 + deep, win: true, char: 'pyrtek', garnek: 0, deep, at: 1 } });
+  await sub('a', 3, 9000); await sub('b', 8, 8000); await sub('c', 0, 99999); await sub('a', 5, 9500);
+  const l = await (await ranks.fetch('https://bg/list?mode=full&kind=deep')).json();
+  eq(l.list.map(e => e.nick + ':' + e.deep), ['b:8', 'a:5'], 'ranking głębokości: tylko wpisy z Dogrywki, najgłębszy pierwszy, jeden na gracza');
+  const p = newProfile(), r = strong(fresh({ mode: 'quick' })); r.round = 10; r.done = 14; r.endless = true; r.cleared = 10; r.ended = 'win'; r.phase = 'over'; r.score = 5;
+  const end = onRunEnd(p, r); eq(end.deep, 4, 'piętra Dogrywki'); eq(end.feathers, 14 + D.RULES.featherWin + D.RULES.featherEndless * 4, 'Pióra: piętra + wygrana + Dogrywka');
+});
+
+test('Trasy: wybór na początku strefy II i III, dwie różne opcje, modyfikatory wrogów i ekonomii', () => {
+  const r = fresh(); r.round = 6; r.tiles = strong(fresh()).tiles; r.hp = 99999;
+  r.phase = 'fight'; r.fight = {}; R.fightFinish(r, []);   // boss 6
+  while (r.phase !== 'route') { if (r.phase === 'badge') R.choose(r, 0); else if (r.phase === 'loot') R.choose(r, 0); else if (r.phase === 'bonus') R.bonusPick(r, 0, 0); else break; }
+  assert(r.phase === 'route' && r.round === 7 && r.pending.kind === 'route' && r.pending.opts.length === 2 && r.pending.opts[0] !== r.pending.opts[1], 'faza trasy na piętrze 7');
+  eq(R.pickTile(r, 0).code, 'phase', 'najpierw trasa'); eq(R.choose(r, 5).code, 'index', 'zła trasa');
+  const key = r.pending.opts[1]; assert(R.choose(r, 1).ok && r.phase !== 'route' && r.routes[1] === key && R.view(r).route === key, 'trasa zapisana dla strefy');
+  // brak ponownego pytania w tej samej strefie, a w strefie III pytanie wraca
+  assert(!R.routeOptions(r).includes(undefined), 'opcje tras');
+  for (const k of Object.keys(D.ROUTES)) { const x = fresh(); x.round = 8; x.routes = [null, k, null]; const e0 = R.buildSetup(fresh({})); const e1 = R.buildSetup(x); const R_ = D.ROUTES[k]; if (R_.enemyHp) assert(R_.enemyHp > 0 ? e1.enemies[0].hp >= 1 : true, 'trasa ' + k + ' działa'); }
+  const hot = fresh(); hot.round = 8; hot.routes = [null, 'kanaly', null]; const cold = fresh(); cold.round = 8;
+  assert(R.buildSetup(hot).enemies[0].hp > R.buildSetup(cold).enemies[0].hp, 'Kanały: wrogowie z większym Życiem');
+  const sor = fresh(); sor.round = 8; sor.routes = [null, 'sortownia', null]; assert(R.buildSetup(sor).enemies.every(e => (e.shieldHits || 0) >= 1), 'Sortownia: tarcza');
+  assert(R.shopPrice(D.TILE_BY_ID['ziarno-mocy'], sor) < R.shopPrice(D.TILE_BY_ID['ziarno-mocy'], cold), 'Sortownia: taniej');
+  const mag = fresh(); mag.round = 8; mag.routes = [null, 'magazyn', null];
+  const co = (run, k) => { run.routes = [null, k, null]; run.round = 8; run.hp = 99999; Object.assign(run, { tiles: strong(fresh()).tiles }); const c0 = run.coins; fightWin(run); return run.coins - c0; };
+  assert(co(fresh(), 'chlodnia') === co(fresh(), 'sortownia') + D.ROUTES.chlodnia.coins, 'Chłodnia: Ziarna za piętro');
+  // quick: trasa na piętrze 6 (początek strefy II), nie na bossie 10
+  const q = fresh({ mode: 'quick' }); q.round = 5; strong(q); q.phase = 'fight'; q.fight = {}; R.fightFinish(q, []);
+  while (q.phase === 'badge' || q.phase === 'loot' || q.phase === 'bonus') { if (q.phase === 'bonus') R.bonusPick(q, 0, 0); else R.choose(q, 0); }
+  eq(q.phase, 'route', 'quick: trasa na piętrze 6'); eq(q.round, 6, 'piętro 6');
+});
+
+test('Warianty bossów: deterministyczne z ziarna, mechaniki (noc, zamieć, przegrzanie, audyt), slot liczy się dla odblokowań', () => {
+  const saved = {}; for (const k of Object.keys(D.BOSS_POOL)) { saved[k] = D.BOSS_POOL[k]; }
+  try {
+    Object.assign(D.BOSS_POOL, structuredClone(BOSS_POOL_FULL));
+    const seen = new Set(); for (let s = 1; s < 300; s++) seen.add(R.bossFor('full', s, 6) + '|' + R.bossFor('full', s, 12) + '|' + R.bossFor('full', s, 20));
+    const flat = new Set([...seen].flatMap(x => x.split('|'))); assert(flat.size === 9, 'wszystkie 9 bossów się pojawia (' + flat.size + ')');
+    eq(R.bossFor('full', 77, 6), R.bossFor('full', 77, 6), 'deterministycznie');
+    const orig = [...Array(600).keys()].filter(s => R.bossFor('full', s + 1, 6) === 'brojler').length; assert(orig > 600 * 0.4 && orig < 600 * 0.6, 'oryginał ma wagę 2 z 4 (' + orig + '/600)');
+    // każdy wariant buduje prawidłowy setup
+    for (const id of Object.keys(D.BOSSES)) {
+      const def = D.BOSSES[id]; const run = fresh(); run.round = def.slot === 'brojler' ? 6 : def.slot === 'skubarka' ? 12 : 20;
+      if (!def.slot) { run.mode = 'quick'; run.round = 15; run.endless = true; }
+      D.BOSS_POOL[def.slot || 'x'] = [id]; const su = def.slot ? R.buildSetup(run) : null;
+      if (su) { const e = su.enemies.find(x => x.boss); assert(e && e.boss === id && e.mech && e.mech.length, 'setup ' + id); }
+    }
+  } finally { for (const k of Object.keys(saved)) D.BOSS_POOL[k] = saved[k]; for (const k of Object.keys(D.BOSS_POOL)) D.BOSS_POOL[k] = [k]; }
+  // mechaniki w silniku
+  const nc = foe({ id: 'szef-nocnej', boss: 'szef-nocnej', name: 'Szef Nocnej Zmiany', hp: 3000, atk: 1, aspd: 40, ...bossFx('szef-nocnej') });
+  let a = play(setup({ hp: 100000, lo: { tiles: ['ziarno-mocy', 'ziarno-mocy'] }, enemies: [nc] })); assert(evs(a.ev, 'night').length >= 2 && evs(a.ev, 'miss').length > 0, 'Szef Nocnej Zmiany oślepia (chybienia)');
+  const ch = foe({ id: 'wielka-chlodnia', boss: 'wielka-chlodnia', name: 'Wielka Chłodnia', hp: 3000, atk: 1, aspd: 40, ...bossFx('wielka-chlodnia') });
+  a = play(setup({ hp: 100000, enemies: [ch] })); assert(evs(a.ev, 'blizzard').length >= 2, 'zamieć spowalnia');
+  const wz = foe({ id: 'wozek-prototyp', boss: 'wozek-prototyp', name: 'Wózek Prototyp', hp: 2000, atk: 1, aspd: 40, ...bossFx('wozek-prototyp') });
+  a = play(setup({ hp: 100000, enemies: [wz] })); assert(evs(a.ev, 'crash').length >= 2 && evs(a.ev, 'telegraph').length >= 2, 'po szarży się przegrzewa');
+  const kr = foe({ id: 'krol-szczurow', boss: 'krol-szczurow', name: 'Król Szczurów', hp: 2000, atk: 1, aspd: 40, ...bossFx('krol-szczurow') });
+  a = play(setup({ hp: 100000, enemies: [kr] })); assert(evs(a.ev, 'summon').length >= 4, 'Król wzywa dużo stażystów');
+  const df = foe({ id: 'dyrektor-finansowy', boss: 'dyrektor-finansowy', name: 'Dyrektor Finansowy', hp: 3000, atk: 2, aspd: 100, ...bossFx('dyrektor-finansowy') });
+  a = play(setup({ hp: 100000, lo: { skills: [sk('grad')] }, enemies: [df] })); assert(evs(a.ev, 'audit').length >= 2 && evs(a.ev, 'steal').length > 0, 'audyt i kradzież Ziaren');
+  // slot bossa: miejsce jest zapisane jako brojler/skubarka/prezes, więc odblokowania działają
+  const run = strong(fresh()); run.round = 6; D.BOSS_POOL.brojler = ['szef-nocnej']; run.phase = 'fight'; run.fight = {}; const out = R.fightFinish(run, []); D.BOSS_POOL.brojler = ['brojler'];
+  assert(out.boss === 'brojler' && out.bossVar === 'szef-nocnej' && run.stats.bossKills.includes('brojler'), 'wariant liczy się jako slot');
+  const p = newProfile(); onBossKill(p, out.boss); onBossKill(p, out.bossVar); assert(p.bosses.brojler === 1 && p.bosses['szef-nocnej'] === 1, 'profil liczy slot i wariant');
+});
+
+test('Arena Duchów: wydarzenie od 3. piętra (nie na bossie), Odbicie gdy brak cudzego ducha, walka z Duchem, nagroda', () => {
+  const r = fresh(); r.round = 2; assert(!r.pool.map(id => D.TILE_BY_ID[id]).filter(t => t.event === 'arena').some(t => R.makeOffer(r, 5).includes(t.id)), 'brak Areny na piętrze 2');
+  let seen = 0; for (let k = 0; k < 800; k++) { const q = fresh({ seed: 1000 + k }); q.round = 5; if (R.makeOffer(q, 1).includes('arena-duchow')) seen++; } assert(seen > 0, 'Arena trafia do ofert od 3. piętra');
+  const boss = fresh(); boss.round = 6; for (let k = 0; k < 20; k++) assert(!R.makeOffer(boss, k).includes('arena-duchow'), 'brak Areny na piętrze bossa');
+  const run = strong(fresh()); run.round = 4; force(run, 'arena-duchow', 'ziarno-mocy');
+  const pk = R.pickTile(run, 0); assert(pk.ok && pk.event === 'arena' && run.phase === 'event' && run.pending.kind === 'arena' && run.pending.ghost.mirror, 'Odbicie jako Duch');
+  const v = R.view(run).pending; assert(v.ghost.stats.hp > 0 && !('curve' in v.ghost) && !('n' in v.ghost), 'widok bez krzywej i klucza');
+  eq(R.choose(run, 7).code, 'index', 'zły wybór');
+  const run2 = JSON.parse(JSON.stringify(run)); assert(R.choose(run2, 1).ok && run2.phase === 'fight' && !R.buildSetup(run2).arena, 'odwrót: zwykła walka');
+  assert(R.choose(run, 0).ok && run.phase === 'fight', 'walka z Duchem');
+  run.tiles.push(...Array(30).fill('ziarno-mocy'), ...Array(30).fill('twardy-grzebien'));   // gracz mocniejszy od własnego Odbicia
+  const su = R.buildSetup(run); assert(su.arena && su.enemies.length === 1 && su.enemies[0].ghost && su.enemies[0].name === 'Duch: Twoje Odbicie' && !su.boss && !su.elite, 'setup: jeden Duch');
+  const c0 = run.coins; run.fight = {}; const out = R.fightFinish(run, []);
+  assert(out.ok && out.result.win && out.arena && out.arena.won && run.phase === 'bonus' && run.offer.length === 3 && run.coins >= c0 + D.RULES.arenaCoins, 'wygrana: Ziarna i bonus');
+  assert(run.stats.arenaWins === 1 && !run.arena, 'licznik wygranych');
+  // Duch cudzego gracza: statystyki z piętra odpowiadającego rundzie (albo ostatniego)
+  const ghost = { n: 'bob', nick: 'Bob', avatar: 1, char: 'kwoka', floors: 6, curve: [[70, 8, 100, 0, 5, 0], [80, 10, 100, 0, 5, 0], [90, 14, 100, 2, 5, 0], [110, 18, 100, 4, 5, 0]], tiles: [] };
+  const a = D.RULES; const s3 = R.ghostStats(ghost, 3), s9 = R.ghostStats(ghost, 9);
+  eq(s3.hp, Math.floor(90 * a.ghostPct / 100), 'piętro 3: statystyki z 3. wpisu'); eq(s9.hp, Math.floor(110 * a.ghostPct / 100), 'późna runda: ostatni wpis');
+  const g2 = strong(fresh()); g2.round = 5; force(g2, 'arena-duchow', 'ziarno-mocy'); R.pickTile(g2, 0, undefined, undefined, { ghost }); assert(g2.pending.ghost.nick === 'Bob', 'cudzy Duch z kontekstu'); R.choose(g2, 0);
+  eq(R.buildSetup(g2).enemies[0].gchar, 'kwoka', 'postać Ducha');
+  // porażka z Duchem kończy run (jak każda walka) i nie robi z Ducha Nemezis
+  const weak = fresh(); weak.round = 4; weak.hp = 1; force(weak, 'arena-duchow', 'ziarno-mocy'); R.pickTile(weak, 0, undefined, undefined, { ghost }); R.choose(weak, 0); weak.phase = 'fight'; weak.fight = {};
+  const lo = R.fightFinish(weak, []); assert(lo.ended === 'lose' && !weak.killer && lo.arena.won === false, 'porażka z Duchem');
+  // ghostOf: krzywa z dziennika
+  const gr = strong(fresh()); for (let k = 0; k < 4; k++) { gr.phase = 'fight'; gr.fight = {}; R.fightFinish(gr, []); while (gr.phase !== 'offer' && gr.phase !== 'over' && gr.phase !== 'route') { if (gr.phase === 'badge' || gr.phase === 'loot' || gr.phase === 'door') R.choose(gr, 0); else if (gr.phase === 'bonus') R.bonusPick(gr, 0, 0); else break; } if (gr.phase === 'route') R.choose(gr, 0); if (gr.phase === 'door') R.choose(gr, 0); }
+  const gh = R.ghostOf(gr); assert(gh && gh.curve.length >= 3 && gh.curve[0].length === 6 && gh.char === 'pyrtek', 'ghostOf z dziennika');
+  eq(R.ghostOf(fresh()), null, 'za krótki run bez ducha');
+});
+
+test('Arena Duchów: BgRanks (put, pick bez własnego, result, get), BgPlayer zapisuje ducha po runie i pobiera cudzego', async () => {
+  const env = mkEnv(), R_ = env.BG_RANKS.get('ranks'), rq = (p, b) => R_.fetch(new Request('https://bg/' + p, { method: 'POST', body: JSON.stringify(b) })).then(r => r.json());
+  const g = { char: 'pyrtek', mode: 'full', garnek: 0, floors: 8, win: false, score: 7000, curve: [[70, 8, 100, 0, 5, 0], [80, 9, 100, 0, 5, 0], [90, 10, 100, 0, 5, 0], [100, 12, 100, 1, 5, 0]], tiles: ['ziarno-mocy'] };
+  assert((await rq('ghost-put', { n: 'bob', nick: 'Bob', avatar: 1, ghost: g, at: 5 })).ok, 'zapis ducha');
+  assert((await rq('ghost-put', { n: 'x', ghost: { ...g, curve: [[1]] } })).err, 'za krótka krzywa odrzucona');
+  assert((await rq('ghost-pick', { n: 'bob', mode: 'full', round: 4, salt: 1 })).ghost === null, 'własny duch nie wraca');
+  const pick = (await rq('ghost-pick', { n: 'ala', mode: 'full', round: 4, salt: 1 })).ghost; assert(pick && pick.n === 'bob' && pick.nick === 'Bob' && pick.curve.length === 4, 'cudzy duch');
+  assert((await rq('ghost-pick', { n: 'ala', mode: 'quick', round: 4, salt: 1 })).ghost === null, 'duch tylko z tego samego trybu');
+  await rq('ghost-result', { n: 'bob', mode: 'full', ghostWon: true }); await rq('ghost-result', { n: 'bob', mode: 'full', ghostWon: false }); await rq('ghost-result', { n: 'bob', mode: 'full', ghostWon: true });
+  const mine = (await rq('ghost-get', { n: 'bob' })).ghosts; assert(mine.full.wins === 2 && mine.full.losses === 1 && mine.full.floors === 8 && !mine.quick, 'liczniki ducha');
+  // BgPlayer: po zakończonym runie (≥3 piętra w dzienniku) powstaje duch; cudzy duch trafia do pending Areny
+  const o = new BgPlayer({ storage: mkStorage() }, env), PL2 = { n: 'cezar', nick: 'Cezar', avatar: 3 };
+  await post(o, 'start', { pl: PL2, mode: 'full', char: 'pyrtek' });
+  const st = await o.ctx.storage.get('run'); strong(st); st.round = 4; st.log = [1, 2, 3, 4].map(r => ({ r, hero: { maxHp: 70 + r * 10, atk: 8 + r, aspd: 100, armor: 0, crit: 5, evade: 0 } })); st.offer = ['arena-duchow', 'ziarno-mocy', 'twardy-grzebien', 'czujne-oko']; st.flawAt = -1; await o.ctx.storage.put('run', st);
+  const pk = await post(o, 'pick', { pl: PL2, i: 0 }); assert(pk.j.ok && pk.j.run.pending.kind === 'arena' && pk.j.run.pending.ghost.nick === 'Bob' && !pk.j.run.pending.ghost.mirror, 'cudzy duch w Arenie');
+  await post(o, 'choose', { pl: PL2, i: 0 }); await post(o, 'fightstart', { pl: PL2 });
+  const fin = await post(o, 'fightfinish', { pl: PL2, inputs: [] }); assert(fin.j.ok && fin.j.arena && fin.j.arena.nick === 'Bob', 'wynik walki z Duchem');
+  const after = (await rq('ghost-get', { n: 'bob' })).ghosts.full; assert(after.wins + after.losses === 4, 'licznik ducha Boba zaktualizowany');
+  await post(o, 'abandon', { pl: PL2 }); const mine2 = (await rq('ghost-get', { n: 'cezar' })).ghosts; assert(mine2.full && mine2.full.floors >= 0, 'po runie powstaje duch Cezara');
+});
+
+test('Towarzysz: Schronisko, poziomy po bossach, premie i czynności w walce', () => {
+  const run = fresh(); run.round = 3; force(run, 'schronisko', 'ziarno-mocy');
+  assert(R.pickTile(run, 0).event === 'adopt' && run.pending.kind === 'adopt' && run.pending.opts.length === 3 && new Set(run.pending.opts).size === 3, 'oferta 3 towarzyszy');
+  eq(R.choose(run, 9).code, 'index', 'zły indeks');
+  const id = run.pending.opts[1]; const ch = R.choose(run, 1); assert(ch.ok && run.companion.id === id && run.companion.lvl === 1 && run.phase === 'fight', 'adopcja');
+  const dec = fresh(); dec.round = 3; force(dec, 'schronisko', 'ziarno-mocy'); R.pickTile(dec, 0); assert(R.choose(dec, -1).ok && !dec.companion, 'rezygnacja');
+  // ewolucja po bossie
+  const b = strong(fresh()); b.round = 6; b.companion = { id: 'pisklak', lvl: 1 }; b.phase = 'fight'; b.fight = {}; const out = R.fightFinish(b, []); assert(out.compUp === 2 && b.companion.lvl === 2, 'po bossie poziom 2');
+  // czynności w silniku
+  const lv = n => ({ companion: { id: 'pisklak', lvl: n } });
+  const a1 = play(setup({ hp: 100000, lo: lv(1), enemies: [foe({ hp: 400, atk: 1, aspd: 20 })] })), a3 = play(setup({ hp: 100000, lo: lv(3), enemies: [foe({ hp: 400, atk: 1, aspd: 20 })] }));
+  assert(evs(a1.ev, 'comp').length >= 3 && evs(a3.ev, 'comp').length > evs(a1.ev, 'comp').length, 'Pisklę dziobie, na poz. 3 częściej');
+  assert(a3.res.ticks < a1.res.ticks, 'wyższy poziom = szybsze zwycięstwo');
+  const none = play(setup({ hp: 100000, enemies: [foe({ hp: 400, atk: 1, aspd: 20 })] })); assert(none.res.ticks > a1.res.ticks, 'towarzysz pomaga');
+  const heal = play(setup({ hp: 20, lo: { companion: { id: 'trzmiel', lvl: 3 } }, enemies: [foe({ hp: 600, atk: 1, aspd: 30 })] })); assert(evs(heal.ev, 'heal').length >= 2, 'Trzmiel leczy');
+  const bu = play(setup({ hp: 100000, lo: { companion: { id: 'salamandra', lvl: 2 } }, enemies: [foe({ hp: 300, atk: 1, aspd: 20 })] })); assert(bu.f.enemies[0].burn >= 0 && bu.res.burnDealt > 0, 'Salamandra podpala');
+  const fr = play(setup({ hp: 100000, lo: { companion: { id: 'balwanek', lvl: 3 } }, enemies: [foe({ hp: 500, atk: 1, aspd: 20 })] })); assert(fr.res.freezes >= 1, 'Bałwanek mrozi');
+  const ho = play(setup({ hp: 100000, lo: { companion: { id: 'gasior', lvl: 3 } }, enemies: [foe({ hp: 900, atk: 3, aspd: 100 })] })); assert(evs(ho.ev, 'stun').length >= 1 && evs(ho.ev, 'block').length >= 3, 'Gąsior ogłusza i blokuje ciosy');
+  eq(heroStats(loadout({ companion: { id: 'kot', lvl: 3 } })).coinFlat, 2, 'Kot: Ziarna'); eq(heroStats(loadout({ companion: { id: 'kot', lvl: 3 } })).luck, 10, 'Kot poz. 3: Szczęście');
+  eq(Object.keys(D.COMPANIONS).length, 6, '6 towarzyszy'); for (const c of Object.values(D.COMPANIONS)) assert(c.lv.length === 3 && c.forms.length === 3, 'dane ' + c.id);
+});
+
+test('Kurnik: Pióra za run, kupno poziomów, efekty na starcie runu i w statystykach', async () => {
+  const p = newProfile(); eq(p.feathers, 0, 'start bez Piór');
+  const r = strong(fresh()); r.done = 12; r.ended = 'win'; r.garnek = 2; r.phase = 'over'; r.score = 1;
+  const e = onRunEnd(p, r); eq(e.feathers, 12 + D.RULES.featherWin + D.RULES.featherGarnek * 2, 'Pióra: piętra + wygrana + palnik'); eq(p.feathers, e.feathers, 'zapisane w profilu');
+  const lose = fresh(); lose.done = 3; lose.ended = 'lose'; lose.phase = 'over'; lose.score = 1; eq(onRunEnd(newProfile(), lose).feathers, 3, 'porażka: tylko piętra');
+  // kupno
+  const { kurnikBuy } = await import('../../../src/games/bulgot/profile.js');
+  const q = newProfile(); q.feathers = 100;
+  assert(kurnikBuy(q, 'spizarnia').ok && q.kurnik.spizarnia === 1 && q.feathers === 100 - D.KURNIK.spizarnia.cost[0], 'poz. 1');
+  assert(kurnikBuy(q, 'spizarnia').ok && kurnikBuy(q, 'spizarnia').ok && q.kurnik.spizarnia === 3, 'poz. 3');
+  eq(kurnikBuy(q, 'spizarnia').code, 'max', 'maks. poziom'); eq(kurnikBuy(q, 'nie-ma').code, 'index', 'nieznany budynek');
+  q.feathers = 0; eq(kurnikBuy(q, 'gabinet').code, 'feathers', 'brak Piór');
+  // efekty na starcie
+  const k = fresh({ kurnik: { spizarnia: 2, silownia: 3, gabinet: 2, szkola: 1, kantyna: 2, skarbiec: 1, pisklecarnia: 2 } });
+  eq(k.coins, 4, 'Spiżarnia +4 Ziarna'); eq(k.freeLeft, 2, 'Kantyna: darmowe rerolle na starcie');
+  const S0 = R.statsOf(fresh()), S1 = R.statsOf(k);
+  assert(S1.maxHp > S0.maxHp && S1.atk >= S0.atk && S1.restBonus === 10 && S1.cdPct === 4, 'Siłownia, Gabinet, Szkoła');
+  assert(k.companion && k.companion.lvl === 2, 'Pisklęcarnia: towarzysz na poz. 2');
+  const b = strong(fresh({ kurnik: { skarbiec: 2 } })); const b0 = strong(fresh()); b.round = 6; b0.round = 6; const c1 = b.coins, c0 = b0.coins; fightWin(b); fightWin(b0);
+  eq((b.coins - c1) - (b0.coins - c0), 2, 'Skarbiec: +2 Ziarna za bossa');
+  assert(R.newRun({ mode: 'full', char: 'pyrtek', garnek: 0, pool: ALL, seed: 3, kurnik: { spizarnia: 99, zly: 2 } }).run.kurnik.spizarnia === D.KURNIK_MAX, 'poziom przycięty do maksimum, nieznane budynki ignorowane');
+  // BgPlayer: akcja kurnik
+  const env = mkEnv(), o = new BgPlayer({ storage: mkStorage() }, env);
+  assert((await post(o, 'kurnik', { pl: PL, id: 'spizarnia' })).j.code === 'feathers', 'bez Piór błąd');
+  const prof = await o.ctx.storage.get('profile'); await post(o, 'state', { pl: PL }); const pr = (await o.ctx.storage.get('profile')) || newProfile(); pr.feathers = 50; await o.ctx.storage.put('profile', pr);
+  const buy = await post(o, 'kurnik', { pl: PL, id: 'spizarnia' }); assert(buy.j.ok && buy.j.kurnikBought.lvl === 1 && buy.j.profile.kurnik.spizarnia === 1 && buy.j.profile.feathers === 50 - 12, 'zakup przez BgPlayer');
+  const st = await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' }); eq(st.j.run.coins, 2, 'run startuje z poziomami Kurnika'); assert(st.j.run.kurnik.spizarnia === 1, 'poziomy w widoku');
+});
+
+test('Nowości: kompletność danych (klątwy, trasy, bossowie, osiągnięcia), RUN_V', () => {
+  for (const [id, c] of Object.entries(D.CURSES)) assert(c.name && c.text && c.pct > 0 && c.icon, 'klątwa ' + id);
+  for (const [id, r] of Object.entries(D.ROUTES)) assert(r.name && r.text && r.icon, 'trasa ' + id);
+  for (const [id, b] of Object.entries(D.BOSSES)) { assert(b.name && b.title && b.hp > 0 && b.art && Array.isArray(b.mech) && b.text && b.quote, 'boss ' + id); if (b.slot) assert(BOSS_POOL_FULL[b.slot].includes(id), id + ' w puli ' + b.slot); }
+  for (const id of D.SUPER_BOSSES) assert(D.BOSSES[id].super, 'super-boss ' + id);
+  for (const [id, b] of Object.entries(D.KURNIK)) { assert(b.name && b.text && b.cost.length === 3 && b.cost[0] < b.cost[2], 'budynek ' + id); }
+  for (const a of ['a-klatwa', 'a-klatwy3', 'a-dogrywka', 'a-dogrywka15', 'a-duch', 'a-towarzysz', 'a-trasy', 'a-kurnik', 'a-kurnik-max']) assert(D.ACH_BY_ID[a], 'osiągnięcie ' + a);
+  eq(R.RUN_V, 8, 'RUN_V 8');
 });

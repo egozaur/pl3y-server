@@ -45,6 +45,12 @@ export const RULES = {
   nemesisHp: 140, nemesisAtk: 115,
   // Zjarany Kurczak (ukryte odblokowanie): tyle Ziaren łącznie zdobytych w jednym runie. Chmura Dymu co `smokeEvery` ticków (4 s): stosy Oparzenia, spowolnienie wrogów (%) i jego czas.
   u420: 420, smokeBurn: 2, smokeSlow: 22, smokeTicks: 24,
+  // Arena Duchów: Duch ma tyle % statystyk gracza z tego samego piętra jego runu; nagroda: Ziarna i wybór rzadkiego kafelka.
+  ghostPct: 95, ghostAtk: 120, arenaCoins: 6,
+  // Dogrywka: po Prezesie wrogowie rosną dodatkowo o tyle % Życia i Ataku na każde piętro ponad limit trybu; super-boss co 5 pięter.
+  endlessHp: 6, endlessAtk: 3, superEvery: 5,
+  // Kurnik: Pióra za run = ukończone piętra + premia za wygraną (+ palnik) + 2 za każde piętro Dogrywki.
+  featherWin: 8, featherGarnek: 2, featherEndless: 2,
 };
 
 // Forma kurczaka zależy od postępu (ułamek runu), nie od numeru rundy, więc tryb szybki też dochodzi do Rambo Chickena.
@@ -340,6 +346,8 @@ export const TILES = [
   { id: 'automat-z-pasza', name: 'Automat z Paszą', type: 'risk', rarity: 0, repeat: true, event: 'automat', text: 'Wydarzenie: wrzucasz 5 Ziaren, wypadają 2 losowe kafelki statystyk', flavor: 'Czasem zwraca resztę. Czasem nie.' },
   { id: 'kontrakt-hr', name: 'Kontrakt z Działem HR', type: 'risk', rarity: 1, repeat: true, event: 'kontrakt', lock: 'u-kontrakt', text: 'Wydarzenie: podpisujesz etat (+Atak, mniej Ziaren) albo B2B (Ziarna teraz, mniej Życia)', flavor: 'Drobnym drukiem: „dusza w cenie”.' },
   { id: 'kapliczka', name: 'Kapliczka Świętego Rosołu', type: 'risk', rarity: 1, repeat: true, event: 'kapliczka', text: 'Wydarzenie: pełne uleczenie albo Odznaka do wyboru', flavor: 'Ktoś zostawił tu marchewkę. I pietruszkę.' },
+  { id: 'arena-duchow', name: 'Arena Duchów', type: 'risk', rarity: 1, repeat: true, event: 'arena', minRound: 3, text: 'Wydarzenie: walka z Duchem innego gracza (jego build z końca runu). Wygrana: Ziarna i wybór rzadkiego kafelka', flavor: 'Kto nie dotarł do Prezesa, ten krąży po arenie i bije następnych.' },
+  { id: 'schronisko', name: 'Schronisko dla Piskląt', type: 'risk', rarity: 0, repeat: true, event: 'schronisko', text: 'Wydarzenie: adoptujesz towarzysza (1 z 3), który walczy u twojego boku i rośnie po bossach', flavor: 'Adopcja jest bezpłatna. Gryzienie w cenie.' },
   { id: 'umowa-etat', name: 'Umowa o Pracę', type: 'risk', rarity: 1, hidden: true, text: '+30% Ataku, -2 Ziarna po każdej rundzie', fx: [{ k: 'atkPct', v: 30 }, { k: 'coinFlat', v: -2 }], flavor: 'Etat, karta Multisport i wieczna lojalność.' },
   { id: 'umowa-b2b', name: 'Umowa B2B', type: 'risk', rarity: 1, hidden: true, text: '-15% maks. Życia (w zamian za 15 Ziaren od ręki)', fx: [{ k: 'hpPct', v: -15 }], flavor: 'Sam sobie sterem, żeglarzem i ZUS-em.' },
   { id: 'zakazana-pasza', name: 'Zakazana Pasza', type: 'risk', rarity: 3, lock: 'u-pasza', text: '+12% wszystkich statystyk, ale następny boss ma +30% Życia', fx: [{ k: 'allPct', v: 12 }], flavor: 'Smakuje jak moc. Kosztuje jak rachunek.' },
@@ -451,14 +459,40 @@ export const ENEMIES = {
   'pisklak-stazysta': { id: 'pisklak-stazysta', name: 'Pisklak-stażysta', zone: 0, hp: 9, atk: 2, aspd: 100, armor: 0, evade: 0, crit: 0, minion: true, art: 'intern', text: 'Pracuje za darmo i za nic.' },
 };
 
+// slot = „miejsce” bossa w trybie (MODES.*.bosses): każde miejsce ma pulę wariantów (BOSS_POOL), wariant losuje się z ziarna runu.
+// mech = lista mechanik (sim.js → bossAct/phases): summon (przyzywa stażystów: summon {every,n,max}), rage (rage {at,aspd}: poniżej at% Życia szybszy),
+// plucker (Skubarka: tarcza, szarże, Skubanie kafelków), guarded + block + tyrant (Prezes), night (oślepia bohatera), blizzard (spowalnia bohatera),
+// crash (po szarży sam się ogłusza), audit (zdejmuje efekty z wrogów).
 export const BOSSES = {
-  brojler: { id: 'brojler', name: 'Brojler Zdzisław', title: 'Szef Zmiany', hp: 95, atk: 6, aspd: 90, armor: 3, evade: 0, crit: 0, art: 'broiler',
+  brojler: { id: 'brojler', slot: 'brojler', name: 'Brojler Zdzisław', title: 'Szef Zmiany', hp: 95, atk: 6, aspd: 90, armor: 3, evade: 0, crit: 0, art: 'broiler', mech: ['summon', 'rage'], summon: { every: 150, n: 2, max: 4 }, rage: { at: 50, aspd: 130 },
     text: 'Co jakiś czas wzywa stażystów. Poniżej połowy życia dostaje Premię Motywacyjną.', quote: 'Nikt nie widział go na urlopie.' },
-  skubarka: { id: 'skubarka', name: 'Skubarka 3000', title: 'Maszyna', hp: 149, atk: 12, aspd: 80, armor: 6, evade: 0, crit: 0, shield: 25, art: 'plucker',
+  'szef-nocnej': { id: 'szef-nocnej', slot: 'brojler', name: 'Szef Nocnej Zmiany', title: 'Dozorca', hp: 100, atk: 6, aspd: 85, armor: 4, evade: 0, crit: 0, art: 'broiler', tint: 'night', mech: ['night', 'rage'], spec: { every: 100, windup: 20, mult: 260 }, night: { every: 130, dur: 45, pct: 40 }, rage: { at: 40, aspd: 125 },
+    text: 'Gasi światło: co 13 s oślepia cię na 4,5 s (40% twoich ciosów chybia). Szarżuje po ciemku, a poniżej 40% życia przyspiesza.', quote: 'W nocy wszystkie kurczaki są szare.' },
+  'krol-szczurow': { id: 'krol-szczurow', slot: 'brojler', name: 'Król Szczurów', title: 'Władca Spiżarni', hp: 88, atk: 6, aspd: 95, armor: 6, evade: 0, crit: 0, art: 'rat', tint: 'king', mech: ['summon'], summon: { every: 90, n: 2, max: 5 },
+    text: 'Pancerny i otoczony świtą: co 9 s wzywa dwóch stażystów (do pięciu naraz). Ogłusz go albo szybko zetnij poddanych.', quote: 'Panuje tu od dawna. Nikt nie pyta, kto go wybrał.' },
+  skubarka: { id: 'skubarka', slot: 'skubarka', name: 'Skubarka 3000', title: 'Maszyna', hp: 149, atk: 12, aspd: 80, armor: 6, evade: 0, crit: 0, shield: 25, art: 'plucker', mech: ['plucker'],
     text: 'Tarcza z pierza, potem fale uderzeń, a na koniec Skubanie twoich kafelków.', quote: 'Skubie, bo kocha.' },
-  prezes: { id: 'prezes', name: 'Prezes Rosołu', title: 'Zarząd', hp: 108, atk: 12, aspd: 90, armor: 6, evade: 0, crit: 0, art: 'boss',
+  'wielka-chlodnia': { id: 'wielka-chlodnia', slot: 'skubarka', name: 'Wielka Chłodnia', title: 'Maszyna', hp: 160, atk: 11, aspd: 75, armor: 5, evade: 0, crit: 0, shield: 20, art: 'snowman', tint: 'frost', mech: ['blizzard', 'rage'], blizzard: { every: 120, dur: 40 }, rage: { at: 50, aspd: 125 }, slow: { pct: 20, ticks: 30 },
+    text: 'Mroźna tarcza, a co 12 s zamieć: spowalnia twoje ataki na 4 s. Każde trafienie też cię mrozi. Poniżej połowy życia przyspiesza.', quote: 'Tu zawsze jest 18 stopni poniżej zera.' },
+  'wozek-prototyp': { id: 'wozek-prototyp', slot: 'skubarka', name: 'Wózek Prototyp X1', title: 'Maszyna', hp: 140, atk: 10, aspd: 60, armor: 8, evade: 0, crit: 0, art: 'forklift', tint: 'proto', mech: ['crash'], spec: { every: 70, windup: 20, mult: 380 },
+    text: 'Co 7 s szarża za 380% obrażeń. Po niej przegrzewa się i stoi bez ruchu przez 2,5 s: wtedy bij.', quote: 'Wersja testowa. Hamulce w planach.' },
+  prezes: { id: 'prezes', slot: 'prezes', name: 'Prezes Rosołu', title: 'Zarząd', hp: 108, atk: 12, aspd: 90, armor: 6, evade: 0, crit: 0, art: 'boss', mech: ['guarded', 'block', 'tyrant'], guards: 2,
     text: 'Nietykalny, dopóki żyją Ochroniarze. Potem Restrukturyzacja i Wrzący Garnek.', quote: 'Padł Prezes, a z nim upadł cały cennik.' },
+  'dyrektor-finansowy': { id: 'dyrektor-finansowy', slot: 'prezes', name: 'Dyrektor Finansowy', title: 'Zarząd', hp: 118, atk: 11, aspd: 90, armor: 7, evade: 0, crit: 0, art: 'canary', tint: 'gold', mech: ['audit', 'block'], steal: { n: 1, max: 6 }, auditEvery: 70,
+    text: 'Każdy cios zabiera Ziarno (do 6), co 7 s Audyt: zdejmuje statusy i daje tarczę, a co 15 s blokuje ci jedną umiejętność.', quote: 'Nie ma budżetu na twoje zwycięstwo.' },
+  'wampir-hr': { id: 'wampir-hr', slot: 'prezes', name: 'Wampir z Działu HR', title: 'Zarząd', hp: 112, atk: 12, aspd: 90, armor: 5, evade: 10, crit: 0, art: 'cat', tint: 'blood', mech: ['summon', 'rage'], vamp: 45, summon: { every: 180, n: 1, max: 3 }, rage: { at: 40, aspd: 145 },
+    text: 'Leczy się 45% zadanych obrażeń, przyzywa stażystów na rozmowy kwalifikacyjne, a poniżej 40% życia wpada w szał.', quote: 'Zapraszamy na rozmowę. Nie wychodzi się z niej żywym.' },
+  // Dogrywka (po Prezesie): co superEvery pięter jeden z poniższych, po kolei.
+  'super-skubarka': { id: 'super-skubarka', slot: null, super: true, name: 'Skubarka 9000', title: 'Maszyna Zarządu', hp: 190, atk: 13, aspd: 85, armor: 8, evade: 0, crit: 0, shield: 25, art: 'plucker', tint: 'super', mech: ['plucker', 'crash'], spec: { every: 80, windup: 20, mult: 330 },
+    text: 'Skubarka po modernizacji: tarcza, szarże z przegrzewaniem i Skubanie twoich kafelków.', quote: 'Nowa wersja. Te same pióra.' },
+  'super-rada': { id: 'super-rada', slot: null, super: true, name: 'Rada Nadzorcza', title: 'Ostateczny Zarząd', hp: 200, atk: 12, aspd: 90, armor: 8, evade: 5, crit: 0, art: 'boss', tint: 'super', mech: ['block', 'audit', 'summon'], auditEvery: 80, summon: { every: 160, n: 2, max: 4 },
+    text: 'Zebranie zarządu bez końca: blokuje umiejętności, zdejmuje statusy i wzywa stażystów.', quote: 'Punkt pierwszy: twoja porażka.' },
+  'super-prezes': { id: 'super-prezes', slot: null, super: true, name: 'Prezes Zero', title: 'Pierwszy Rosół', hp: 220, atk: 14, aspd: 90, armor: 8, evade: 0, crit: 5, art: 'boss', tint: 'super', mech: ['block', 'tyrant', 'rage', 'blizzard'], rage: { at: 35, aspd: 140 }, blizzard: { every: 130, dur: 35 },
+    text: 'Wrzący Garnek bez dna. Zamieć, blokady umiejętności, narastający gniew i szał poniżej 35% życia.', quote: 'Od zawsze i do końca. Taki był plan.' },
 };
+// Pule wariantów bossów na miejsce (slot z MODES.*.bosses). Wariant losuje się z ziarna runu (rules.js → bossFor).
+export const BOSS_POOL = { brojler: ['brojler', 'szef-nocnej', 'krol-szczurow'], skubarka: ['skubarka', 'wielka-chlodnia', 'wozek-prototyp'], prezes: ['prezes', 'dyrektor-finansowy', 'wampir-hr'] };
+export const SUPER_BOSSES = ['super-skubarka', 'super-rada', 'super-prezes'];
 
 // ---------- Szablony zwykłych pięter ----------
 // Losowane z ziarna runu (rules.js → floorTemplate). Nie dotyczą wczesnych pięter, bossów, elit, Nemezis ani ryzykownych drzwi.
@@ -527,6 +561,63 @@ export const FLAWS = {
 // ---------- Awans Wroga (Nemezis) ----------
 export const NEMESIS_TITLES = ['Kierownik', 'Starszy Specjalista', 'Koordynator', 'Brygadzista', 'Kontroler Jakości', 'Dyrektor Regionalny'];
 export const NEMESIS_NAMES = ['Zbigniew', 'Halina', 'Mirosław', 'Grażyna', 'Bożydar', 'Wiesława', 'Czesław', 'Krystyna'];
+
+// ---------- Trasy (wybór drogi na początku strefy II i III) ----------
+// Dwie trasy z pięciu losuje się z ziarna runu. Modyfikator działa na całą strefę: wrogowie (poza bossami): enemyHp/enemyAtk (%),
+// slow {pct,ticks}, ignite (% Ataku wroga na stos), shieldHits; ekonomia: coins (Ziarna po wygranej), freeReroll (na piętro), heal (pkt proc.), priceDisc (%), luck (Szczęście w ofertach).
+export const ROUTES = {
+  chlodnia: { name: 'Chłodnia', icon: 'chlodnia', text: 'Wrogowie mają +3% Życia i lekko spowalniają twoje ataki, ale każde piętro daje +3 Ziarna.', enemyHp: 3, slow: { pct: 10, ticks: 20 }, coins: 3 },
+  kotlownia: { name: 'Kotłownia', icon: 'kotlownia', text: 'Wrogowie mają +4% Ataku, ale w ofertach jest znacznie więcej rzadkich kafelków (+35 Szczęścia).', enemyAtk: 4, luck: 35 },
+  magazyn: { name: 'Magazyn Pasz', icon: 'magazyn', text: 'Wrogowie mają -12% Życia, ale +8% Ataku (szklane armaty). Dostajesz 1 darmowy reroll na piętro.', enemyHp: -12, enemyAtk: 8, freeReroll: 1 },
+  kanaly: { name: 'Kanały Wentylacyjne', icon: 'kanaly', text: 'Wrogowie mają +6% Życia, ale po każdej walce leczysz się o 20 pkt proc. więcej.', enemyHp: 6, heal: 20 },
+  sortownia: { name: 'Sortownia Jaj', icon: 'sortownia', text: 'Wrogowie mają tarczę na 1 cios i -10% Życia, a dokupowanie jest o 30% tańsze.', enemyHp: -10, shieldHits: 1, priceDisc: 30 },
+};
+
+// ---------- Klątwy Prezesa (dobrowolne, wybierane przed runem; do CURSE_MAX naraz) ----------
+// pct = premia do wyniku (sumuje się). Efekty: rules.js (rerolle, odpoczynek, Ziarna, sloty, wrogowie, podgląd), stats.js (Kruche Kości), sim.js (Pospiech).
+export const CURSES = {
+  'zakaz-wymian': { name: 'Zakaz Wymian', text: 'Reroll jest niemożliwy (także darmowy).', pct: 25, icon: 'zakaz' },
+  'przegrzany-piec': { name: 'Przegrzany Piec', text: 'Wrogowie mają +15% Życia i +15% Ataku.', pct: 30, icon: 'piec' },
+  'zakaz-drzemek': { name: 'Zakaz Drzemek', text: 'Odpoczynek jest wyłączony.', pct: 5, icon: 'drzemka' },
+  'podatek': { name: 'Podatek Kurzy', text: 'Po każdej wygranej walce o 2 Ziarna mniej.', pct: 18, icon: 'podatek' },
+  'ciasne-gniazdo': { name: 'Ciasne Gniazdo', text: 'Tylko 2 sloty umiejętności.', pct: 20, icon: 'gniazdo' },
+  'pospiech': { name: 'Pospiech', text: 'Wrogowie wpadają w Furię już po 30 s walki.', pct: 6, icon: 'pospiech' },
+  'mgla': { name: 'Mgła Zarządu', text: 'Nie widzisz składu piętra przed walką.', pct: 8, icon: 'mgla' },
+  'kruche-kosci': { name: 'Kruche Kości', text: '-25% maks. Życia.', pct: 30, icon: 'kosci' },
+};
+export const CURSE_MAX = 3;
+export const cursePct = list => (list || []).reduce((a, id) => a + (CURSES[id] ? CURSES[id].pct : 0), 0);
+
+// ---------- Towarzysze (pisklęta-pupile; adopcja w Schronisku, rosną po bossach do poziomu 3) ----------
+// lv[i] = poziom i+1: act = czynność w walce (peck: cios w % Ataku, heal: leczenie w % maks. Życia, burn/frost: stosy na celu, honk: ogłuszenie wrogów w tickach), every w tickach, fx = stałe premie.
+export const COMPANIONS = {
+  pisklak: { id: 'pisklak', name: 'Pisklę Bojowe', forms: ['Pisklę Bojowe', 'Kurczę Bojowe', 'Kogucik Bojowy'], text: 'Dziobie wroga co kilka sekund (cios w % twojego Ataku).',
+    lv: [{ act: 'peck', every: 30, v: 30 }, { act: 'peck', every: 26, v: 45 }, { act: 'peck', every: 22, v: 65 }] },
+  trzmiel: { id: 'trzmiel', name: 'Trzmiel Medyk', forms: ['Trzmiel Medyk', 'Trzmiel Felczer', 'Trzmiel Chirurg'], text: 'Co kilka sekund leczy cię (% maks. Życia).',
+    lv: [{ act: 'heal', every: 40, v: 3 }, { act: 'heal', every: 35, v: 4 }, { act: 'heal', every: 30, v: 5 }] },
+  salamandra: { id: 'salamandra', name: 'Salamandra', forms: ['Salamandra', 'Salamandra Paleniskowa', 'Smok Rosołowy'], text: 'Podpala wroga: dokłada stosy Oparzenia.',
+    lv: [{ act: 'burn', every: 40, v: 1 }, { act: 'burn', every: 35, v: 2 }, { act: 'burn', every: 30, v: 3 }] },
+  balwanek: { id: 'balwanek', name: 'Bałwanek', forms: ['Bałwanek', 'Bałwan Chłodniczy', 'Lodowy Kolos'], text: 'Mrozi wroga: dokłada stosy Mrozu.',
+    lv: [{ act: 'frost', every: 30, v: 1 }, { act: 'frost', every: 28, v: 2 }, { act: 'frost', every: 26, v: 2 }] },
+  gasior: { id: 'gasior', name: 'Gąsior Stróż', forms: ['Gąsior Stróż', 'Gęsi Ochroniarz', 'Gęsi Generał'], text: 'Blokuje pierwsze ciosy wrogów, a co kilka sekund syczy i ogłusza ich.',
+    lv: [{ act: 'honk', every: 120, v: 8, fx: [{ k: 'parasol', v: 1 }] }, { act: 'honk', every: 100, v: 10, fx: [{ k: 'parasol', v: 2 }] }, { act: 'honk', every: 80, v: 12, fx: [{ k: 'parasol', v: 3 }] }] },
+  kot: { id: 'kot', name: 'Kot Skarbnik', forms: ['Kot Skarbnik', 'Kot Księgowy', 'Kot Prezesa'], text: 'Przynosi Ziarna po każdej wygranej walce.',
+    lv: [{ fx: [{ k: 'coinFlat', v: 1 }] }, { fx: [{ k: 'coinFlat', v: 2 }] }, { fx: [{ k: 'coinFlat', v: 2 }, { k: 'luck', v: 10 }] }] },
+};
+export const COMPANION_OFFER = 3;
+
+// ---------- Kurnik (meta-progres: Pióra za runy → trwałe ulepszenia, maks. 3 poziomy) ----------
+// Efekty liczone w rules.js (start: Ziarna, towarzysz; kantyna: rerolle; skarbiec: Ziarna za bossa) i stats.js (siłownia, gabinet, szkoła).
+export const KURNIK = {
+  spizarnia: { name: 'Spiżarnia', icon: 'spizarnia', text: '+2 Ziarna na start runu za poziom.', cost: [12, 28, 55] },
+  gabinet: { name: 'Gabinet Lekarski', icon: 'gabinet', text: 'Odpoczynek leczy o 5 pkt proc. więcej za poziom.', cost: [12, 28, 55] },
+  silownia: { name: 'Siłownia', icon: 'silownia', text: '+3% maks. Życia i +3% Ataku za poziom.', cost: [20, 45, 80] },
+  skarbiec: { name: 'Skarbiec Prezesa', icon: 'skarbiec', text: '+1 Ziarno za każdego pokonanego bossa za poziom.', cost: [15, 35, 65] },
+  kantyna: { name: 'Kantyna', icon: 'kantyna', text: '+1 darmowy reroll za poziom na pierwszym piętrze każdej strefy.', cost: [12, 28, 55] },
+  szkola: { name: 'Szkoła Kurzych Sztuczek', icon: 'szkola', text: 'Umiejętności mają o 4% krótszy cooldown za poziom.', cost: [15, 35, 65] },
+  pisklecarnia: { name: 'Pisklęcarnia', icon: 'pisklecarnia', text: 'Poz. 1: zaczynasz z losowym towarzyszem. Poz. 2: towarzysz zaczyna na poziomie 2. Poz. 3: w Schronisku wybierasz z 4.', cost: [25, 60, 110] },
+};
+export const KURNIK_MAX = 3;
 
 // ---------- Temperatura Garnka (poziomy trudności) ----------
 export const GARNEK = [
@@ -624,6 +715,15 @@ export const ACHIEVEMENTS = [
   { id: 'a-weteran', g: 'meta', s: '●', name: 'Weteran Fabryki', text: 'Zakończ 10 runów.' },
   { id: 'a-staly', g: 'meta', s: '●', name: 'Stały Bywalec', text: 'Zakończ 25 runów.' },
   { id: 'a-rekord', g: 'meta', s: '♛', name: 'Rekordzista', text: 'Zdobądź 20 000 punktów w jednym runie.' },
+  { id: 'a-klatwa', g: 'style', s: '☠', name: 'Przeklęty', text: 'Wygraj run z co najmniej jedną Klątwą Prezesa.' },
+  { id: 'a-klatwy3', g: 'win', s: '☠', name: 'Wróg Publiczny Nr 1', text: 'Wygraj run z trzema Klątwami Prezesa naraz.', secret: true },
+  { id: 'a-dogrywka', g: 'win', s: '∞', name: 'Dogrywka', text: 'Przeżyj 5 pięter Dogrywki po pokonaniu Prezesa.' },
+  { id: 'a-dogrywka15', g: 'win', s: '∞', name: 'Nieskończony Rosół', text: 'Przeżyj 15 pięter Dogrywki.', secret: true },
+  { id: 'a-duch', g: 'fight', s: '👻', name: 'Pogromca Duchów', text: 'Pokonaj Ducha innego gracza (albo własne Odbicie) na Arenie Duchów.' },
+  { id: 'a-towarzysz', g: 'style', s: '♥', name: 'Najlepszy Przyjaciel', text: 'Wygraj run z towarzyszem na najwyższym poziomie.' },
+  { id: 'a-trasy', g: 'style', s: '➤', name: 'Zbieg Okoliczności', text: 'Wybierz trasę w obu strefach jednego runu (tryb pełny).' },
+  { id: 'a-kurnik', g: 'meta', s: '⌂', name: 'Gospodarz Kurnika', text: 'Kup 10 ulepszeń w Kurniku.' },
+  { id: 'a-kurnik-max', g: 'meta', s: '⌂', name: 'Kurnik Marzeń', text: 'Rozbuduj wszystkie budynki Kurnika do maksymalnego poziomu.', secret: true },
   { id: 'a-pelna-gra', g: 'meta', s: '♛', name: 'Szef Kuchni', text: 'Osiągnij 100% ukończenia gry w profilu.', secret: true },
 ];
 export const ACH_BY_ID = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, a]));

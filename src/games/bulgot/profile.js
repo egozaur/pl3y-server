@@ -1,12 +1,12 @@
 // Bulgot: profil gracza (Księga Kurnika): odblokowania, liczniki, najlepsze wyniki, Temperatura Garnka.
 // Czyste funkcje na obiekcie `profile`; zapis robi BgPlayer.
-import { STARTER_TILES, UNLOCKS, UNLOCK_BY_ID, MODES, RULES } from './data.js';
+import { STARTER_TILES, UNLOCKS, UNLOCK_BY_ID, MODES, RULES, KURNIK, KURNIK_MAX } from './data.js';
 import { nemesisName } from './rules.js';
 import { evaluateAch, completion } from './achievements.js';
 import { ACHIEVEMENTS } from './data.js';
 
 export function newProfile() {
-  return { v: 1, chars: ['pyrtek'], tiles: [], garnek: 0, best: {}, counters: { runs: 0, wins: 0, fox: 0 }, bosses: {}, flags: {}, seen: [], unlocked: [], ach: [], clears: {} };
+  return { v: 1, chars: ['pyrtek'], tiles: [], garnek: 0, best: {}, counters: { runs: 0, wins: 0, fox: 0 }, bosses: {}, flags: {}, seen: [], unlocked: [], ach: [], clears: {}, feathers: 0, kurnik: {} };
 }
 
 // Pula kafelków dostępnych w nowym runie.
@@ -70,7 +70,21 @@ export function onNemesisBeaten(p) { p.nemesis = null; p.counters.nemesisKills =
 // Wywoływane po rozstrzygnięciu walki z bossem.
 export function onBossKill(p, bossId) { p.bosses[bossId] = (p.bosses[bossId] || 0) + 1; }
 
-// Koniec runu: liczniki, najlepszy wynik, kolejny poziom Garnka. Zwraca { newBest, garnekUnlocked }.
+// Kurnik: kupno kolejnego poziomu budynku za Pióra. Zwraca { ok, id, lvl, cost } albo { err, code }.
+export function kurnikBuy(p, id) {
+  const B = KURNIK[id];
+  if (!B) return { err: 'Nie ma takiego budynku.', code: 'index' };
+  p.kurnik = p.kurnik || {};
+  const lvl = p.kurnik[id] | 0;
+  if (lvl >= KURNIK_MAX) return { err: 'Ten budynek ma już maksymalny poziom.', code: 'max' };
+  const cost = B.cost[lvl];
+  if ((p.feathers | 0) < cost) return { err: 'Za mało Piór: potrzebujesz ' + cost + '.', code: 'feathers' };
+  p.feathers -= cost; p.kurnik[id] = lvl + 1;
+  p.counters.kurnikBuys = (p.counters.kurnikBuys || 0) + 1;
+  return { ok: true, id, lvl: lvl + 1, cost };
+}
+
+// Koniec runu: liczniki, najlepszy wynik, kolejny poziom Garnka, Pióra do Kurnika. Zwraca { newBest, garnekUnlocked, feathers }.
 export function onRunEnd(p, r) {
   p.counters.runs++;
   if (r.stats.fox) p.counters.fox++;
@@ -92,7 +106,12 @@ export function onRunEnd(p, r) {
   const newBest = r.done > 0 && (!prev || r.score > prev.score);
   if (newBest) p.best[r.mode] = { score: r.score, rounds: r.done, win, char: r.char, garnek: r.garnek };
   for (const id of r.tiles) if (!p.seen.includes(id)) p.seen.push(id);
-  return { newBest, garnekUnlocked };
+  // Pióra: ukończone piętra + premia za wygraną (z palnikiem) + piętra Dogrywki.
+  const deep = r.endless && r.cleared != null ? Math.max(0, r.done - r.cleared) : 0;
+  const feathers = r.done + (win ? RULES.featherWin + RULES.featherGarnek * (r.garnek | 0) : 0) + RULES.featherEndless * deep;
+  p.feathers = (p.feathers | 0) + feathers; p.counters.feathers = (p.counters.feathers || 0) + feathers;
+  if (deep > (p.counters.deepest || 0)) p.counters.deepest = deep;
+  return { newBest, garnekUnlocked, feathers, deep };
 }
 
 // Osiągnięcia sprawdzane po zakończeniu runu (profil już zaktualizowany przez onRunEnd). Zwraca świeżo zdobyte.
@@ -105,7 +124,7 @@ export function publicProfile(p) {
   return {
     nick: p.nick, avatar: p.avatar || 0, chars: p.chars, tiles: p.tiles, garnek: p.garnek, best: p.best,
     counters: p.counters, bosses: p.bosses, seen: p.seen, unlocked: p.unlocked, ach: p.ach || [], clears: p.clears || {}, completion: completion(p), recipes: p.recipes || [], reactions: p.reactions || [],
-    nemesis: p.nemesis ? { ...p.nemesis, name: nemesisName(p.nemesis) } : null, will: p.will || null,
+    nemesis: p.nemesis ? { ...p.nemesis, name: nemesisName(p.nemesis) } : null, will: p.will || null, feathers: p.feathers | 0, kurnik: p.kurnik || {},
     // Ukryte odblokowania (secret) nie zdradzają warunku, dopóki gracz ich nie zdobędzie.
     locks: UNLOCKS.filter(u => !p.unlocked.includes(u.id)).map(u => ({ id: u.id, kind: u.kind, target: u.target, secret: !!u.secret, text: u.secret ? '???' : u.text })),
     modes: Object.keys(MODES),

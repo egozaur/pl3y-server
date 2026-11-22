@@ -1,7 +1,7 @@
 // Bulgot: liczenie statystyk bohatera z postaci i kafelków. Czysta funkcja, bez losowości.
-// loadout = { char, tiles: [id...], skills: [{id,lvl}], coins, bonusAtk, noRegen, grow: {id: n}, flawed: [{id, flaw, on}], decree };
+// loadout = { char, tiles: [id...], skills: [{id,lvl}], coins, bonusAtk, noRegen, grow: {id: n}, flawed: [{id, flaw, on}], decree, companion: {id,lvl}, kurnik: {budynek: poziom}, curses: [id] };
 // opt.off = indeks kafelka wyłączonego (Skubanie).
-import { CHARS, TILE_BY_ID, MILESTONES, MILESTONE_EVERY, BADGES, FLAWS, RULES } from './data.js';
+import { CHARS, TILE_BY_ID, MILESTONES, MILESTONE_EVERY, BADGES, FLAWS, RULES, COMPANIONS } from './data.js';
 
 // Okólnik „Wyjazd Integracyjny”: każdy zaczęty zestaw liczy się o 1 sztukę więcej.
 export function setCounts(tileIds, decree) {
@@ -21,6 +21,14 @@ export function heroStats(loadout, opt = {}) {
   const has = id => ids.includes(id);
   for (const id of ids) { const t = TILE_BY_ID[id]; if (t && t.fx) for (const f of t.fx) add(f.k, f.v); }
   for (const b of (loadout.badges || [])) { const d = BADGES[b]; if (d) for (const f of d.fx) add(f.k, f.v); }
+  // Towarzysz (stałe premie poziomu), Kurnik (trwałe ulepszenia) i Klątwa „Kruche Kości”.
+  const co = loadout.companion && COMPANIONS[loadout.companion.id];
+  if (co) for (const f of (co.lv[Math.min(3, Math.max(1, loadout.companion.lvl | 0)) - 1].fx || [])) add(f.k, f.v);
+  const ku = loadout.kurnik || {};
+  if (ku.silownia) { add('hpPct', 3 * ku.silownia); add('atkPct', 3 * ku.silownia); }
+  if (ku.gabinet) add('restBonus', 5 * ku.gabinet);
+  if (ku.szkola) add('cdPct', 4 * ku.szkola);
+  if ((loadout.curses || []).includes('kruche-kosci')) add('hpPct', -25);
   // Wadliwa Partia: kafelek z wadą ma o flawBoost% mocniejsze dodatnie efekty; wada działa dopiero po ujawnieniu (on).
   for (const w of (loadout.flawed || [])) {
     if (!has(w.id)) continue;
