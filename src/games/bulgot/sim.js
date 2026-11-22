@@ -412,7 +412,7 @@ export class Fight {
       return;
     }
     if (this.S.planB && !this.planBUsed) {   // Plan B: druga szansa w każdej walce
-      this.planBUsed = true; this.hp = Math.max(1, fl(this.S.maxHp * 30 / 100)); this.invulnUntil = Math.max(this.invulnUntil, this.tick + 30); this.push({ k: 'revive' });
+      this.planBUsed = true; this.hp = Math.max(1, fl(this.S.maxHp * 15 / 100)); this.invulnUntil = Math.max(this.invulnUntil, this.tick + 15); this.push({ k: 'revive' });
       return;
     }
     this.hp = 0; this.over = true; this.win = false;

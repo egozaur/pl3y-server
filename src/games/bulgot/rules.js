@@ -2,7 +2,7 @@
 // Wszystkie losowania biorą ziarno z run.seed, więc ten sam run daje te same oferty i spotkania.
 // Każda funkcja zwraca { ok: true, ... } albo { err, code }. Stan zapisuje i autoryzuje BgPlayer (player.js).
 import { mix, hash, makeRng } from './rng.js';
-import { SKILLS, TILES, RECIPES, BADGES, BADGE_OFFER, BADGE_POOL, AFFIXES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, FLOOR_TPL, RARITY_WEIGHTS, TYPE_WEIGHTS, DECREES, FLAWS, NEMESIS_TITLES, NEMESIS_NAMES, garnekMods, formFor } from './data.js';
+import { SKILLS, TILES, RECIPES, BADGES, BADGE_OFFER, BADGE_POOL, AFFIXES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, FLOOR_TPL, garnekRamp, RARITY_WEIGHTS, TYPE_WEIGHTS, DECREES, FLAWS, NEMESIS_TITLES, NEMESIS_NAMES, garnekMods, formFor } from './data.js';
 import { heroStats, setCounts } from './stats.js';
 import { runFight } from './sim.js';
 
@@ -33,7 +33,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 6;
+export const RUN_V = 7;
 
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null }) {
   const M = MODES[mode], ch = CHARS[char];
@@ -345,9 +345,9 @@ export function restPctOf(run, S = statsOf(run)) {
 }
 
 // ---------- Ulepszanie statystyk ----------
-// 3 kopie tego samego kafelka statystyki poziomu 1 albo 2 zlewają się za darmo w 1 kafelek następnego poziomu rodziny (t.next).
+// RULES.upgradeCost (2) kopie tego samego kafelka statystyki poziomu 1 albo 2 zlewają się za darmo w 1 kafelek następnego poziomu rodziny (t.next).
 // Poziom 3 → legendarny to nie ulepszanie (legendarne to tylko łup z bossów). Tylko w fazie oferty, więc powtórka walki się nie zmienia.
-export const UPGRADE_COST = 3;
+export const UPGRADE_COST = RULES.upgradeCost;
 export const upgradable = run => [...new Set(run.tiles)].filter(id => { const t = TILE_BY_ID[id]; return t && t.next && run.tiles.filter(x => x === id).length >= UPGRADE_COST; });
 export function upgrade(run, id) {
   if (run.phase !== 'offer') return fail('Zlewać kafelki można tylko przed wyborem kafelka.', 'phase');
@@ -585,13 +585,15 @@ function concrete(def, s, gm, extra = {}, early = null) {
 }
 
 export function buildSetup(run) {
-  const M = MODES[run.mode], gm = garnekMods(run.garnek), s = scale(run.mode, run.round);
+  const M = MODES[run.mode], gm0 = garnekMods(run.garnek), s = scale(run.mode, run.round);
+  const rp = garnekRamp(run.mode, run.round), gm = { ...gm0, enemyHp: fl(gm0.enemyHp * rp / 100), enemyAtk: fl(gm0.enemyAtk * rp / 100), bossHp: fl(gm0.bossHp * rp / 100) };   // premie palnika rosną z piętrem
   const ids = encounterIds(run), boss = M.bosses[run.round] || null, elite = isElite(run);
   let enemies;
   if (boss) {
     const def = BOSSES[boss];
     const be = concrete(def, s, gm, { boss, title: def.title, aspd: fl(def.aspd * (100 + gm.bossAspd) / 100) });
     if (run.flags.bossHpBonus) be.hp = fl(be.hp * (100 + run.flags.bossHpBonus) / 100);
+    if (gm.bossHp) be.hp = fl(be.hp * (100 + gm.bossHp) / 100);   // wyższe palniki: mocniejsi bossowie
     enemies = [be];
     if (boss === 'prezes') {
       const g = ENEMIES['kot-ochroniarz'];
@@ -679,7 +681,7 @@ export function fightFinish(run, inputs) {
   }
 
   // Wygrana: nagrody, leczenie, rozliczenie wyniku.
-  let coins = (setup.boss ? RULES.coinsBoss + S.bossCoins : RULES.coinsRound) + S.coinFlat;
+  let coins = (setup.boss ? RULES.coinsBoss + S.bossCoins : RULES.coinsRound) + S.coinFlat - (gm.coinMinus || 0);
   coins = fl(coins * (100 + S.coinPct + (setup.elite ? RULES.eliteCoinsPct : 0)) / 100);
   if (S.interest) coins += Math.min(5, fl(run.coins * S.interest / 100));
   if (S.bigInterest) coins += Math.min(12, fl(run.coins * S.bigInterest / 100));   // Akcje Zarządu

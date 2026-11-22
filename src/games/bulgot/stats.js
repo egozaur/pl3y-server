@@ -59,7 +59,7 @@ export function heroStats(loadout, opt = {}) {
   if (kp >= 4) add('interest', 10);
 
   const all = acc.allPct || 0;
-  const atk = Math.floor((b.atk + (acc.atkFlat || 0)) * (100 + (acc.atkPct || 0) + all) / 100);
+  const atk = Math.round((b.atk + (acc.atkFlat || 0)) * (100 + (acc.atkPct || 0) + all) / 100);   // zaokrąglenie: małe premie procentowe nie giną przy niskim Ataku
   const maxHp = Math.max(1, Math.floor((b.hp + (acc.hpFlat || 0)) * (100 + (acc.hpPct || 0) + all) / 100));
   const aspd = Math.max(20, Math.floor(b.aspd * (100 + (acc.aspdPct || 0) + all) / 100));
   const armor = Math.max(0, Math.floor((b.armor + (acc.armor || 0)) * (100 + all) / 100));
