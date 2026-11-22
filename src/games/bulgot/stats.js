@@ -73,6 +73,7 @@ export function heroStats(loadout, opt = {}) {
     egg: has('jajko-na-twardo') ? 60 : has('tykajace-jajo') ? ((sc.jajeczne || 0) >= 2 ? 60 : 80) : 0,   // co ile ticków wybucha Tykające Jajo
     eggAll: !!acc.eggAll, eggBurn: acc.eggBurn || 0, bleedStacks: acc.bleedStacks || 1, revivePct: acc.revivePct || 40, reviveBurn: acc.reviveBurn || 0,
     eggHeal: (sc.jajeczne || 0) >= 3 ? 3 : 0,
+    smoke: acc.smoke || 0,   // Zjarany Kurczak: co tyle ticków Chmura Dymu (0 = brak)
     bleed: acc.bleed || 0,
     // efekty statusowe: szansa nałożenia przy zwykłym ataku (%), moc i czas trwania
     bleedMax: acc.bleedMax || 0, burnHit: Math.min(100, acc.burnHit || 0), frostHit: Math.min(100, acc.frostHit || 0), poisonHit: Math.min(100, acc.poisonHit || 0),

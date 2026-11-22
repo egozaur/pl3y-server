@@ -233,6 +233,33 @@ test('efekty: Oparzenie kumuluje się do limitu i bije co sekundę mimo pancerza
   eq(f.enemies[0].burn, D.STATUS.burn.max, 'stosy na limicie');
 });
 
+test('Zjarany Kurczak: statystyki, Chmura Dymu co 4,2 s (Oparzenie i spowolnienie), inne postacie bez zmian', () => {
+  const S = heroStats(loadout({ char: 'zjarany' }));
+  eq([S.atk, S.aspd, S.regen, S.burnHit, S.burnMax, S.smoke], [7, 75, 2, 25, 4, 42], 'Zjarany: statystyki');
+  eq(heroStats(loadout({ char: 'indor' })).smoke, 0, 'Indor bez Chmury');
+  const f = new Fight(setup({ lo: { char: 'zjarany' }, enemies: [foe({ hp: 100000, atk: 1, aspd: 100 }), foe({ hp: 100000, atk: 1, aspd: 100 })] }));
+  const smokes = []; for (let i = 0; i < 90; i++) { f.step(); for (const e of f.ev) if (e.k === 'smoke') smokes.push(f.tick - 1); }
+  eq(smokes, [41, 83], 'Chmura Dymu w 42. i 84. ticku');
+  assert(f.enemies.every(e => e.burn >= D.RULES.smokeBurn), 'wrogowie podpaleni Chmurą');
+  // spowolnienie: wróg w dymie atakuje rzadziej niż ten sam wróg bez dymu
+  const hits = lo => { const g = new Fight(setup({ lo, hp: 100000, enemies: [foe({ hp: 100000, atk: 1, aspd: 100 })] })); let n = 0; for (let i = 0; i < 200; i++) { g.step(); n += g.ev.filter(e => e.k === 'hurt' && e.from).length; } return n; };
+  assert(hits({ char: 'zjarany' }) < hits({ char: 'pyrtek' }), 'Chmura spowalnia atak wrogów');
+});
+test('Ziarna zdobyte łącznie w runie (stats.earned): wzrosty liczą się, wydatki i zastaw nie', () => {
+  const run = fresh({ char: 'kaczor' }); eq(run.stats.earned || 0, 0, 'start: Ziarna startowe nie liczą się');
+  run.phase = 'event'; run.pending = { kind: 'gamble' }; run.coins = 10; run.seed = 1; const before = run.stats.earned || 0;
+  R.bet(run, 10); assert((run.stats.earned || 0) === before + (run.coins > 0 ? 10 : 0), 'wygrany zakład liczy się, przegrany nie');
+  const r2 = fresh(); r2.phase = 'offer'; r2.tiles = ['kostka-rosolowa']; r2.coins = 0;
+  const e0 = r2.stats.earned || 0; R.pawn(r2, 'kostka-rosolowa'); eq(r2.stats.earned || 0, e0, 'zastaw w lombardzie nie liczy się');
+  const r3 = fresh(); r3.phase = 'fight'; r3.fight = {}; r3.hp = 70; const e1 = r3.stats.earned || 0;
+  const w = R.fightFinish(r3, []); assert(w.ok, 'walka rozstrzygnięta'); if (w.result.win) assert(r3.stats.earned > e1, 'nagroda za piętro liczy się do zdobytych Ziaren');
+});
+test('wynik walki: ile życia wrogów zostało i kto walczył (ciekawostki na ekranie porażki)', () => {
+  const lost = runFight(setup({ hp: 5, enemies: [foe({ name: 'Szczur', hp: 1000, atk: 50 })] }));
+  assert(!lost.win && lost.foeLeft > 90 && lost.foes[0] === 'Szczur', 'przegrana: prawie całe życie wroga zostało');
+  const won = runFight(setup({ enemies: [foe({ hp: 10, atk: 1 })] }));
+  eq([won.win, won.foeLeft], [true, 0], 'wygrana: nic nie zostało');
+});
 test('efekty: Mróz spowalnia, 5 stosów zamraża (przerywa szarżę), boss zamarza krócej', () => {
   const f = new Fight(setup({ enemies: [foe({ hp: 100000, atk: 1, aspd: 100, spec: { every: 200, windup: 30, mult: 300 } })] }));
   const e = f.enemies[0];
@@ -780,7 +807,9 @@ test('profil: odblokowania postaci i kafelków, liczniki, najlepszy wynik, kolej
   const rich = fresh(); rich.ended = 'lose'; rich.coins = 31; rich.phase = 'over'; onRunEnd(p, rich); onRunEnd(p, rich); evaluate(p, null); assert(p.tiles.includes('hazard-w-kurniku'), 'Hazard: porażka z >30 Ziarnami');
   p.counters.fox = 3; evaluate(p, null); assert(p.tiles.includes('szklane-skrzydlo'), 'Szklane Skrzydło: 3 runy z Paktem');
   assert(p.tiles.includes('tajemnicza-skrzynka'), 'Skrzynka: 5 zakończonych runów');
-  const nr = fresh(); nr.stats.tankWin = true; nr.stats.maxCoins = 40; nr.stats.muts = 1; nr.stats.maxBurn = 250; nr.stats.freezes = 8; nr.stats.richBoss = true; nr.stats.badges = 3; evaluate(p, nr);
+  const nr = fresh(); nr.stats.tankWin = true; nr.stats.maxCoins = 40; nr.stats.muts = 1; nr.stats.maxBurn = 250; nr.stats.freezes = 8; nr.stats.richBoss = true; nr.stats.badges = 3;
+  nr.stats.earned = D.RULES.u420 - 1; evaluate(p, nr); assert(!p.chars.includes('zjarany'), 'Zjarany Kurczak: o jedno Ziarno za mało');
+  nr.stats.earned = D.RULES.u420; evaluate(p, nr); assert(p.chars.includes('zjarany'), 'Zjarany Kurczak: 425 Ziaren zdobytych w jednym runie');
   assert(['garnek-cisnieniowy', 'szron', 'premia-kwartalna'].every(id => p.tiles.includes(id)), 'Garnek, Szron, Premia Kwartalna');
   assert(['kogucia-kontra', 'dziobanie-premii', 'egzekucja-ostroga'].every(id => p.tiles.includes(id)), 'Kontra, Premia, Egzekucja');
   assert(p.unlocked.length === D.UNLOCKS.length, 'wszystkie odblokowania sprawdzalne');
@@ -867,6 +896,23 @@ test('BgRanks: jeden wpis na gracza (najlepszy), sortowanie, brak klucza gracza,
   assert((await (await rk.fetch(new Request('https://bg/list?mode=quick'))).json()).list.length === 0, 'tryby osobno');
   assert((await rk.fetch(new Request('https://bg/list?mode=zly'))).status === 400, 'zły tryb');
   assert((await post(rk, 'submit', { mode: 'full', entry: { n: 'x', score: 'dużo' } })).status === 400, 'zły wpis');
+});
+test('BgRanks: widoki po postaci, poziomie Garnka i graczu, jeden wpis na gracza w przekroju, migracja starych wpisów', async () => {
+  const rk = new BgRanks({ storage: mkStorage() }, {});
+  const sub = (n, score, char, garnek) => post(rk, 'submit', { mode: 'full', entry: { n, nick: n.toUpperCase(), avatar: 1, score, rounds: 5, win: false, char, garnek, at: 1 } });
+  const ls = async q => (await (await rk.fetch(new Request('https://bg/list?mode=full' + q))).json());
+  await sub('ala', 100, 'pyrtek', 0); await sub('ala', 900, 'indor', 1); await sub('ola', 300, 'pyrtek', 0); await sub('ola', 250, 'pyrtek', 2); await sub('ala', 400, 'pyrtek', 0);
+  eq((await ls('')).list.map(x => x.nick + x.score), ['ALA900', 'OLA300'], 'ogólny: najlepszy wynik gracza');
+  eq((await ls('&char=pyrtek')).list.map(x => x.nick + x.score), ['ALA400', 'OLA300'], 'po postaci: najlepszy gracza na tej postaci');
+  eq((await ls('&garnek=0')).list.map(x => x.nick + x.score), ['ALA400', 'OLA300'], 'po Garnku');
+  eq((await ls('&char=pyrtek&garnek=2')).list.map(x => x.nick + x.score), ['OLA250'], 'postać i Garnek razem');
+  const my = await ls('&nick=ala'); eq(my.list.map(x => x.char + x.garnek + ':' + x.score).sort(), ['indor1:900', 'pyrtek0:400'], 'po graczu: każda kombinacja osobno (bez starych, gorszych wyników)');
+  eq([my.total, (await ls('&nick=nikt')).list.length], [2, 0], 'liczba wpisów i nieznany gracz');
+  assert((await rk.fetch(new Request('https://bg/list?mode=full&char=smok'))).status === 400 && (await rk.fetch(new Request('https://bg/list?mode=full&garnek=x'))).status === 400, 'zła postać i zły Garnek');
+  // migracja: stary ranking (tylko klucz „r:”) zasila widoki po postaci
+  const st = mkStorage(); await st.put('r:quick', [{ n: 'zed', nick: 'ZED', avatar: 1, score: 777, rounds: 4, win: false, char: 'kwoka', garnek: 1, at: 1 }]);
+  const r2 = new BgRanks({ storage: st }, {});
+  eq((await (await r2.fetch(new Request('https://bg/list?mode=quick&char=kwoka'))).json()).list.map(x => x.score), [777], 'stary wpis widać po postaci');
 });
 
 // ---------- cały Worker ----------

@@ -223,7 +223,10 @@ export default {
     if (url.pathname === '/api/bg/ranks' && req.method === 'GET') {
       if (!origin) return new Response('Forbidden', { status: 403 });
       const mode = url.searchParams.get('mode') || 'full';
-      return cors(origin, await env.BG_RANKS.get(env.BG_RANKS.idFromName('ranks')).fetch('https://bg/list?mode=' + encodeURIComponent(mode)));
+      // Filtry rankingu (opcjonalne): postać, poziom Garnka, nick gracza.
+      const q = new URLSearchParams({ mode });
+      for (const k of ['char', 'garnek', 'nick']) { const v = (url.searchParams.get(k) || '').slice(0, 24); if (v) q.set(k, v); }
+      return cors(origin, await env.BG_RANKS.get(env.BG_RANKS.idFromName('ranks')).fetch('https://bg/list?' + q.toString()));
     }
     m = url.pathname.match(/^\/api\/bg\/(state|start|pick|reroll|buy|rest|shop|bet|bonus|choose|pawn|redeem|will|fightstart|fightfinish|abandon|history|analysis|skillorder)$/);
     if (m && req.method === 'POST') {

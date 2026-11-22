@@ -1,6 +1,6 @@
 // Bulgot: profil gracza (Księga Kurnika): odblokowania, liczniki, najlepsze wyniki, Temperatura Garnka.
 // Czyste funkcje na obiekcie `profile`; zapis robi BgPlayer.
-import { STARTER_TILES, UNLOCKS, UNLOCK_BY_ID, MODES } from './data.js';
+import { STARTER_TILES, UNLOCKS, UNLOCK_BY_ID, MODES, RULES } from './data.js';
 import { nemesisName } from './rules.js';
 
 export function newProfile() {
@@ -15,6 +15,7 @@ const CHECKS = {
   'u-kwoka': p => !!p.flags.winFull,
   'u-kaczor': (p, r) => !!r && r.stats.riskPicks >= 5,
   'u-indor': p => !!p.flags.winQuick,
+  'u-420': (p, r) => !!r && (r.stats.earned || 0) >= RULES.u420,   // Zjarany Kurczak: łącznie zdobyte Ziarna w jednym runie
   'u-koniczyna': (p, r) => !!r && r.stats.maxCoins >= 100,
   'u-unik': p => (p.bosses.brojler || 0) > 0,
   'u-zagrzebanie': (p, r) => !!r && r.stats.lowWin,
@@ -90,7 +91,8 @@ export function publicProfile(p) {
     nick: p.nick, avatar: p.avatar || 0, chars: p.chars, tiles: p.tiles, garnek: p.garnek, best: p.best,
     counters: p.counters, bosses: p.bosses, seen: p.seen, unlocked: p.unlocked, recipes: p.recipes || [], reactions: p.reactions || [],
     nemesis: p.nemesis ? { ...p.nemesis, name: nemesisName(p.nemesis) } : null, will: p.will || null,
-    locks: UNLOCKS.filter(u => !p.unlocked.includes(u.id)).map(u => ({ id: u.id, kind: u.kind, target: u.target, text: u.text })),
+    // Ukryte odblokowania (secret) nie zdradzają warunku, dopóki gracz ich nie zdobędzie.
+    locks: UNLOCKS.filter(u => !p.unlocked.includes(u.id)).map(u => ({ id: u.id, kind: u.kind, target: u.target, secret: !!u.secret, text: u.secret ? '???' : u.text })),
     modes: Object.keys(MODES),
   };
 }

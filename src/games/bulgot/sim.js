@@ -393,7 +393,8 @@ export class Fight {
       return;
     }
     if (e.spec && this.tick >= e.nextSpec) { e.windup = { end: this.tick + e.spec.windup }; this.push({ k: 'telegraph', uid: e.uid, end: e.windup.end }); return; }
-    e.acc += fl(fl(e.aspd * e.aspdPct / 100) * (100 - Math.min(60, e.frost * (STATUS.frost.slow + (this.S.frostSlow || 0)))) / 100);
+    const smoked = this.tick < (e.smokeUntil || 0) ? 100 - RULES.smokeSlow : 100;   // Chmura Dymu (dla pozostałych postaci mnożnik 100% nic nie zmienia)
+    e.acc += fl(fl(fl(e.aspd * e.aspdPct / 100) * (100 - Math.min(60, e.frost * (STATUS.frost.slow + (this.S.frostSlow || 0)))) / 100) * smoked / 100);
     while (e.acc >= 1000 && !this.over && !e.dead) { e.acc -= 1000; this.enemyHit(e, 100); }
   }
 
@@ -435,6 +436,11 @@ export class Fight {
         this.push({ k: 'egg' });
         for (const x of (this.S.eggAll ? this.alive() : [tg])) { this.heroHit(x, 120, false, 'egg'); if (this.S.eggPoison) this.applyStatus(x, 'poison', this.S.eggPoison); if (this.S.eggBurn) this.applyStatus(x, 'burn', this.S.eggBurn); } if (this.S.eggHeal) this.heal(fl(this.S.maxHp * this.S.eggHeal / 100)); }
     }
+    // Zjarany Kurczak: Chmura Dymu co `S.smoke` ticków (4,2 s) nakłada stosy Oparzenia i spowalnia wszystkich wrogów.
+    if (this.S.smoke && (t + 1) % this.S.smoke === 0 && this.alive().length) {
+      this.push({ k: 'smoke' });
+      for (const e of this.alive()) { this.applyStatus(e, 'burn', RULES.smokeBurn); if (!e.immune) e.smokeUntil = t + RULES.smokeTicks; }
+    }
     // atak bohatera
     this.acc += this.heroAspd();
     while (this.acc >= 1000) {
@@ -453,7 +459,10 @@ export class Fight {
 
   result() {
     const boss = this.setup.enemies.find(e => e.boss);
+    // Ile życia wrogów zostało (w %, bez pomagierów): do ciekawostek na ekranie porażki.
+    const foes = this.enemies.filter(e => !e.minion), tot = foes.reduce((a, e) => a + e.maxHp, 0), left = foes.reduce((a, e) => a + (e.dead ? 0 : Math.max(0, e.hp)), 0);
     return {
+      foeLeft: tot ? Math.ceil(left * 100 / tot) : 0, foes: foes.map(e => e.name).filter(Boolean),
       win: this.win, ticks: this.tick, hp: Math.max(0, this.hp), maxHp: this.S.maxHp, timeout: this.timeout,
       usedRevive: this.revived, stolen: this.stolen, dealt: this.dealt, taken: this.taken, maxHit: this.maxHit,
       kills: this.kills, skillsUsed: this.used, chains: this.chains, reactions: this.reacts, reactSeen: this.reactSeen, coinsWon: this.coinsWon, burnDealt: this.burnDealt, freezes: this.freezes, lowest: this.lowest, boss: this.win && boss ? boss.boss : null,

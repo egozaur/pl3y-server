@@ -41,6 +41,8 @@ export const RULES = {
   chainWindow: 15, chainPct: [20, 50], chainStun: 10,
   // Awans Wroga: Nemezis ma tyle % życia/ataku (rośnie z każdym awansem).
   nemesisHp: 140, nemesisAtk: 115,
+  // Zjarany Kurczak (ukryte odblokowanie): tyle Ziaren łącznie zdobytych w jednym runie. Chmura Dymu co `smokeEvery` ticków (4,2 s): stosy Oparzenia, spowolnienie wrogów (%) i jego czas.
+  u420: 425, smokeBurn: 1, smokeSlow: 15, smokeTicks: 20,
 };
 
 // Forma kurczaka zależy od postępu (ułamek runu), nie od numeru rundy, więc tryb szybki też dochodzi do Rambo Chickena.
@@ -67,6 +69,10 @@ export const CHARS = {
     fx: [], startSkills: [], coins: 10, freeRerolls: 1, riskWeight: 2, lock: 'u-kaczor', interestMax: 5 },
   indor: { id: 'indor', name: 'Indor Bogdan', style: 'Ciężkie ciosy', text: '+60% Ataku, -30% tempa ataku, 15% szansy na trafienie krytyczne.', base: BASE,
     fx: [{ k: 'atkPct', v: 60 }, { k: 'aspdPct', v: -30 }, { k: 'crit', v: 10 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-indor' },
+  zjarany: { id: 'zjarany', name: 'Zjarany Kurczak', style: 'Oparzenie i luz', secret: true,
+    text: 'Podpala wrogów (25% Oparzenia, limit +4, leczy się od płonących), ale -25% tempa i -10% Ataku. Co 4,2 s Chmura Dymu: Oparzenie i spowolnienie wrogów.', base: BASE,
+    fx: [{ k: 'burnHit', v: 25 }, { k: 'burnMax', v: 4 }, { k: 'regen', v: 2 }, { k: 'burnHeal', v: 3 }, { k: 'aspdPct', v: -25 }, { k: 'atkPct', v: -10 }, { k: 'smoke', v: 42 }],
+    startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-420' },
 };
 
 // ---------- Umiejętności aktywne ----------
@@ -255,6 +261,8 @@ export const UNLOCKS = [
   { id: 'u-kwoka', kind: 'char', target: 'kwoka', text: 'Ukończ pełny run' },
   { id: 'u-kaczor', kind: 'char', target: 'kaczor', text: 'Weź 5 kafelków ryzyka w jednym runie' },
   { id: 'u-indor', kind: 'char', target: 'indor', text: 'Pokonaj Prezesa Rosołu w trybie szybkim' },
+  // Ukryte: przed odblokowaniem widok profilu pokazuje tylko „???” (patrz publicProfile).
+  { id: 'u-420', kind: 'char', target: 'zjarany', secret: true, text: 'Zbierz łącznie 425 Ziaren w jednym runie' },
   { id: 'u-koniczyna', kind: 'tile', target: 'czterolistna-koniczyna', text: 'Zbierz 100 Ziaren w jednym runie' },
   { id: 'u-unik', kind: 'tile', target: 'unik-skrzydlem', text: 'Pokonaj Brojlera Zdzisława' },
   { id: 'u-zagrzebanie', kind: 'tile', target: 'zagrzebanie-w-sianie', text: 'Wygraj walkę, kończąc ją z mniej niż 10% życia' },

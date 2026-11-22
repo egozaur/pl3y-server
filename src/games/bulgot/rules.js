@@ -136,7 +136,12 @@ export function rerollCost(run) {
 }
 
 // ---------- Pomocnicze ----------
-function setCoins(run, v) { run.coins = Math.max(0, v); if (run.coins > run.stats.maxCoins) run.stats.maxCoins = run.coins; }
+// Każdy wzrost liczby Ziaren liczy się do `stats.earned` (łącznie zdobyte w runie; odblokowanie Zjaranego Kurczaka), poza zastawem w lombardzie (noEarn).
+function setCoins(run, v, noEarn) {
+  const nv = Math.max(0, v);
+  if (nv > run.coins && !noEarn) run.stats.earned = (run.stats.earned || 0) + nv - run.coins;
+  run.coins = nv; if (run.coins > run.stats.maxCoins) run.stats.maxCoins = run.coins;
+}
 
 // Stosuje kafelek do runu (wybór z oferty, bonusu albo zakup). Zwraca null albo błąd.
 // mut = wybrana gałąź Mutacji (1 lub 2), wymagana przy trzeciej kopii umiejętności.
@@ -350,7 +355,7 @@ export function pawn(run, id) {
   run.tiles.splice(run.tiles.lastIndexOf(id), 1);
   run.hp = Math.max(1, Math.min(run.hp, statsOf(run).maxHp));
   run.pawned = { id, round: run.round, price };
-  setCoins(run, run.coins + price);
+  setCoins(run, run.coins + price, true);
   run.stats.pawns = (run.stats.pawns || 0) + 1; cur(run).pawn = id;
   return { ok: true, pawned: id, price };
 }
@@ -698,7 +703,7 @@ export function view(run) {
     id: run.id, mode: run.mode, char: run.char, garnek: run.garnek, round: run.round, rounds: M.rounds, phase: run.phase,
     hp: run.hp, maxHp: S.maxHp, coins: run.coins, tiles: run.tiles, skills: run.skills, offer: run.offer, pending: run.pending,
     rerollCost: run.phase === 'offer' ? rerollCost(run) : null, freeLeft: run.freeLeft, rested: run.rested, restCost: restCost(run), restPct: RULES.restPct + S.restBonus, badges: run.badges || [], affixes: !over && isElite(run) && !hideFoes(run) ? eliteAffixes(run) : null, buyDisc: S.buyDisc, stats: run.stats, flags: { bossHpBonus: run.flags.bossHpBonus, revived: run.flags.revived, bonusAtk: run.flags.bonusAtk },
-    score: over ? run.score : liveScore(run), done: run.done, timeBonus: run.timeBonus, ended: run.ended, form: formFor(run.mode, run.round).id, zone: zoneOf(run.mode, run.round),
+    score: over ? run.score : liveScore(run), done: run.done, timeBonus: run.timeBonus, ended: run.ended, killer: over && run.killer ? { enemy: run.killer.enemy, nemesis: !!run.killer.nemesis } : null, form: formFor(run.mode, run.round).id, zone: zoneOf(run.mode, run.round),
     boss: M.bosses[run.round] || null, elite: !over && isElite(run), hero: S,
     decree: over ? null : decreeOf(run), priceMul: priceMul(run), grow: run.grow || {}, flawAt: run.phase === 'offer' ? run.flawAt : -1,
     flawed: (run.flawed || []).map(w => ({ id: w.id, flaw: w.on ? w.flaw : null, on: w.on })),
