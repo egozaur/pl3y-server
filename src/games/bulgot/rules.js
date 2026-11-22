@@ -478,6 +478,7 @@ function addBadge(run, b) {
   if (run.log.length) (run.log[run.log.length - 1].badges = run.log[run.log.length - 1].badges || []).push(b);
 }
 // Łup z bossa: wybór 1 z lootSize legendarnych statystyk (z ziarna runu, najpierw te, których jeszcze nie masz).
+export const lootRoll = run => makeRng(mix(run.seed, run.round, hash('lootroll'))).int(100) < RULES.lootChance;   // czy po tym bossie wypada łup
 const lootTiles = run => { const all = TILES.filter(t => t.boss && t.type === 'stat'); const fresh = all.filter(t => !run.tiles.includes(t.id)); return fresh.length >= RULES.lootSize ? fresh : all; };
 function startLoot(run, bonus) {
   const rr = makeRng(mix(run.seed, run.round, hash('loot'))), pool = lootTiles(run).map(t => t.id), offer = [];
@@ -709,7 +710,7 @@ export function fightFinish(run, inputs) {
 
   if (run.round >= MODES[run.mode].rounds) { endRun(run, 'win'); out.ended = 'win'; return out; }
   const bonus = MODES[run.mode].bonusAfter.includes(run.round) || (setup.door && run.door.reward === 'rare');
-  const loot = !!setup.boss;   // ostatni boss kończy run wcześniej (return powyżej)
+  const loot = !!setup.boss && lootRoll(run);   // szansa RULES.lootChance %; ostatni boss kończy run wcześniej (return powyżej)
   const avail = BADGE_POOL.filter(b => !(run.badges || []).includes(b));
   run.fight = null;
   if ((setup.boss || setup.elite) && avail.length) {

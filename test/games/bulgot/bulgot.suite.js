@@ -12,6 +12,7 @@ import { Players, playerToken } from '../../../src/core/players.js';
 import { signToken } from '../../../src/core/auth.js';
 import worker from '../../../src/index.js';
 
+D.RULES.lootChance = 100;   // w testach łup z bossa wypada zawsze (osobny test sprawdza 15%)
 export const bgTests = [];
 const test = (name, fn) => bgTests.push({ name: 'bulgot: ' + name, fn });
 function assert(c, msg) { if (!c) throw new Error('Asercja: ' + (msg || '')); }
@@ -658,7 +659,7 @@ test('dokupowanie: cena wg rzadkości, kafelek znika z oferty, wolny wybór zost
   force(run, 'ziarenko-z-podlogi', 'oko-kontrolera-jakosci', 'unik-skrzydlem', 'hazard-w-kurniku');
   const atk0 = R.statsOf(run).atk;
   let r = R.buyOffer(run, 0); assert(r.ok && r.bought === 'ziarenko-z-podlogi' && r.price === D.RULES.prices[0], 'zwykły kosztuje ' + D.RULES.prices[0]);
-  assert(run.coins === 100 - D.RULES.prices[0] && R.statsOf(run).atk === atk0 + 2 && run.offer[0] === null && run.phase === 'offer', 'Ziarna pobrane, efekt od razu, faza oferty trwa');
+  assert(run.coins === 100 - D.RULES.prices[0] && R.statsOf(run).atk === atk0 + 1 && run.offer[0] === null && run.phase === 'offer', 'Ziarna pobrane, efekt od razu, faza oferty trwa');
   assert(R.buyOffer(run, 0).code === 'index', 'drugi raz tego samego nie kupisz');
   assert(R.buyOffer(run, 3).code === 'event', 'Hazard to wydarzenie: nie na sprzedaż');
   r = R.buyOffer(run, 1); assert(r.ok && r.price === D.RULES.prices[1], 'rzadki kosztuje ' + D.RULES.prices[1]);
@@ -1277,7 +1278,7 @@ test('Ulepszanie: 3 kopie poziomu 1 lub 2 → 1 kafelek następnego poziomu; bł
   const hp0 = R.statsOf(run).maxHp, r = R.upgrade(run, 'grzebien-z-tasmy');
   assert(r.ok && r.upgraded.to === 'grzebien-hodowlany', 'zlanie');
   eq(run.tiles, ['grzebien-z-tasmy', 'czujne-oko', 'grzebien-hodowlany'], '3 kopie znikają, 1 nowa (jedna zostaje)');
-  eq(R.statsOf(run).maxHp, hp0 - 15 + 12, 'statystyki liczą się z nowego kafelka'); assert(run.hp <= R.statsOf(run).maxHp, 'życie nie przekracza maks.');
+  eq(R.statsOf(run).maxHp, hp0 - 6 + 7, 'statystyki liczą się z nowego kafelka'); assert(run.hp <= R.statsOf(run).maxHp, 'życie nie przekracza maks.');
   eq([run.stats.upgrades, run.cur.upgrades], [1, [{ from: 'grzebien-z-tasmy', to: 'grzebien-hodowlany' }]], 'licznik i dziennik rundy');
   run.tiles = Array(3).fill('grzebien-hodowlany'); assert(R.upgrade(run, 'grzebien-hodowlany').ok && run.tiles[0] === 'twardy-grzebien', 'poziom 2 → 3 (stare id)');
   run.tiles = Array(3).fill('twardy-grzebien'); eq(R.upgrade(run, 'twardy-grzebien').code, 'level', 'poziom 3 nie jest ulepszany');
@@ -1293,7 +1294,7 @@ test('Ulepszanie: wynik liczy się jak zdobyty (próg), wada fabryczna nie zosta
   eq([R.statsOf(run).evade, R.statsOf(run).aspd], [6 * 3 + 5, 108], 'trzy Zwinne Nogi: 18% + próg Taniec Kurczaka (5% uniku, 8% szybkości ataku)');
   const f = fresh(); f.tiles = Array(3).fill('sloma-z-wczoraj'); f.flawed = [{ id: 'sloma-z-wczoraj', flaw: 'kruchy', on: false, round: 1 }];
   assert(R.upgrade(f, 'sloma-z-wczoraj').ok && f.flawed.length === 0, 'wada zniknęła razem ze stopioną kopią');
-  eq(heroStats({ char: 'pyrtek', tiles: ['sloma-z-wczoraj', 'gniazdko-z-siana'] }).regen, 17, 'regeneracja w dziesiątych częściach (0,5 + 1,2 / s)');
+  eq(heroStats({ char: 'pyrtek', tiles: ['sloma-z-wczoraj', 'gniazdko-z-siana'] }).regen, 9, 'regeneracja w dziesiątych częściach (0,2 + 0,7 / s)');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run0 = await st.get('run'); run0.tiles = Array(3).fill('ziarenko-z-podlogi'); run0.phase = 'offer'; await st.put('run', run0);
@@ -1336,8 +1337,21 @@ test('RUN_V = 3: stary run (wersja 2) jest unieważniany', async () => {
   const r = await post(o, 'state', { pl: PL }); assert(r.j.voided && !r.j.run, 'run v2 unieważniony');
 });
 
-test('regeneracja: ułamkowe wartości kumulują się w sekundach (0,5 / s = 1 Życia co 2 s)', () => {
+test('regeneracja: ułamkowe wartości kumulują się w sekundach (0,2 / s = 1 Życia co 5 s)', () => {
   const lo = { char: 'pyrtek', tiles: ['sloma-z-wczoraj'], skills: [] };
   const setup = { v: 1, round: 1, mode: 'quick', seed: 5, boss: null, elite: false, zone: 0, hero: { loadout: lo, hp: 10 }, enemies: [{ id: 'szczur-pasz', name: 'Test', hp: 999999, atk: 1, aspd: 100, armor: 0, evade: 0, crit: 0, art: 'rat', idle: 99999 }], minion: null };
-  const f = new Fight(setup); for (let i = 0; i < 100; i++) f.step([]); eq(f.hp, 15, '10 s × 0,5 = +5 Życia');
+  const f = new Fight(setup); for (let i = 0; i < 100; i++) f.step([]); eq(f.hp, 12, '10 s × 0,2 = +2 Życia (ułamki się kumulują)');
+});
+
+test('łup z bossa: szansa 15% (RULES.lootChance), losowana deterministycznie z ziarna; bez łupu od razu bonus albo następne piętro', () => {
+  D.RULES.lootChance = 15;
+  try {
+    let hit = 0; const N = 2000;
+    for (let seed = 1; seed <= N; seed++) { const r = fresh({ seed }); r.round = 6; const a = R.lootRoll(r); eq(a, R.lootRoll(r), 'deterministyczne'); if (a) hit++; }
+    assert(hit > N * 0.11 && hit < N * 0.19, 'ok. 15% runów dostaje łup: ' + hit + ' z ' + N);
+    let nl = null, wl = null;
+    for (let seed = 1; seed < 200 && (!nl || !wl); seed++) { const r = fresh({ seed }); r.round = 6; if (R.lootRoll(r)) wl = wl || seed; else nl = nl || seed; }
+    const go = seed => { const b = fresh({ seed }); b.round = 6; b.tiles = [...Array(8).fill('twardy-grzebien'), 'ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy']; b.hp = 9999; b.phase = 'fight'; b.fight = {}; R.fightFinish(b, []); R.choose(b, 0); return b; };
+    eq(go(nl).phase, 'bonus', 'bez łupu: po Odznace od razu bonus'); eq(go(wl).phase, 'loot', 'z łupem: faza łupu');
+  } finally { D.RULES.lootChance = 100; }
 });

@@ -12,9 +12,9 @@ export const TYPES = { stat: 'Statystyka', skill: 'Umiejętność', item: 'Przed
 // grow: o ile rośnie życie i atak wrogów z każdą rundą (mnożnik). bosses: runda -> boss. bonusAfter: po tych bossach dodatkowa oferta.
 // elite: rundy z elitą (nagroda: Odznaka). zoneMul: dodatkowy mnożnik życia/ataku zwykłych wrogów w strefie (%, null = brak).
 export const MODES = {
-  quick: { name: 'Zupka Chińska', rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.17, atk: 1.113 }, bossPct: { hp: 80, atk: 90 },
+  quick: { name: 'Zupka Chińska', rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.135, atk: 1.092 }, bossPct: { hp: 80, atk: 90 },
     zones: [{ upTo: 5, zone: 0 }, { upTo: 10, zone: 1 }], elite: [4, 8], doors: [2, 6, 9] },
-  full: { name: 'Bulion Babci', rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 135, atk: 80 }, grow: { hp: 1.14, atk: 1.087 }, bossPct: { hp: 100, atk: 100 },
+  full: { name: 'Bulion Babci', rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 135, atk: 80 }, grow: { hp: 1.115, atk: 1.072 }, bossPct: { hp: 100, atk: 100 },
     zones: [{ upTo: 6, zone: 0 }, { upTo: 12, zone: 1 }, { upTo: 20, zone: 2 }], elite: [4, 10, 16], zoneMul: [null, null, { hp: 130, atk: 112 }], doors: [2, 5, 8, 11, 14, 17] },
 };
 // doors: piętra z Rozwidleniem Korytarza (wybór: zwykłe piętro albo wróg z cechą elity za nagrodę).
@@ -34,7 +34,7 @@ export const RULES = {
   // Rozwidlenie Korytarza: ryzykowne drzwi = pierwszy wróg z cechą elity (życie/atak w %), nagroda: Ziarna albo wybór rzadkiego kafelka.
   doorCoins: 8, doorHp: 165, doorAtk: 125,
   // Łup z bossa: po pokonaniu bossa (poza ostatnim) wybierasz 1 z `lootSize` legendarnych statystyk (kafelki z flagą boss).
-  lootSize: 3,
+  lootSize: 3, lootChance: 15,   // % szans, że po bossie (nie ostatnim) pojawia się okno wyboru łupu
   // Lombard Lisa: zastaw = pełna cena rzadkości teraz, wykup na następnym piętrze za `pawnBack`% ceny; przepadek wzmacnia Lisy o `pawnFox`%.
   pawnBack: 150, pawnFox: 25,
   // Wadliwa Partia: szansa (%) na kafelek z wadą w ofercie i o ile (%) mocniejsze są jego dodatnie efekty.
@@ -157,48 +157,48 @@ export const SETS = {
 const tenths = v => String(v / 10).replace('.', ',');
 const STAT_FAMILIES = [
   { fam: 'zycie', k: 'hpFlat', fmt: v => `+${v} maks. Życia`, lv: [
-    ['grzebien-z-tasmy', 'Grzebień z Taśmy', 5, 'Wyszedł z taśmy lekko krzywy, ale czerwony.'],
-    ['grzebien-hodowlany', 'Grzebień Hodowlany', 12, 'Z hodowli, gdzie każdy grzebień ma metrykę.'],
+    ['grzebien-z-tasmy', 'Grzebień z Taśmy', 2, 'Wyszedł z taśmy lekko krzywy, ale czerwony.'],
+    ['grzebien-hodowlany', 'Grzebień Hodowlany', 7, 'Z hodowli, gdzie każdy grzebień ma metrykę.'],
     ['twardy-grzebien', 'Grzebień Barberski', 20, 'Im czerwieńszy, tym trudniej go zgasić.'],
     ['grzebien-rosolowego-krola', 'Grzebień Rosołowego Króla', 35, 'Korona założona przed pierwszą zupą. Do dziś ciepła.']] },
   { fam: 'atak', k: 'atkFlat', fmt: v => `+${v} Atak`, lv: [
-    ['ziarenko-z-podlogi', 'Ziarenko z Podłogi', 2, 'Spadło ze stołu. Zasada pięciu sekund obowiązuje także w kurniku.'],
-    ['ziarno-selekcjonowane', 'Ziarno Selekcjonowane', 4, 'Wybrane przez komisję, która nie przyjmowała odwołań.'],
+    ['ziarenko-z-podlogi', 'Ziarenko z Podłogi', 1, 'Spadło ze stołu. Zasada pięciu sekund obowiązuje także w kurniku.'],
+    ['ziarno-selekcjonowane', 'Ziarno Selekcjonowane', 2, 'Wybrane przez komisję, która nie przyjmowała odwołań.'],
     ['ziarno-mocy', 'Ziarno Mocy', 6, 'Jedno ziarno, a w nim cała sprawiedliwość.'],
     ['ziarno-pierwszego-jajka', 'Ziarno Pierwszego Jajka', 10, 'Z niego wszystko się zaczęło. Kura wolałaby, żebyś o to nie pytał.']] },
   { fam: 'obrazenia', k: 'dmg', fmt: v => `+${v}% obrażeń`, lv: [
-    ['nadpilowany-dziob', 'Nadpiłowany Dziób', 3, 'Ktoś zaczął go piłować i się znudził.'],
-    ['dziob-szlifowany', 'Dziób Szlifowany', 7, 'Szlif końcowy robi dział jakości, po godzinach.'],
+    ['nadpilowany-dziob', 'Nadpiłowany Dziób', 1, 'Ktoś zaczął go piłować i się znudził.'],
+    ['dziob-szlifowany', 'Dziób Szlifowany', 4, 'Szlif końcowy robi dział jakości, po godzinach.'],
     ['ostry-dziob', 'Ostry Dziób', 12, 'Naostrzony na kamieniu, na którym ostrzy się cennik.'],
     ['dziob-prezesa', 'Dziób Prezesa', 20, 'Podpisuje wyroki szybciej niż zarządzenia.']] },
   { fam: 'szybkosc', k: 'aspdPct', fmt: v => `+${v}% szybkości ataku`, lv: [
-    ['dziob-po-kawie', 'Dziób po Kawie', 3, 'Pierwsza kawa z automatu, pierwsze drgania.'],
-    ['dziob-po-espresso', 'Dziób po Espresso', 6, 'Drgania zaczynają być zauważalne dla ubezpieczyciela.'],
+    ['dziob-po-kawie', 'Dziób po Kawie', 1, 'Pierwsza kawa z automatu, pierwsze drgania.'],
+    ['dziob-po-espresso', 'Dziób po Espresso', 3, 'Drgania zaczynają być zauważalne dla ubezpieczyciela.'],
     ['szybki-dziob', 'Szybki Dziób', 10, 'Stuk, stuk, stuk. Księgowość nie nadąża.'],
     ['dziob-maszynowy', 'Dziób Maszynowy', 18, 'Stuka tak szybko, że księgowość wezwała mechanika.']] },
   { fam: 'pancerz', k: 'armor', fmt: v => `+${v} Pancerza`, lv: [
-    ['puch-zbity-w-kule', 'Puch Zbity w Kulę', 2, 'Wygląda jak pompon. Chroni jak pompon z ambicjami.'],
-    ['pierze-prasowane', 'Pierze Prasowane', 4, 'Prasowane na gorąco, jak kołnierzyk dyrektora.'],
+    ['puch-zbity-w-kule', 'Puch Zbity w Kulę', 1, 'Wygląda jak pompon. Chroni jak pompon z ambicjami.'],
+    ['pierze-prasowane', 'Pierze Prasowane', 2, 'Prasowane na gorąco, jak kołnierzyk dyrektora.'],
     ['pancerz-z-pierza', 'Pancerz z Pierza', 6, 'Miękki w dotyku, twardy w boju.'],
     ['zbroja-wyroczni-kurnika', 'Zbroja Wyroczni Kurnika', 10, 'Wyrocznia przewidziała ciosy. Zbroja już je zna.']] },
   { fam: 'krytyk', k: 'crit', fmt: v => `+${v}% szansy na trafienie krytyczne`, lv: [
-    ['zezowate-oko', 'Zezowate Oko', 2, 'Patrzy w dwie strony naraz. Czasem trafia w obie.'],
-    ['oko-kontrolera-jakosci', 'Oko Kontrolera Jakości', 5, 'Odrzuca wszystko, w tym twoich wrogów.'],
+    ['zezowate-oko', 'Zezowate Oko', 1, 'Patrzy w dwie strony naraz. Czasem trafia w obie.'],
+    ['oko-kontrolera-jakosci', 'Oko Kontrolera Jakości', 3, 'Odrzuca wszystko, w tym twoich wrogów.'],
     ['czujne-oko', 'Czujne Oko', 8, 'Widzi słabe punkty. Szczególnie Prezesa.'],
     ['oko-cyklopa-z-chlodni', 'Oko Cyklopa z Chłodni', 14, 'Jedno oko, zero litości, temperatura minus dwadzieścia.']] },
   { fam: 'unik', k: 'evade', fmt: v => `+${v}% uniku`, lv: [
-    ['slieskie-nozki', 'Śliskie Nóżki', 2, 'Posmarowane tłuszczem po wczorajszym rosole.'],
-    ['nogi-akrobaty', 'Nogi Akrobaty', 4, 'Cyrk wyjechał, nogi zostały.'],
+    ['slieskie-nozki', 'Śliskie Nóżki', 1, 'Posmarowane tłuszczem po wczorajszym rosole.'],
+    ['nogi-akrobaty', 'Nogi Akrobaty', 2, 'Cyrk wyjechał, nogi zostały.'],
     ['zwinne-nogi', 'Zwinne Nogi', 6, 'Kto biega, ten się nie gotuje.'],
     ['cien-skrzydla', 'Cień Skrzydła', 10, 'Nie widać go nawet po fakcie.']] },
   { fam: 'regeneracja', k: 'regen', fmt: v => `+${tenths(v)} Regeneracji / s`, lv: [
-    ['sloma-z-wczoraj', 'Słoma z Wczoraj', 5, 'Trochę wilgotna, ale własna.'],
-    ['gniazdko-z-siana', 'Gniazdko z Siana', 12, 'Siano pachnie latem, którego tu nie było.'],
+    ['sloma-z-wczoraj', 'Słoma z Wczoraj', 2, 'Trochę wilgotna, ale własna.'],
+    ['gniazdko-z-siana', 'Gniazdko z Siana', 7, 'Siano pachnie latem, którego tu nie było.'],
     ['cieple-gniazdko', 'Ciepłe Gniazdko', 20, 'Nawet w fabryce znajdzie się kąt na drzemkę.'],
     ['wieczny-ogien-kuchenki', 'Wieczny Ogień Kuchenki', 35, 'Nikt nie pamięta, kto go zapalił. Nikt go nie gasi.']] },
   { fam: 'szczescie', k: 'luck', fmt: v => `+${v} Szczęścia (lepsze kafelki w ofertach)`, lv: [
-    ['trojlistna-koniczyna', 'Trójlistna Koniczyna', 3, 'Zwykła, ale ktoś ją pogłaskał.'],
-    ['koniczyna-z-kapliczki', 'Koniczyna z Kapliczki', 6, 'Wyrosła pod figurką świętego Rosołu.'],
+    ['trojlistna-koniczyna', 'Trójlistna Koniczyna', 1, 'Zwykła, ale ktoś ją pogłaskał.'],
+    ['koniczyna-z-kapliczki', 'Koniczyna z Kapliczki', 3, 'Wyrosła pod figurką świętego Rosołu.'],
     ['czterolistna-koniczyna', 'Czterolistna Koniczyna', 10, 'Rzadkie jak kurczak, który wraca z ubojni.'],
     ['piecio-koniczyna-zarzadu', 'Pięciolistna Koniczyna Zarządu', 16, 'Wyhodowana na koszt akcjonariuszy. Szczęście wypłacane w ratach.']] },
 ];
