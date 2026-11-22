@@ -408,3 +408,69 @@ export function garnekMods(level) {
 export const RARITY_WEIGHTS = [[70, 25, 5, 0], [50, 35, 13, 2], [35, 38, 22, 5]];
 // Wagi typów kafelków w ofercie.
 export const TYPE_WEIGHTS = { stat: 40, skill: 20, item: 25, risk: 15 };
+
+// ---------- Osiągnięcia ----------
+// g = grupa (kolor medalu), s = symbol na medalu, secret = nazwa i opis ukryte do zdobycia. Warunki: achievements.js (tylko serwer).
+export const ACH_GROUPS = { win: { name: 'Zwycięstwa', color: '#f0b429' }, style: { name: 'Styl gry', color: '#4db6ff' }, fight: { name: 'Walka', color: '#ef6a4a' }, coll: { name: 'Kolekcja', color: '#7bd88f' }, meta: { name: 'Droga kurczaka', color: '#c792ea' } };
+export const ACHIEVEMENTS = [
+  // zwycięstwa
+  { id: 'a-wygrana', g: 'win', s: '★', name: 'Pierwsza Zupa', text: 'Wygraj dowolny run.' },
+  { id: 'a-szybka', g: 'win', s: '⚡', name: 'Zupka Zalana', text: 'Wygraj tryb Zupka Chińska.' },
+  { id: 'a-babcia', g: 'win', s: '♛', name: 'Babcia Przytakuje', text: 'Wygraj tryb Bulion Babci.' },
+  { id: 'a-g1', g: 'win', s: '♨', name: 'Ciepło, ciepło', text: 'Wygraj run na palniku 1 lub wyższym.' },
+  { id: 'a-g2', g: 'win', s: '♨', name: 'Gazówka Dzwoni', text: 'Wygraj run na palniku 2 lub wyższym.' },
+  { id: 'a-g3', g: 'win', s: '♨', name: 'Piec Nie Prosi', text: 'Wygraj run na palniku 3 lub wyższym.' },
+  { id: 'a-g4', g: 'win', s: '♨', name: 'Kuźnia Rosołu', text: 'Wygraj run na palniku 4 lub wyższym.' },
+  { id: 'a-g5', g: 'win', s: '☠', name: 'Wulkaniczny Kurczak', text: 'Wygraj run na najwyższym palniku.' },
+  { id: 'a-pyrtek', g: 'win', s: '✦', name: 'Pyrtek w Garnku', text: 'Wygraj run Pyrtkiem.' },
+  { id: 'a-kwoka', g: 'win', s: '✦', name: 'Babcia Nie Ustępuje', text: 'Wygraj run Kwoką Babcią.' },
+  { id: 'a-kaczor', g: 'win', s: '✦', name: 'Szczęśliwa Kaczka', text: 'Wygraj run Kaczorem Hazardzistą.' },
+  { id: 'a-indor', g: 'win', s: '✦', name: 'Bogdan Rozdaje Karty', text: 'Wygraj run Indorem Bogdanem.' },
+  { id: 'a-zjarany', g: 'win', s: '✦', name: 'Dym Nad Garnkiem', text: 'Wygraj run Zjaranym Kurczakiem.', secret: true },
+  { id: 'a-zagroda', g: 'win', s: '♛', name: 'Cała Zagroda', text: 'Wygraj runy wszystkimi postaciami.' },
+  // styl gry
+  { id: 'a-bez-synergii', g: 'style', s: '○', name: 'Solista', text: 'Wygraj run bez żadnego aktywnego zestawu (synergii).' },
+  { id: 'a-bez-zakupow', g: 'style', s: '○', name: 'Skąpiec', text: 'Wygraj run bez dokupowania kafelków.' },
+  { id: 'a-bez-rerolli', g: 'style', s: '○', name: 'Nie Zmieniam Zdania', text: 'Wygraj run bez ani jednego rerolla.' },
+  { id: 'a-bez-odpoczynku', g: 'style', s: '○', name: 'Twardy Kurczak', text: 'Wygraj run bez Odpoczynku.' },
+  { id: 'a-bez-umiejetnosci', g: 'style', s: '○', name: 'Dziób Goły', text: 'Wygraj run, w którym nie użyłeś żadnej umiejętności w walce.' },
+  { id: 'a-pusty-portfel', g: 'style', s: '○', name: 'Wydałem Wszystko', text: 'Wygraj run z 0 Ziaren w kieszeni.' },
+  { id: 'a-skarbnik', g: 'style', s: '◎', name: 'Skarbnik Fabryki', text: 'Miej 200 Ziaren naraz.' },
+  { id: 'a-lombard', g: 'style', s: '◎', name: 'Stały Klient Lisa', text: 'Zastaw kafelek w Lombardzie 3 razy w jednym runie.' },
+  { id: 'a-mutant', g: 'style', s: '◎', name: 'Mutant', text: 'Zmutuj umiejętność (trzecia kopia).' },
+  { id: 'a-trzy-mutacje', g: 'style', s: '◎', name: 'Trzy Mutacje, Jeden Kurczak', text: 'Zmutuj trzy umiejętności w jednym runie.' },
+  { id: 'a-odznaki', g: 'style', s: '◎', name: 'Pracownik Miesiąca', text: 'Zdobądź 6 Odznak w jednym runie.' },
+  { id: 'a-rozwidlenia', g: 'style', s: '◎', name: 'Tylko Dla Personelu', text: 'Wybierz ryzykowne drzwi w 3 rozwidleniach w jednym runie.' },
+  // walka
+  { id: 'a-sekunda', g: 'fight', s: '⚡', name: 'Mgnienie Dzioba', text: 'Wygraj walkę w mniej niż sekundę.' },
+  { id: 'a-minuta', g: 'fight', s: '⌛', name: 'Długa Zupa', text: 'Wygraj walkę, która trwała dłużej niż 60 sekund.' },
+  { id: 'a-wlosek', g: 'fight', s: '✚', name: 'Na Włosku', text: 'Wygraj walkę, kończąc ją z mniej niż 10% życia.' },
+  { id: 'a-bez-zadrapania', g: 'fight', s: '✚', name: 'Bez Zadrapania', text: 'Wygraj walkę, nie tracąc ani punktu życia.' },
+  { id: 'a-nietykalny', g: 'fight', s: '✚', name: 'Nietykalny', text: 'Wygraj 10 walk w jednym runie, nie tracąc życia.' },
+  { id: 'a-boss-czysto', g: 'fight', s: '☠', name: 'Boss Bez Ran', text: 'Pokonaj bossa, nie tracąc życia.' },
+  { id: 'a-seria', g: 'fight', s: '⚔', name: 'Gdakacz', text: 'Odpal Pełną Kurzą Serię (3 różne umiejętności w Oknie Gdakania).' },
+  { id: 'a-trzy-serie', g: 'fight', s: '⚔', name: 'Chór Gdakaczy', text: 'Odpal 3 Pełne Kurze Serie w jednej walce.' },
+  { id: 'a-mocarz', g: 'fight', s: '✹', name: 'Mocarz', text: 'Zadaj jednym trafieniem 300 obrażeń.' },
+  { id: 'a-mocarz2', g: 'fight', s: '✹', name: 'Dziobnięcie Stulecia', text: 'Zadaj jednym trafieniem 1000 obrażeń.' },
+  { id: 'a-reakcja', g: 'fight', s: '❄', name: 'Młody Chemik', text: 'Wywołaj dowolną Reakcję.' },
+  { id: 'a-brojler', g: 'fight', s: '☠', name: 'Koniec Brojlera', text: 'Pokonaj Brojlera Zdzisława.' },
+  { id: 'a-skubarka', g: 'fight', s: '☠', name: 'Skubarka Skubana', text: 'Pokonaj Skubarkę 3000.' },
+  { id: 'a-prezes', g: 'fight', s: '☠', name: 'Wypowiedzenie dla Prezesa', text: 'Pokonaj Prezesa Rosołu.' },
+  { id: 'a-nemezis', g: 'fight', s: '☠', name: 'Zemsta Smakuje Najlepiej', text: 'Pokonaj swojego Nemezis.' },
+  { id: 'a-nemezis5', g: 'fight', s: '☠', name: 'Seryjny Zemściciel', text: 'Pokonaj 5 Nemezis.' },
+  // kolekcja
+  { id: 'a-wylegarnia', g: 'coll', s: '✿', name: 'Hodowca', text: 'Wyklu legendarny przedmiot w Wylęgarni.' },
+  { id: 'a-wylegarnia-all', g: 'coll', s: '✿', name: 'Wylęgarnia Pełna', text: 'Odkryj wszystkie przepisy Wylęgarni.' },
+  { id: 'a-reakcje-all', g: 'coll', s: '❄', name: 'Mistrz Reakcji', text: 'Odkryj wszystkie Reakcje.' },
+  { id: 'a-kolekcjoner', g: 'coll', s: '▣', name: 'Kolekcjoner', text: 'Poznaj 40 różnych kafelków.' },
+  { id: 'a-zbieracz', g: 'coll', s: '▣', name: 'Kurnikowa Encyklopedia', text: 'Poznaj wszystkie kafelki.' },
+  { id: 'a-wszystkie-postacie', g: 'coll', s: '▣', name: 'Pełen Kurnik', text: 'Odblokuj wszystkie postacie.' },
+  // droga kurczaka
+  { id: 'a-pierwszy', g: 'meta', s: '●', name: 'Pierwsze Piętro', text: 'Zakończ pierwszy run.' },
+  { id: 'a-wytrwaly', g: 'meta', s: '●', name: 'Wytrwały', text: 'Przegraj 5 runów (i się nie poddawaj).' },
+  { id: 'a-weteran', g: 'meta', s: '●', name: 'Weteran Fabryki', text: 'Zakończ 10 runów.' },
+  { id: 'a-staly', g: 'meta', s: '●', name: 'Stały Bywalec', text: 'Zakończ 25 runów.' },
+  { id: 'a-rekord', g: 'meta', s: '♛', name: 'Rekordzista', text: 'Zdobądź 20 000 punktów w jednym runie.' },
+  { id: 'a-pelna-gra', g: 'meta', s: '♛', name: 'Szef Kuchni', text: 'Osiągnij 100% ukończenia gry w profilu.', secret: true },
+];
+export const ACH_BY_ID = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, a]));

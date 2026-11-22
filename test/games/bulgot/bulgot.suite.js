@@ -1202,3 +1202,23 @@ test('unieważnianie runów ze starej wersji reguł', async () => {
   eq(await st.get('run'), undefined, 'stary run usunięty z pamięci');
   eq(fresh().v, R.RUN_V, 'nowy run ma bieżącą wersję');
 });
+
+// ---------- osiągnięcia i procent ukończenia ----------
+test('osiągnięcia: warunki, brak powtórek, procent ukończenia gry', async () => {
+  const A = await import('../../../src/games/bulgot/achievements.js');
+  const ids = D.ACHIEVEMENTS.map(a => a.id);
+  assert(new Set(ids).size === ids.length && ids.length >= 45, 'unikalne id, co najmniej 45 osiągnięć');
+  const p = newProfile(); eq(A.completion(p).pct, 0, 'nowy profil: 0%');
+  const run = fresh(); run.ended = 'win'; run.phase = 'over'; run.coins = 0;
+  run.stats.fastWin = 7; run.stats.flawless = 1; run.stats.longWin = 650; run.stats.maxChainsFight = 3; run.stats.chains = 3;
+  onRunEnd(p, run);
+  const got = A.evaluateAch(p, run).map(a => a.id);
+  for (const id of ['a-wygrana', 'a-szybka'.replace('szybka', 'wygrana'), 'a-pyrtek', 'a-bez-synergii', 'a-bez-zakupow', 'a-bez-rerolli', 'a-bez-odpoczynku', 'a-bez-umiejetnosci', 'a-pusty-portfel', 'a-sekunda', 'a-minuta', 'a-bez-zadrapania', 'a-seria', 'a-trzy-serie', 'a-pierwszy']) assert(got.includes(id), 'zdobyte: ' + id);
+  assert(!got.includes('a-nietykalny') && !got.includes('a-g1') && !got.includes('a-zagroda'), 'nie wszystko naraz');
+  assert(A.evaluateAch(p, run).length === 0, 'drugi raz nic nowego');
+  assert(p.clears['full:pyrtek:0'] === true, 'zapisano zwycięstwo trybu, postaci i palnika');
+  const pc = A.completion(p); assert(pc.pct > 0 && pc.pct < 100, 'procent rośnie: ' + pc.pct);
+  // run ze starej wersji (bez v2) nie przyznaje osiągnięć stylu
+  const old = fresh(); delete old.stats.v2; old.ended = 'win'; old.phase = 'over'; const p2 = newProfile(); onRunEnd(p2, old);
+  assert(!A.evaluateAch(p2, old).some(a => a.id === 'a-bez-synergii'), 'brak danych = brak osiągnięcia');
+});

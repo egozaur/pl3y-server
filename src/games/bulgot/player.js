@@ -6,7 +6,7 @@
 // Odpowiedź: { ok, profile, run, ...wynik akcji } albo { err, code } z kodem 400/409.
 import { mix, hash } from './rng.js';
 import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, swapSkills, view, statsOf, pawn, redeem, willOptions, RUN_V } from './rules.js';
-import { newProfile, poolFor, evaluate, onBossKill, onRunEnd, onNemesisBeaten, markSeen, publicProfile } from './profile.js';
+import { newProfile, poolFor, evaluate, evaluateAchievements, onBossKill, onRunEnd, onNemesisBeaten, markSeen, publicProfile } from './profile.js';
 import { MODES, CHARS, TILE_BY_ID } from './data.js';
 
 export class BgPlayer {
@@ -102,6 +102,7 @@ export class BgPlayer {
       if (run.phase === 'over' && !wasOver) {
         const end = onRunEnd(profile, run);
         fresh.push(...evaluate(profile, run));
+        extra.ach = evaluateAchievements(profile, run).map(a => ({ id: a.id, name: a.name, text: a.text, g: a.g, s: a.s, secret: !!a.secret }));
         extra.end = { ...end, score: run.score, rounds: run.done, ended: run.ended };
         await this.saveHistory(st, pl, run, path === 'abandon');
         if (run.done > 0 && this.env && this.env.BG_RANKS) {

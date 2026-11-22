@@ -2,9 +2,11 @@
 // Czyste funkcje na obiekcie `profile`; zapis robi BgPlayer.
 import { STARTER_TILES, UNLOCKS, UNLOCK_BY_ID, MODES, RULES } from './data.js';
 import { nemesisName } from './rules.js';
+import { evaluateAch, completion } from './achievements.js';
+import { ACHIEVEMENTS } from './data.js';
 
 export function newProfile() {
-  return { v: 1, chars: ['pyrtek'], tiles: [], garnek: 0, best: {}, counters: { runs: 0, wins: 0, fox: 0 }, bosses: {}, flags: {}, seen: [], unlocked: [] };
+  return { v: 1, chars: ['pyrtek'], tiles: [], garnek: 0, best: {}, counters: { runs: 0, wins: 0, fox: 0 }, bosses: {}, flags: {}, seen: [], unlocked: [], ach: [], clears: {} };
 }
 
 // Pula kafelków dostępnych w nowym runie.
@@ -68,6 +70,7 @@ export function onRunEnd(p, r) {
     p.counters.wins++;
     if (r.mode === 'full') p.flags.winFull = true;
     if (r.mode === 'quick') p.flags.winQuick = true;
+    p.clears = p.clears || {}; p.clears[r.mode + ':' + r.char + ':' + (r.garnek | 0)] = true;
   } else if (r.coins > 30) p.flags.loseRich = true;
   // Awans Wroga: wróg, który zakończył run, zostaje Nemezis (a Nemezis, który wygrał znowu, awansuje wyżej).
   if (!win && r.killer) {
@@ -83,13 +86,16 @@ export function onRunEnd(p, r) {
   return { newBest, garnekUnlocked };
 }
 
+// Osiągnięcia sprawdzane po zakończeniu runu (profil już zaktualizowany przez onRunEnd). Zwraca świeżo zdobyte.
+export const evaluateAchievements = (p, r) => evaluateAch(p, r);
+
 export function markSeen(p, ids) { for (const id of ids) if (!p.seen.includes(id)) p.seen.push(id); }
 
 // Publiczny widok profilu (dla klienta).
 export function publicProfile(p) {
   return {
     nick: p.nick, avatar: p.avatar || 0, chars: p.chars, tiles: p.tiles, garnek: p.garnek, best: p.best,
-    counters: p.counters, bosses: p.bosses, seen: p.seen, unlocked: p.unlocked, recipes: p.recipes || [], reactions: p.reactions || [],
+    counters: p.counters, bosses: p.bosses, seen: p.seen, unlocked: p.unlocked, ach: p.ach || [], clears: p.clears || {}, completion: completion(p), recipes: p.recipes || [], reactions: p.reactions || [],
     nemesis: p.nemesis ? { ...p.nemesis, name: nemesisName(p.nemesis) } : null, will: p.will || null,
     // Ukryte odblokowania (secret) nie zdradzają warunku, dopóki gracz ich nie zdobędzie.
     locks: UNLOCKS.filter(u => !p.unlocked.includes(u.id)).map(u => ({ id: u.id, kind: u.kind, target: u.target, secret: !!u.secret, text: u.secret ? '???' : u.text })),

@@ -3,7 +3,7 @@
 // Każda funkcja zwraca { ok: true, ... } albo { err, code }. Stan zapisuje i autoryzuje BgPlayer (player.js).
 import { mix, hash, makeRng } from './rng.js';
 import { RECIPES, BADGES, BADGE_OFFER, BADGE_POOL, AFFIXES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, FLOOR_TPL, RARITY_WEIGHTS, TYPE_WEIGHTS, DECREES, FLAWS, NEMESIS_TITLES, NEMESIS_NAMES, garnekMods, formFor } from './data.js';
-import { heroStats } from './stats.js';
+import { heroStats, setCounts } from './stats.js';
 import { runFight } from './sim.js';
 
 const fl = Math.floor;
@@ -44,7 +44,7 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null
     hp: 1, coins: ch.coins, tiles: [], skills: ch.startSkills.map(([id, lvl]) => ({ id, lvl })), offer: [], rerolls: 0, paid: 0, freeLeft: ch.freeRerolls,
     pending: null, rested: false, pool: pool.slice(), badges: [], started: now, ended: null, score: 0, timeBonus: 0, done: 0,
     flags: { bonusAtk: 0, bossHpBonus: 0, revived: false },
-    stats: { riskPicks: 0, fox: 0, maxCoins: ch.coins, maxHit: 0, lowWin: false, maxRound: 1, bossKills: [], picks: 0, rerolls: 0 },
+    stats: { riskPicks: 0, fox: 0, maxCoins: ch.coins, maxHit: 0, lowWin: false, maxRound: 1, bossKills: [], picks: 0, rerolls: 0, v2: 1, syn: false, rests: 0, skillUses: 0, flawless: 0, bossFlawless: false, maxChainsFight: 0, longWin: 0 },
     log: [],
     grow: {}, flawed: [], flawAt: -1, pawned: null, foxDebt: 0, door: null, nemesis: null, will: null, willUsed: false,
   };
@@ -327,7 +327,7 @@ export function rest(run) {
   setCoins(run, run.coins - rc);
   const before = run.hp;
   run.hp = Math.min(S.maxHp, run.hp + Math.max(1, fl(S.maxHp * restPctOf(run, S) / 100)));
-  run.rested = true; cur(run).rested = (cur(run).rested || 0) + (run.hp - before);
+  run.rested = true; cur(run).rested = (cur(run).rested || 0) + (run.hp - before); run.stats.rests = (run.stats.rests || 0) + 1;
   return { ok: true, healed: run.hp - before, cost: rc };
 }
 
@@ -606,6 +606,16 @@ export function fightFinish(run, inputs) {
   for (const w of (run.flawed || [])) if (!w.on) { w.on = true; revealed.push({ id: w.id, flaw: w.flaw }); }
   run.stats.reactions = [...new Set([...(run.stats.reactions || []), ...(res.reactSeen || [])])];
   run.stats.chains = (run.stats.chains || 0) + (res.chains || 0);
+  if (run.stats.v2) {
+    run.stats.skillUses = (run.stats.skillUses || 0) + (res.skillsUsed || 0);
+    if ((res.chains || 0) > (run.stats.maxChainsFight || 0)) run.stats.maxChainsFight = res.chains;
+    if (Object.values(setCounts(run.tiles)).some(n => n >= 2)) run.stats.syn = true;
+    if (res.win) {
+      if (res.ticks > (run.stats.longWin || 0)) run.stats.longWin = res.ticks;
+      if (run.stats.fastWin === undefined || res.ticks < run.stats.fastWin) run.stats.fastWin = res.ticks;
+      if (res.taken === 0) { run.stats.flawless = (run.stats.flawless || 0) + 1; if (setup.boss) run.stats.bossFlawless = true; }
+    }
+  }
   if (setup.boss && run.flags.bossHpBonus) run.flags.bossHpBonus = 0;
   if (res.maxHit > run.stats.maxHit) run.stats.maxHit = res.maxHit;
   run.hp = res.hp;
