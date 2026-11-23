@@ -57,7 +57,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 16;
+export const RUN_V = 17;
 
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null, curses = [], kurnik = {} }) {
   const M = MODES[mode], ch = CHARS[char];
@@ -484,7 +484,7 @@ export function shopBuy(run, i, slot, mut) {
   if (i === -1) { enterFight(run); return { ok: true, left: true }; }
   const t = TILE_BY_ID[run.pending.offer[i]];
   if (!t) return fail('Nie ma takiego towaru.', 'index');
-  const price = shopPrice(t, run);
+  const price = Math.max(1, Math.ceil(shopPrice(t, run) * RULES.shopPct / 100));   // Sklepik Babci Kwoki: 60% zwykłej ceny
   if (run.coins < price) return fail('Babcia mówi: bez ziarna nie ma rozmowy.', 'coins');
   const e = applyTile(run, t, slot, mut);
   if (e) return e;
@@ -499,7 +499,7 @@ export function bet(run, amount) {
   const a = Math.max(0, Math.min(run.coins, amount | 0));
   let won = null;
   if (a > 0) {
-    won = makeRng(mix(run.seed, run.round, hash('bet'))).int(100) < 50;
+    won = makeRng(mix(run.seed, run.round, hash('bet'))).int(100) < RULES.betPct;
     setCoins(run, run.coins + (won ? a : -a));
   }
   cur(run).bet = a ? { amount: a, won } : null;
@@ -887,7 +887,7 @@ export function fightFinish(run, inputs) {
   // Kafelki rosnące.
   const gw = (id, n, why) => { if (n > 0 && run.tiles.includes(id)) { const t = TILE_BY_ID[id]; const v = Math.min(t.grow.max, (run.grow[id] || 0) + n); if (v !== (run.grow[id] || 0)) { run.grow[id] = v; (out.grew = out.grew || []).push(id); } } };
   run.grow = run.grow || {};
-  gw('pierze-weterana', res.lowest * 100 < S.maxHp * 40 ? 1 : 0);
+  gw('pierze-weterana', res.lowest * 100 < S.maxHp * 60 ? 1 : 0);
   gw('trofeum-z-pior', Math.min(4, res.kills));
   gw('skarbonka-piskleca', run.rested ? 0 : 1);
   // Jajko Dinozaura: po 5 wygranych piętrach wykluwa się Dinozaur

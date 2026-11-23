@@ -85,7 +85,7 @@ export function limitKind(method, path) {
   if (path === '/api/pl/admin-reset') return 'admin';
   if (path.startsWith('/api/pl/')) return 'read';
   if (path === '/api/bg/ranks' || path === '/api/bg/daily') return 'read';
-  if (path === '/api/bg/analysis' || path === '/api/bg/analysis-del') return 'admin';
+  if (path === '/api/bg/analysis' || path === '/api/bg/analysis-del' || path === '/api/bg/admin-grant') return 'admin';
   if (path.startsWith('/api/bg/')) return 'bg';
   if (path === '/api/wd/guess') return 'guess';
   if (path.startsWith('/api/wd/')) return 'read';
@@ -130,6 +130,20 @@ export default {
       if (req.method === 'GET') return jres(await (await stub.fetch('https://bg/analysis-list')).json());
       const b = await readJson(req, 20000);
       return jres(await (await stub.fetch('https://bg/analysis-del', { method: 'POST', body: JSON.stringify({ ids: b && b.ids }) })).json());
+    }
+
+    // Admin: odblokowanie wszystkich postaci i palników graczowi o podanym nicku ({nick}); tak samo chroniony X-Admin-Key.
+    if (url.pathname === '/api/bg/admin-grant' && req.method === 'POST') {
+      const key = req.headers.get('X-Admin-Key') || '';
+      if (!env.BG_ADMIN_KEY || key.length !== env.BG_ADMIN_KEY.length || !sameKey(key, env.BG_ADMIN_KEY)) return jres({ err: 'Brak dostępu.', code: 'admin' }, 403);
+      const b = await readJson(req, 500), nn = b && normNick(b.nick);
+      if (!nn) return jres({ err: 'Zły nick.', code: 'nick' }, 400);
+      const r = await playersCall(env, '/get', { n: nn.n });
+      if (r.status !== 200) return jres({ err: 'Nie ma takiego gracza.', code: 'none' }, 404);
+      const stub = env.BG_PLAYERS.get(env.BG_PLAYERS.idFromName(nn.n));
+      const res = await stub.fetch('https://bg/admin-grant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pl: { n: nn.n, nick: r.body.nick, avatar: r.body.avatar } }) });
+      const out = await res.json();
+      return jres({ ok: !!out.ok, nick: r.body.nick, granted: out.granted });
     }
 
     if (url.pathname === '/api/auth/login' && req.method === 'POST') {

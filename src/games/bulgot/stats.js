@@ -75,7 +75,7 @@ export function heroStats(loadout, opt = {}) {
     const pct = 8 * Math.floor((loadout.coins || 0) / 10);
     add('atkPct', (sc.zbozowe || 0) >= 3 ? pct : Math.min(40, pct));
   }
-  if (has('siewnik')) add('atkFlat', loadout.bonusAtk || 0);
+  if (has('siewnik')) add('atkFlat', Math.ceil((loadout.bonusAtk || 0) / 2));
   if (has('kura-nioska')) add('coinFlat', Math.min(4, sc.jajeczne || 0));   // Kura Nioska: +1 Ziarno za każdy przedmiot Jajeczny (maks. 4)
   // Powiązania zestawów i żywiołów (SET_LINKS): konflikty i synergie.
   const lk = {}; for (const l of activeLinks(ids, loadout.skills, sc)) if (l.on && !ch.noSets) lk[l.id] = true;
@@ -101,7 +101,7 @@ export function heroStats(loadout, opt = {}) {
   if (kp >= 3) add('buyDisc', 25);
   if (kp >= 4) add('interest', 10);
   // progi 4 i 6 pozostałych zestawów oraz Nadwyżka (każda sztuka ponad 4)
-  if (zb >= 4 && has('siewnik')) add('atkFlat', loadout.bonusAtk || 0);
+  if (zb >= 4 && has('siewnik')) add('atkFlat', Math.ceil((loadout.bonusAtk || 0) / 2));
   if (zb >= 6) add('hpPct', Math.min(30, 2 * Math.floor((loadout.coins || 0) / 10)));
   if (rb >= 4) { add('crit', 10); add('okrzykN', 1); }
   if (rb >= 6) add('volley', 1);

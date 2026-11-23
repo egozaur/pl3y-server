@@ -19,6 +19,7 @@ D.RULES.lootChance = 100;   // w testach łup z bossa wypada zawsze (osobny test
 const EXTRA_FULL = { ...D.EXTRA_AT };
 for (const k of Object.keys(D.EXTRA_AT)) delete D.EXTRA_AT[k];   // dodatkowe rundy (Gruszka, Pipsztal) mają własne testy; w pozostałych wyłączone
 const withExtras = fn => () => { Object.assign(D.EXTRA_AT, EXTRA_FULL); try { return fn(); } finally { for (const k of Object.keys(D.EXTRA_AT)) delete D.EXTRA_AT[k]; } };
+const PYRTEK_FX = D.CHARS.pyrtek.fx; D.CHARS.pyrtek.fx = [];   // w testach Pyrtek to neutralny wzorzec (70/8/100); jego prawdziwy bonus z audytu sprawdza osobny test
 export const bgTests = [];
 const test = (name, fn) => bgTests.push({ name: 'bulgot: ' + name, fn });
 function assert(c, msg) { if (!c) throw new Error('Asercja: ' + (msg || '')); }
@@ -114,20 +115,20 @@ test('statystyki: baza, kafelki, procenty, zestawy, Worek, Zakazana Pasza, wył�
   S = heroStats(loadout({ tiles: ['ziarno-mocy', 'ziarno-mocy', 'twardy-grzebien', 'szybki-dziob', 'pancerz-z-pierza'] }));
   eq([S.atk, S.maxHp, S.aspd, S.armor], [12, B.hp + 16, 124, 11], 'płaskie i procentowe');
   S = heroStats(loadout({ tiles: ['pakt-z-lisem'] }));
-  eq([S.atk, S.maxHp], [Math.floor(8 * 150 / 100), Math.floor(B.hp * 70 / 100)], 'Pakt z Lisem');
+  eq([S.atk, S.maxHp], [Math.floor(8 * 150 / 100), Math.floor(B.hp * 75 / 100)], 'Pakt z Lisem');
   S = heroStats(loadout({ tiles: ['opaska-rambo', 'ostrogi-bojowe'] }));
-  eq([S.atk, S.dmg, S.bleed, S.crit], [Math.round(8 * 120 / 100), 15, 4, 15], 'zestaw Rambo x2: +20% Ataku');
+  eq([S.atk, S.dmg, S.bleed, S.crit], [Math.round(8 * 120 / 100), 15, 1, 15], 'zestaw Rambo x2: +20% Ataku');
   assert(!S.okrzyk && heroStats(loadout({ tiles: ['opaska-rambo', 'ostrogi-bojowe', 'kamizelka-kuloodporna'] })).okrzyk, 'Ostatni Okrzyk od 3 przedmiotów');
   S = heroStats(loadout({ tiles: ['tykajace-jajo'] })); eq([S.egg, S.eggHeal], [80, 0], 'jajo co 8 s');
   S = heroStats(loadout({ tiles: ['tykajace-jajo', 'zlote-jajo', 'gniazdo-zapasowe'] })); eq([S.egg, S.eggHeal, S.revive], [60, 3, true], 'zestaw Jajeczne');
   S = heroStats(loadout({ tiles: ['worek-kukurydzy'], coins: 30 })); eq(S.atk, Math.round(8 * 124 / 100), 'Worek: +8% za każde 10 Ziaren');
   S = heroStats(loadout({ tiles: ['worek-kukurydzy'], coins: 200 })); eq(S.atk, Math.floor(8 * 140 / 100), 'Worek: limit +40%');
   S = heroStats(loadout({ tiles: ['worek-kukurydzy', 'mlocarnia', 'siewnik'], coins: 200 })); assert(S.atk > Math.floor(8 * 140 / 100), 'trzy Zbożowe zdejmują limit');
-  S = heroStats(loadout({ tiles: ['zakazana-pasza'] })); eq([S.atk, S.maxHp, S.aspd], [9, 78, 112], 'Zakazana Pasza +12% wszystkiego');
+  S = heroStats(loadout({ tiles: ['zakazana-pasza'] })); eq([S.atk, S.maxHp, S.aspd], [9, 76, 109], 'Zakazana Pasza +9% wszystkiego');
   S = heroStats(loadout({ tiles: ['czujne-oko', 'ziarno-mocy'] }), { off: 1 }); eq(S.atk, 8, 'wyłączony kafelek (Skubanie) nie liczy się');
   S = heroStats(loadout({ tiles: ['czujne-oko'].concat(Array(20).fill('czujne-oko')) })); eq(S.crit, 100, 'krytyk ma sufit 100%');
   S = heroStats(loadout({ tiles: ['cieple-gniazdko'], noRegen: true })); eq(S.regen, 5, 'Wulkan: regeneracja o połowę słabsza');
-  S = heroStats(loadout({ char: 'kwoka' })); eq([S.maxHp, S.aspd], [Math.floor(B.hp * 120 / 100), 75], 'Kwoka');
+  S = heroStats(loadout({ char: 'kwoka' })); eq([S.maxHp, S.aspd], [Math.floor(B.hp * 112 / 100), 75], 'Kwoka');
   S = heroStats(loadout({ char: 'indor' })); eq([S.atk, S.aspd, S.crit], [Math.floor(8 * 160 / 100), 70, 15], 'Indor');
 });
 
@@ -209,7 +210,7 @@ test('walka: Tykające Jajo, krwawienie, Młocarnia, Gniazdo Zapasowe, Ostatni O
   let a = play(setup({ lo: { tiles: ['tykajace-jajo'] }, enemies: [foe({ hp: 100000, atk: 1, aspd: 20 })] }));
   assert(evs(a.ev, 'egg').length >= 10 && evs(a.ev, 'hit').some(e => e.kind === 'egg'), 'jajo wybucha co 8 s');
   a = play(setup({ lo: { tiles: ['ostrogi-bojowe'] }, enemies: [foe({ hp: 100000, atk: 1, aspd: 20 })] }));
-  assert(evs(a.ev, 'hit').some(e => e.kind === 'bleed' && e.d === 4), 'krwawienie 4/s');
+  assert(evs(a.ev, 'hit').some(e => e.kind === 'bleed' && e.d === 1), 'krwawienie 1/s na stos (Ostrogi)');
   a = play(setup({ lo: { tiles: Array(8).fill('mlocarnia').slice(0, 1) }, enemies: [foe({ hp: 100000, atk: 1, aspd: 20, armor: 40 })] }));
   const dm = evs(a.ev, 'hit').filter(e => e.kind === 'atk'); assert(dm[dm.length - 1].d >= dm[0].d, 'rozbity pancerz nie zmniejsza obrażeń');
   // Gniazdo: wskrzeszenie raz
@@ -244,7 +245,7 @@ test('efekty: Oparzenie kumuluje się do limitu i bije co sekundę mimo pancerza
 
 test('Zjarany Kurczak: statystyki, Chmura Dymu co 4 s (Oparzenie i spowolnienie), inne postacie bez zmian', () => {
   const S = heroStats(loadout({ char: 'zjarany' }));
-  eq([S.atk, S.aspd, S.regen, S.burnHit, S.burnMax, S.smoke], [7, 55, 20, 30, 4, 40], 'Zjarany: statystyki');
+  eq([S.atk, S.aspd, S.regen, S.burnHit, S.burnMax, S.smoke], [7, 55, 14, 30, 4, 40], 'Zjarany: statystyki');
   eq(heroStats(loadout({ char: 'indor' })).smoke, 0, 'Indor bez Chmury');
   const f = new Fight(setup({ lo: { char: 'zjarany' }, enemies: [foe({ hp: 100000, atk: 1, aspd: 100 }), foe({ hp: 100000, atk: 1, aspd: 100 })] }));
   const smokes = []; for (let i = 0; i < 90; i++) { f.step(); for (const e of f.ev) if (e.k === 'smoke') smokes.push(f.tick - 1); }
@@ -561,12 +562,13 @@ test('run: wybór kafelka (statystyki rosną z życiem), umiejętności: sloty, 
   assert(R.pickTile(run, 0, undefined, 2).ok && run.skills[0].lvl === 3 && run.skills[0].mut === 2 && run.stats.muts === 1, 'Mutacja: gałąź 2');
   force(run, 'kukurydziany-grad'); assert(!R.makeOffer(run, 5, { size: 60 }).includes('kukurydziany-grad'), 'zmutowana nie wraca do ofert');
   assert(R.pickTile(fresh(), 9).code === 'index', 'zły indeks');
-  const pakt = fresh(); force(pakt, 'pakt-z-lisem'); R.pickTile(pakt, 0); assert(pakt.hp === Math.floor(70 * 70 / 100) && pakt.stats.fox === 1, 'Pakt zmniejsza życie od razu');
+  const pakt = fresh(); force(pakt, 'pakt-z-lisem'); R.pickTile(pakt, 0); assert(pakt.hp === Math.floor(70 * 75 / 100) && pakt.stats.fox === 1, 'Pakt zmniejsza życie od razu');
 });
 test('run: wydarzenia: Sklepik, Hazard, Skrzynka', () => {
   const s = fresh(); s.coins = 20; force(s, 'sklepik-babci-kwoki'); const r = R.pickTile(s, 0);
   assert(r.event === 'shop' && s.phase === 'event' && s.pending.offer.length === 3, 'sklepik pokazuje 3 towary');
-  const i = s.pending.offer.findIndex(id => R.shopPrice(D.TILE_BY_ID[id]) <= 20), price = R.shopPrice(D.TILE_BY_ID[s.pending.offer[i]]);
+  const sp = id => Math.max(1, Math.ceil(R.shopPrice(D.TILE_BY_ID[id]) * D.RULES.shopPct / 100));   // Sklepik Babci Kwoki: 60% ceny
+  const i = s.pending.offer.findIndex(id => sp(id) <= 20), price = sp(s.pending.offer[i]);
   const b = R.shopBuy(s, i); assert(b.ok && s.coins === 20 - price && s.phase === 'fight', 'kupiono za ' + price);
   const poor = fresh(); poor.coins = 0; force(poor, 'sklepik-babci-kwoki'); R.pickTile(poor, 0); assert(R.shopBuy(poor, 0).code === 'coins', 'bez ziarna nie ma rozmowy');
   const left = fresh(); force(left, 'sklepik-babci-kwoki'); R.pickTile(left, 0); assert(R.shopBuy(left, -1).left && left.phase === 'fight', 'można wyjść bez zakupu');
@@ -770,6 +772,17 @@ test('analiza: „Wyślij do analizy” kopiuje zakończony run do kolekcji (tyl
   const ok = await get('klucz-admina-xyz'); assert(ok.status === 200 && (await ok.json()).list.length === 1, 'z kluczem admina lista partii');
   assert((await (await get('klucz-admina-xyz', '/api/bg/analysis-del', 'POST', { ids: [id] })).json()).deleted === 1, 'usunięcie po pobraniu');
   assert((await (await get('klucz-admina-xyz')).json()).list.length === 0, 'kolekcja pusta');
+});
+
+test('admin-grant: wszystkie postacie i palniki; Worker bez klucza admina 403, a gracz nie ma tej trasy', async () => {
+  const env = mkEnv(), o = new BgPlayer({ storage: mkStorage() }, env);
+  assert((await post(o, 'state', { pl: PL })).j.profile.chars.length === 1, 'na starcie jedna postać');
+  const r = (await post(o, 'admin-grant', { pl: PL })).j;
+  assert(r.ok && r.profile.chars.length === Object.keys(D.CHARS).length && r.profile.garnek === 5 && r.granted.garnek === 5, 'wszystkie postacie i palnik 5');
+  assert(!r.profile.locks.some(l => l.kind === 'char'), 'brak zablokowanych postaci');
+  assert((await post(o, 'start', { pl: PL, mode: 'quick', char: 'zjarany', garnek: 5 })).j.ok, 'start ukrytą postacią na palniku 5');
+  const call = key => worker.fetch(new Request('https://srv/api/bg/admin-grant', { method: 'POST', body: JSON.stringify({ nick: 'Ala' }), headers: { 'CF-Connecting-IP': '10.8.' + (ipN++ % 250) + '.1', ...(key ? { 'X-Admin-Key': key } : {}) } }), env);
+  assert((await call('')).status === 403 && (await call('cokolwiek')).status === 403, 'bez klucza 403');
 });
 
 test('kolejność umiejętności: zamiana slotów przed walką, nie w trakcie walki, błędne sloty odrzucone (przez BgPlayer)', async () => {
@@ -1405,7 +1418,7 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
 });
 
 test('RUN_V = 7: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 16, 'wersja reguł');
+  eq(R.RUN_V, 17, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1534,7 +1547,7 @@ test('kafelki ryzyka etapu 3: Pożyczka (Ziarna teraz, odsetki, nie do lombardu)
   const S = ids => heroStats(loadout({ tiles: ids }));
   eq([S(['dopalacz-z-biedronki']).aspd, S(['dopalacz-z-biedronki']).maxHp], [140, Math.floor(70 * 75 / 100)], 'Dopalacz: +40% szybkości, -25% Życia');
   const ng = fresh(); ng.tiles = ['nadgodziny-bez-doplaty']; ng.hp = 10; eq(R.restPctOf(ng), 10, 'Nadgodziny: Odpoczynek leczy o połowę mniej'); eq(S(['nadgodziny-bez-doplaty']).dmg, 30, '+30% obrażeń');
-  eq([S(['dieta-cud']).armor, S(['dieta-cud']).aspd], [15, 70], 'Dieta: +15 Pancerza, -30% szybkości'); eq([S(['los-na-loterii']).luck, S(['los-na-loterii']).coinFlat], [25, -1], 'Los na Loterii');
+  eq([S(['dieta-cud']).armor, S(['dieta-cud']).aspd], [20, 75], 'Dieta: +20 Pancerza, -25% szybkości'); eq([S(['los-na-loterii']).luck, S(['los-na-loterii']).coinFlat], [25, -1], 'Los na Loterii');
 });
 
 test('legendarne przedmioty: Złoty Rosołek, Kogut Alfa, Plan B, Dziób Mistrza, Akcje Zarządu', () => {
@@ -1586,7 +1599,7 @@ test('nowe postacie: 14 postaci, każda ma blokadę i odblokowanie, tylko Zjaran
 test('memiczne kurczaki: Gigachad ma 1 slot, Pan Jajeczko 1 życie, Skibidi 2 losowe umiejętności, Krypto zmienia kurs, Sigma bez zestawów', () => {
   const start = (char, seed = 5) => R.newRun({ mode: 'quick', char, garnek: 0, pool: ALL, seed }).run;
   eq(R.maxSkillsOf(start('gigachad')), 1, 'Gigachad: 1 slot'); eq(R.maxSkillsOf(start('pyrtek')), 3, 'inni: 3 sloty');
-  eq(R.statsOf(start('jajeczko')).maxHp, 1, 'Pan Jajeczko: 1 punkt życia');
+  eq(R.statsOf(start('jajeczko')).maxHp, 3, 'Pan Jajeczko: 3 punkty życia'); assert(start('jajeczko').tiles.includes('gniazdo-zapasowe'), 'Pan Jajeczko zaczyna z Gniazdem Zapasowym');
   const sk = start('skibidi'); eq(sk.skills.length, 2, 'Skibidi: 2 umiejętności'); assert(sk.skills[0].id !== sk.skills[1].id, 'bez powtórzeń');
   eq(start('mutant').skills.length, 1, 'Mutant dalej ma 1');
   const r = start('krypto'); const hp = f => { r.done = f; return R.statsOf(r).maxHp; };
@@ -1597,12 +1610,12 @@ test('memiczne kurczaki: Gigachad ma 1 slot, Pan Jajeczko 1 życie, Skibidi 2 lo
 
 test('postacie: Barista, Gęś, Lodziarz, Pielęgniarka, Rzeźnik, Wróżka — statystyki i start', () => {
   const S = ch => heroStats(loadout({ char: ch }));
-  let s = S('barista'); eq([s.aspd, s.maxHp, s.atk], [135, 49, 7], 'Barista: +35% szybkości, -30% Życia, -10% Ataku');
+  let s = S('barista'); eq([s.aspd, s.maxHp, s.atk], [135, 52, 8], 'Barista: +35% szybkości, -25% Życia, -5% Ataku');
   const g = R.newRun({ mode: 'quick', char: 'ges', garnek: 0, pool: ALL, seed: 5 }).run; eq([g.coins, R.statsOf(g).coinFlat, R.view(g).interestMax], [15, 1, 6], 'Gęś: 15 Ziaren, +1 po rundzie, Odsetki do 6');
-  s = S('lodziarz'); eq([s.frostHit, s.frostWeak, s.aspd], [20, 10, 80], 'Lodziarz'); eq(R.newRun({ mode: 'quick', char: 'lodziarz', garnek: 0, pool: ALL, seed: 5 }).run.skills, [{ id: 'lodowy', lvl: 1 }], 'Lodziarz zaczyna z Lodowym Dziobem');
-  s = S('pielegniarka'); eq([s.regen, s.healBonus, s.atk], [12, 8, 6], 'Pielęgniarka'); eq(R.newRun({ mode: 'quick', char: 'pielegniarka', garnek: 0, pool: ALL, seed: 5 }).run.skills[0].id, 'zagrzebanie', 'zaczyna z Zagrzebaniem');
-  s = S('rzeznik'); eq([s.bleed, s.bleedMax, s.maxHp, s.atk], [1, 1, 59, 7], 'Rzeźnik'); eq(R.newRun({ mode: 'quick', char: 'rzeznik', garnek: 0, pool: ALL, seed: 5 }).run.skills[0].id, 'darcie', 'zaczyna z Darciem Pierza');
-  const w = R.newRun({ mode: 'quick', char: 'wrozka', garnek: 0, pool: ALL, seed: 5 }).run; eq([R.statsOf(w).luck, w.freeLeft, R.statsOf(w).maxHp], [20, 1, 63], 'Wróżka: 20 Szczęścia, darmowy reroll, -10% Życia');
+  s = S('lodziarz'); eq([s.frostHit, s.frostWeak, s.aspd], [15, 10, 75], 'Lodziarz'); eq(R.newRun({ mode: 'quick', char: 'lodziarz', garnek: 0, pool: ALL, seed: 5 }).run.skills, [{ id: 'lodowy', lvl: 1 }], 'Lodziarz zaczyna z Lodowym Dziobem');
+  s = S('pielegniarka'); eq([s.regen, s.healBonus, s.atk], [8, 5, 6], 'Pielęgniarka'); eq(R.newRun({ mode: 'quick', char: 'pielegniarka', garnek: 0, pool: ALL, seed: 5 }).run.skills[0].id, 'zagrzebanie', 'zaczyna z Zagrzebaniem');
+  s = S('rzeznik'); eq([s.bleed, s.bleedMax, s.maxHp, s.atk], [1, 1, 59, 8], 'Rzeźnik'); eq(R.newRun({ mode: 'quick', char: 'rzeznik', garnek: 0, pool: ALL, seed: 5 }).run.skills[0].id, 'darcie', 'zaczyna z Darciem Pierza');
+  const w = R.newRun({ mode: 'quick', char: 'wrozka', garnek: 0, pool: ALL, seed: 5 }).run; eq([R.statsOf(w).luck, w.freeLeft, R.statsOf(w).maxHp], [30, 1, 70], 'Wróżka: 30 Szczęścia, darmowy reroll, bez kary do Życia');
 });
 
 test('Kurczak Stażysta rośnie z piętrami (+5% wszystkich statystyk, maks. +35%), Mutant zaczyna z losową umiejętnością (deterministycznie), Dinozaur z Jajkiem', () => {
@@ -1613,7 +1626,7 @@ test('Kurczak Stażysta rośnie z piętrami (+5% wszystkich statystyk, maks. +35
   const m1 = R.newRun({ mode: 'quick', char: 'mutant', garnek: 0, pool: ALL, seed: 21 }).run, m2 = R.newRun({ mode: 'quick', char: 'mutant', garnek: 0, pool: ALL, seed: 21 }).run;
   eq(m1.skills, m2.skills, 'ta sama umiejętność dla tego samego ziarna'); assert(m1.skills.length === 1 && D.SKILLS[m1.skills[0].id], 'jedna losowa umiejętność');
   const kinds = new Set(); for (let sd = 1; sd < 60; sd++) kinds.add(R.newRun({ mode: 'quick', char: 'mutant', garnek: 0, pool: ALL, seed: sd }).run.skills[0].id); assert(kinds.size >= 8, 'różne umiejętności dla różnych ziaren: ' + kinds.size);
-  eq([heroStats(loadout({ char: 'mutant' })).cdPct, heroStats(loadout({ char: 'mutant' })).maxHp], [25, 56], 'Mutant: -25% cooldownu, -20% Życia');
+  eq([heroStats(loadout({ char: 'mutant' })).cdPct, heroStats(loadout({ char: 'mutant' })).maxHp], [25, 59], 'Mutant: -25% cooldownu, -15% Życia');
   const d = R.newRun({ mode: 'quick', char: 'dinozaur', garnek: 0, pool: ALL, seed: 3 }).run; eq(d.tiles, ['jajko-dinozaura'], 'Dinozaur zaczyna z Jajkiem Dinozaura'); eq(d.hp, R.statsOf(d).maxHp, 'pełne życie na start');
 });
 
@@ -1868,7 +1881,7 @@ test('Nowości: kompletność danych (klątwy, trasy, bossowie, osiągnięcia), 
   for (const id of D.SUPER_BOSSES) assert(D.BOSSES[id].super, 'super-boss ' + id);
   for (const [id, b] of Object.entries(D.KURNIK)) { assert(b.name && b.text && b.cost.length === 3 && b.cost[0] < b.cost[2], 'budynek ' + id); }
   for (const a of ['a-klatwa', 'a-klatwy3', 'a-dogrywka', 'a-dogrywka15', 'a-duch', 'a-towarzysz', 'a-trasy', 'a-kurnik', 'a-kurnik-max']) assert(D.ACH_BY_ID[a], 'osiągnięcie ' + a);
-  eq(R.RUN_V, 16, 'RUN_V 16');
+  eq(R.RUN_V, 17, 'RUN_V 17');
 });
 
 test('Jajko Dinozaura: tylko jedno na run (po wykluciu nie wraca do ofert)', () => {
@@ -2105,8 +2118,8 @@ test('etap 4: wzmocnienia: Pobudka, Echo, Przyspieszony Obieg', () => {
   const o0 = ob(0); assert(o0[1] < o0[0], 'Obieg skraca cooldown pozostałych'); const o1 = ob(1); assert(o1[1] < o0[1], 'Turbo Obieg skraca mocniej');
   const o2 = new Fight(setup({ hp: 400, lo: { skills: [{ id: 'obieg', lvl: 3, mut: 2 }] }, enemies: [foe({ hp: 1e7, atk: 1, aspd: 10 })] })); o2.hp = 50; o2.skills[0].cd = 0; o2.step([0]); assert(o2.hp > 50, 'Obieg Zamknięty leczy');
 });
-test('etap 4: RUN_V 16, nowe umiejętności trafiają do ofert', () => {
-  eq(R.RUN_V, 16, 'RUN_V');
+test('etap 4: RUN_V 17, nowe umiejętności trafiają do ofert', () => {
+  eq(R.RUN_V, 17, 'RUN_V');
   const seen = new Set();
   for (let seed = 1; seed < 300; seed++) { const r = R.newRun({ mode: 'full', char: 'pyrtek', garnek: 0, pool: ALL, seed }); const run = r.run; for (const o of (run.cur && run.cur.offer) || []) { const t = D.TILE_BY_ID[o.id || o]; if (t && t.skill && NEW20.includes(t.skill)) seen.add(t.skill); } }
   assert(seen.size >= 5, 'nowe umiejętności pojawiają się w ofertach (widziano ' + seen.size + ')');
@@ -2217,3 +2230,15 @@ test('dodatkowe rundy: Pipsztal ogłusza bohatera (bez ataków i umiejętności)
   assert(f.ev.length >= 0 && f.enemies[1].mech.includes('stunhero'), 'mechanika');
   const f2 = new Fight(su); f2.enemies[1].hp = 1; f2.heroHit(f2.enemies[1], 100, false, 'atk'); assert(f2.enemies[1].dead && f2.enemies[0].dead, 'boss pada razem z psem');
 }));
+
+test('audyt balansu (2026-11-23): Pyrtek +7%, Ostrogi i Kolczatka 1/s, Siewnik co drugą rundę, Zakazana Pasza 9%, Hazard 60%, Sklepik 60% ceny, Młocarnia +8% Ataku', () => {
+  D.CHARS.pyrtek.fx = PYRTEK_FX;
+  try { const S = heroStats(loadout({ char: 'pyrtek' })); eq([S.atk, S.maxHp], [9, 74], 'Pyrtek: +7% Ataku i Życia'); } finally { D.CHARS.pyrtek.fx = []; }
+  eq(heroStats(loadout({ tiles: ['siewnik'], bonusAtk: 5 })).atk, 11, 'Siewnik: +1 Ataku co drugą rundę (5 wygranych = +3)');
+  eq([heroStats(loadout({ tiles: ['ostrogi-bojowe'] })).bleed, heroStats(loadout({ tiles: ['kolczatka'] })).bleed], [1, 1], 'Ostrogi i Kolczatka: +1 do Krwawienia na stos');
+  eq(heroStats(loadout({ tiles: ['mlocarnia'] })).atk, 9, 'Młocarnia: +8% Ataku');
+  eq([D.RULES.betPct, D.RULES.shopPct], [60, 60], 'Hazard 60%, Sklepik 60% ceny');
+  const hits = Array.from({ length: 200 }, (_, k) => { const h = fresh({ seed: 100 + k }); h.coins = 10; force(h, 'hazard-w-kurniku'); R.pickTile(h, 0); return R.bet(h, 5).won; }).filter(Boolean).length;
+  assert(hits > 100 && hits < 140, 'rzut w Hazardzie wygrywa się w ok. 60% przypadków: ' + hits + ' / 200');
+  assert(D.TILE_BY_ID['szklane-skrzydlo'].fx[0].v === 100 && D.TILE_BY_ID['szklane-skrzydlo'].fx[1].v === -40, 'Szklane Skrzydło: +100% Ataku, -40% Życia');
+});

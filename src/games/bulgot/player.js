@@ -7,7 +7,7 @@
 import { mix, hash } from './rng.js';
 import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, swapSkills, view, statsOf, pawn, redeem, upgrade, willOptions, ghostOf, RUN_V } from './rules.js';
 import { newProfile, poolFor, evaluate, evaluateAchievements, onBossKill, onRunEnd, onNemesisBeaten, markSeen, publicProfile, kurnikBuy, levelChoose, shopBuyItem, wearItem, takeBuffs, dailyKey, dailyOf, dailyView } from './profile.js';
-import { MODES, CHARS, TILE_BY_ID, UNLOCK_BY_ID, STARTER_TILES, CASINO_REROLLS } from './data.js';
+import { MODES, CHARS, UNLOCKS, TILE_BY_ID, UNLOCK_BY_ID, STARTER_TILES, CASINO_REROLLS } from './data.js';
 
 export class BgPlayer {
   constructor(ctx, env, now = () => Date.now()) { this.ctx = ctx; this.env = env; this.now = now; this.chain = Promise.resolve(); }
@@ -128,6 +128,13 @@ export class BgPlayer {
           if (!profile.chars.includes(u.target)) profile.chars.push(u.target);
           extra.unlocks = [{ id: u.id, kind: u.kind, target: u.target, text: u.text }];
         }
+        break;
+      }
+      case 'admin-grant': {   // tylko z Workera (nagłówek X-Admin-Key), nie z listy tras gracza: wszystkie postacie i palniki
+        for (const id of Object.keys(CHARS)) if (!profile.chars.includes(id)) profile.chars.push(id);
+        for (const u of UNLOCKS) if (u.kind === 'char' && !profile.unlocked.includes(u.id)) profile.unlocked.push(u.id);
+        profile.garnek = 5;
+        extra.granted = { chars: profile.chars.length, garnek: profile.garnek };
         break;
       }
       case 'history': break;
