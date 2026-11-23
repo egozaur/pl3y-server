@@ -8,6 +8,7 @@ import * as R from '../../../src/games/bulgot/rules.js';
 import { BgPlayer } from '../../../src/games/bulgot/player.js';
 import { BgRanks } from '../../../src/games/bulgot/ranks.js';
 import { newProfile, evaluate, onRunEnd, poolFor, onBossKill } from '../../../src/games/bulgot/profile.js';
+import * as P from '../../../src/games/bulgot/profile.js';
 import { Players, playerToken } from '../../../src/core/players.js';
 import { signToken } from '../../../src/core/auth.js';
 import worker from '../../../src/index.js';
@@ -1387,7 +1388,7 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
 });
 
 test('RUN_V = 7: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 12, 'wersja reguł');
+  eq(R.RUN_V, 13, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1838,7 +1839,7 @@ test('Nowości: kompletność danych (klątwy, trasy, bossowie, osiągnięcia), 
   for (const id of D.SUPER_BOSSES) assert(D.BOSSES[id].super, 'super-boss ' + id);
   for (const [id, b] of Object.entries(D.KURNIK)) { assert(b.name && b.text && b.cost.length === 3 && b.cost[0] < b.cost[2], 'budynek ' + id); }
   for (const a of ['a-klatwa', 'a-klatwy3', 'a-dogrywka', 'a-dogrywka15', 'a-duch', 'a-towarzysz', 'a-trasy', 'a-kurnik', 'a-kurnik-max']) assert(D.ACH_BY_ID[a], 'osiągnięcie ' + a);
-  eq(R.RUN_V, 12, 'RUN_V 12');
+  eq(R.RUN_V, 13, 'RUN_V 13');
 });
 
 test('Jajko Dinozaura: tylko jedno na run (po wykluciu nie wraca do ofert)', () => {
@@ -1855,4 +1856,85 @@ test('Jajko Dinozaura: tylko jedno na run (po wykluciu nie wraca do ofert)', () 
   assert(seen(false, false) > 0, 'bez Dinozaura jajko trafia do ofert');
   eq(seen(true, false), 0, 'po wykluciu jajka nie ma w ofertach');
   eq(seen(false, true), 0, 'gdy jajko już rośnie, drugiego nie ma');
+});
+
+// ---------- Staż, Sklepik Zakładowy, Księga Rosołów, Dyżur dnia ----------
+
+test('Staż: krzywa poziomów, Talony i oczekujące nagrody (wolniej z każdym poziomem, jeden run to najwyżej jeden poziom na starcie)', () => {
+  assert(D.stazCost(1) < D.stazCost(2) && D.stazCost(2) < D.stazCost(5) && D.stazCost(5) < D.stazCost(10), 'koszt rośnie');
+  eq(P.stazLevel(0).level, 0, 'poziom 0'); eq(P.stazLevel(D.stazCost(1)).level, 1, 'pierwszy poziom za ' + D.stazCost(1));
+  eq(P.stazLevel(D.stazCost(1) + D.stazCost(2) - 1).level, 1, 'bez drugiego poziomu tuż przed progiem');
+  const p = newProfile(); p.nick = 'Test';
+  const a = P.addXp(p, D.STAZ.xpCap); assert(a.ups.length <= 1, 'maks. jeden poziom z jednego runu na starcie');
+  eq([p.talons, p.lvlPending.length], [D.STAZ.talons * a.ups.length, a.ups.length], 'Talony i oczekujące nagrody za każdy poziom');
+  const big = newProfile(); big.nick = 'Test'; const b = P.addXp(big, 500); assert(b.ups.length > 2 && big.lvlPending.length === b.ups.length && big.talons === D.STAZ.talons * b.ups.length, 'wiele poziomów naraz = wiele nagród i Talonów');
+  const q = big.lvlPending[0]; assert(q.opts.length === 2 && q.opts[0] !== q.opts[1] && q.opts.every(id => D.REWARD_BY_ID[id]), 'dwie różne nagrody z puli');
+  const before = big.lvlPending.length, res = P.levelChoose(big, 0); assert(res.ok && big.lvlPending.length === before - 1, 'wybór zdejmuje nagrodę z kolejki');
+  eq(P.levelChoose(newProfile(), 0).code, 'none', 'brak nagrody');
+  eq(P.levelChoose(big, 5).code, 'index', 'zły indeks');
+  const f = newProfile(); f.nick = 'X'; f.lvlPending = [{ lvl: 3, opts: ['piora', 'talon'] }, { lvl: 4, opts: ['prowiant', 'bon'] }];
+  P.levelChoose(f, 0); assert(f.feathers === 13, 'Premia kwartalna: 10 + poziom Piór'); P.levelChoose(f, 1); eq(f.buffs.rerolls, 2, 'Bon: 2 darmowe przetasowania w następnym runie');
+  eq(P.takeBuffs(f), { coins: 0, rerolls: 2, xpPct: 0 }, 'premie pobierane raz'); eq(P.takeBuffs(f), { coins: 0, rerolls: 0, xpPct: 0 }, 'i znikają');
+  eq(P.xpFor({ ended: 'win', done: 40, cleared: 20, endless: true, garnek: 0, buffs: { xpPct: 0 } }), D.STAZ.xpCap, 'limit Nadgodzin za run'); eq(P.xpFor({ ended: 'lose', done: 3, garnek: 0 }), 3, 'porażka: piętra');
+  eq(P.xpFor({ ended: 'lose', done: 10, garnek: 0, buffs: { xpPct: 30 } }), 13, 'Praca po godzinach +30%');
+});
+
+test('Sklepik Zakładowy: Talony, zakładanie i zdejmowanie, jeden strój na slot', () => {
+  const p = newProfile(); p.talons = 5;
+  eq(P.shopBuyItem(p, 'nie-ma').code, 'index', 'zły towar'); eq(P.shopBuyItem(p, 'fartuch').ok, true, 'fartuch za 5'); eq(p.talons, 0, 'Talony pobrane');
+  eq(P.shopBuyItem(p, 'fartuch').code, 'owned', 'drugi raz nie'); eq(P.shopBuyItem(p, 'kask').code, 'talons', 'za mało Talonów');
+  eq(p.wardrobe.eq.body, 'fartuch', 'kupione zakładasz od razu'); p.talons = 10; P.shopBuyItem(p, 'dres'); eq(p.wardrobe.eq.body, 'dres', 'nowe ubranie zastępuje stare');
+  assert(P.wearItem(p, 'fartuch', true).ok && p.wardrobe.eq.body === 'fartuch', 'przebranie z powrotem'); P.wearItem(p, 'fartuch', false); assert(!p.wardrobe.eq.body, 'zdjęcie');
+  eq(P.wearItem(p, 'kask', true).code, 'owned', 'nie założysz tego, czego nie masz');
+  for (const it of Object.values(D.SHOP)) assert(D.SLOTS[it.slot] && it.cost > 0 && it.name, 'towar kompletny: ' + it.id);
+});
+
+test('Księga Rosołów: przepis zależy od buildu, tylko wygrana gotuje rosół', () => {
+  const fire = D.TILES.filter(t => (t.tags || []).includes('ogien')).slice(0, 4).map(t => t.id);
+  const run = (o = {}) => ({ ended: 'win', char: 'pyrtek', tiles: [], stats: {}, curses: [], garnek: 0, coins: 0, done: 10, score: 100, ...o });
+  eq(P.soupOf(run({ ended: 'lose' })), null, 'porażka nie gotuje');
+  eq(P.soupOf(run()), 'c-pyrtek', 'bez dominującego żywiołu: rosół postaci');
+  eq(P.soupOf(run({ tiles: fire })), 'wulkaniczny', 'cztery kafelki Ognia');
+  eq(P.soupOf(run({ tiles: fire.slice(0, 3) })), 'c-pyrtek', 'trzy to za mało');
+  eq(P.soupOf(run({ tiles: fire, garnek: 4 })), 'piekielny', 'palnik 4 wygrywa z żywiołem');
+  eq(P.soupOf(run({ curses: ['przegrzany-piec', 'zakaz-drzemek'] })), 'zakazany', 'dwie Klątwy');
+  eq(P.soupOf(run({ stats: { lowWin: true } })), 'ostatniego-tchu', 'ledwo żywy'); eq(P.soupOf(run({ coins: 60 })), 'skapca', 'Skąpiec');
+  eq(P.soupOf(run({ char: 'mutant' })), 'c-mutant', 'rosół postaci'); eq(P.soupOf(run({ char: 'nie-ma' })), 'domowy', 'domowy na wszystko inne');
+  eq(P.soupOf(run({ endless: true, cleared: 10, done: 16 })), 'nieskonczony', 'Dogrywka');
+  const ids = D.SOUPS.map(s => s.id); eq(new Set(ids).size, ids.length, 'unikalne id'); for (const c of Object.keys(D.CHARS)) assert(ids.includes('c-' + c), 'rosół postaci ' + c);
+  const p = newProfile(); const a = P.recordSoup(p, 'domowy', 50), b = P.recordSoup(p, 'domowy', 90); eq([a.isNew, b.isNew, b.n, p.soups.domowy.best], [true, false, 2, 90], 'licznik i najlepszy wynik');
+});
+
+test('Dyżur dnia: ta sama konfiguracja dla wszystkich, jedna Klątwa, jedno podejście, ranking dnia i Talony', async () => {
+  const d1 = P.dailyOf('2026-11-24'), d2 = P.dailyOf('2026-11-24'), d3 = P.dailyOf('2026-11-25');
+  eq(d1, d2, 'deterministyczny'); assert(d1.seed !== d3.seed && d1.curses.length === 1 && d1.curses[0] !== 'zakaz-wymian', 'inny dzień, jedna Klątwa, bez zakazu wymian');
+  eq(P.dailyYesterday('2026-03-01'), '2026-02-28', 'wczoraj'); assert(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(P.dailyKey(Date.now())), 'format daty');
+  const env = mkEnv(), o1 = new BgPlayer({ storage: mkStorage() }, env), o2 = new BgPlayer({ storage: mkStorage() }, env);
+  const s1 = await post(o1, 'start', { pl: PL, daily: true }), s2 = await post(o2, 'start', { pl: { ...PL, n: 'inny', nick: 'Inny' }, daily: true });
+  assert(s1.j.ok && s2.j.ok && s1.j.run.daily === s1.j.daily.date, 'obaj startują dyżur');
+  eq(s1.j.run.offer, s2.j.run.offer, 'ta sama pierwsza oferta (ziarno i pula startowa)'); eq([s1.j.run.mode, s1.j.run.char, s1.j.run.curses], ['quick', 'pyrtek', P.dailyOf(s1.j.daily.date).curses], 'tryb, postać i Klątwa z dyżuru');
+  assert(s1.j.profile.buffs && !s1.j.run.kurnik.spizarnia, 'bez premii i Kurnika');
+  let r = s1.j, guard = 0;
+  while (r.run.phase !== 'over' && guard++ < 100) {
+    const ph = r.run.phase;
+    if (ph === 'offer') r = (await post(o1, 'pick', { pl: PL, i: Math.max(0, r.run.offer.findIndex(id => id && id !== 'automat-z-pasza')), slot: 0, mut: 1 })).j;
+    else if (ph === 'badge' || ph === 'door' || ph === 'loot' || ph === 'route') r = (await post(o1, 'choose', { pl: PL, i: 0 })).j;
+    else if (ph === 'event') { const kd = r.run.pending.kind; r = (await post(o1, kd === 'shop' ? 'shop' : kd === 'gamble' ? 'bet' : 'choose', { pl: PL, i: kd === 'shop' || kd === 'adopt' ? -1 : kd === 'arena' ? 1 : 2, amount: 0 })).j; }
+    else if (ph === 'bonus') r = (await post(o1, 'bonus', { pl: PL, i: 0, slot: 0 })).j;
+    else if (ph === 'victory') r = (await post(o1, 'choose', { pl: PL, i: 1 })).j;
+    else { await post(o1, 'fightstart', { pl: PL }); r = (await post(o1, 'fightfinish', { pl: PL, inputs: [] })).j; }
+    if (r.err) break;
+  }
+  assert(r.run.phase === 'over' && r.end && r.end.daily, 'dyżur kończy się podsumowaniem dnia'); assert(r.end.daily.talons >= (r.run.done > 0 ? 1 : 0), 'Talony za dyżur');
+  assert(r.profile.staz.xp >= 0 && r.end.staz && r.end.staz.gain >= 0, 'Nadgodziny też liczone');
+  const again = await post(o1, 'start', { pl: PL, daily: true }); eq([again.status, again.j.code], [409, 'daily'], 'drugi raz tego samego dnia nie');
+  const list = await (await env.BG_RANKS.get('ranks').fetch('https://bg/daily-list?date=' + s1.j.daily.date)).json();
+  assert(list.total === (r.run.done > 0 ? 1 : 0), 'ranking dnia ma wynik gracza'); assert(!list.list.some(e => e.n), 'bez wewnętrznego klucza gracza');
+  const bad = await env.BG_RANKS.get('ranks').fetch('https://bg/daily-list?date=jutro'); eq(bad.status, 400, 'zła data');
+  assert(!(r.profile.best.quick) , 'dyżur nie psuje zwykłego rekordu');
+});
+
+test('Przetasowanie: Klątwa Zakaz Wymian daje cenę null (klient pokazuje zablokowany przycisk)', () => {
+  const run = R.newRun({ mode: 'quick', char: 'pyrtek', garnek: 0, pool: D.STARTER_TILES.slice(), seed: 5, curses: ['zakaz-wymian'] }).run;
+  eq(R.view(run).rerollCost, null, 'zablokowane'); eq(R.reroll(run).code !== undefined, true, 'reroll odrzucony');
 });

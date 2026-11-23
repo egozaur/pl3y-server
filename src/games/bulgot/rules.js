@@ -57,7 +57,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 12;
+export const RUN_V = 13;
 
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null, curses = [], kurnik = {} }) {
   const M = MODES[mode], ch = CHARS[char];
@@ -628,7 +628,7 @@ export function ghostStats(g, round) {
   const [maxHp, atk, aspd, armor, crit, evade] = g.curve[Math.min(g.curve.length - 1, Math.max(0, round - 1))];
   return { hp: Math.max(1, fl(maxHp * RULES.ghostPct / 100)), atk: Math.max(1, fl(atk * RULES.ghostPct / 100 * RULES.ghostAtk / 100)), aspd: Math.max(20, aspd), armor, crit: Math.min(60, crit), evade: Math.min(50, evade) };
 }
-const ghostEnemy = run => { const g = run.arena.ghost, st = ghostStats(g, run.round); return { id: 'duch', name: 'Duch: ' + g.nick, ...st, art: 'ghost', ghost: true, gchar: g.char }; };
+const ghostEnemy = run => { const g = run.arena.ghost, st = ghostStats(g, run.round); return { id: 'duch', name: 'Duch: ' + g.nick, ...st, art: 'ghost', ghost: true, gchar: g.char, gwear: g.wear || null }; };
 const arenaOn = run => !!(run.arena && run.arena.round === run.round);
 
 // ---------- Walka ----------
@@ -925,7 +925,7 @@ function viewPending(run) {
   const P = run.pending;
   if (!P || P.kind !== 'arena') return P;
   const g = P.ghost;
-  return { kind: 'arena', ghost: { nick: g.nick, avatar: g.avatar | 0, char: g.char, floors: g.floors, mirror: !!g.mirror, win: !!g.win, tiles: g.tiles || [], stats: ghostStats(g, run.round) } };
+  return { kind: 'arena', ghost: { nick: g.nick, avatar: g.avatar | 0, char: g.char, wear: g.wear || null, floors: g.floors, mirror: !!g.mirror, win: !!g.win, tiles: g.tiles || [], stats: ghostStats(g, run.round) } };
 }
 // Bez ziarna runu: oferty i spotkania z przyszłości nie dają się wyliczyć po stronie przeglądarki.
 export function view(run) {
@@ -934,7 +934,7 @@ export function view(run) {
   const v = {
     id: run.id, mode: run.mode, char: run.char, garnek: run.garnek, round: run.round, rounds: M.rounds, phase: run.phase,
     hp: run.hp, maxHp: S.maxHp, coins: run.coins, tiles: run.tiles, skills: run.skills, offer: run.offer, pending: viewPending(run),
-    curses: run.curses || [], routes: run.routes || [null, null, null], route: (run.routes && run.routes[zoneOf(run.mode, run.round)]) || null, companion: run.companion || null, kurnik: run.kurnik || {},
+    daily: run.daily || null, curses: run.curses || [], routes: run.routes || [null, null, null], route: (run.routes && run.routes[zoneOf(run.mode, run.round)]) || null, companion: run.companion || null, kurnik: run.kurnik || {},
     arenaGhost: arenaOn(run) ? { nick: run.arena.ghost.nick, avatar: run.arena.ghost.avatar | 0, char: run.arena.ghost.char, mirror: !!run.arena.ghost.mirror, floors: run.arena.ghost.floors, stats: ghostStats(run.arena.ghost, run.round) } : null,
     endless: !!run.endless, cleared: run.cleared === undefined ? null : run.cleared, fell: !!run.fell, maxSkills: maxSkillsOf(run), cursePct: cursePct(run.curses), arenaNow: !!(run.arena && run.arena.round === run.round),
     rerollCost: run.phase === 'offer' ? rerollCost(run) : null, freeLeft: run.freeLeft, rested: run.rested, restCost: restCost(run), restPct: RULES.restPct + S.restBonus, badges: run.badges || [], affixes: !over && isElite(run) && !hideFoes(run) ? eliteAffixes(run) : null, buyDisc: S.buyDisc, stats: run.stats, flags: { bossHpBonus: run.flags.bossHpBonus, revived: run.flags.revived, bonusAtk: run.flags.bonusAtk },

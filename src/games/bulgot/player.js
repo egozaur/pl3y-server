@@ -2,12 +2,12 @@
 // i aktywny run. Całą logikę gry liczy serwer: oferty, rerolle, zakupy, walki (powtórka z wejść gracza).
 //
 // Gracz przychodzi już sprawdzony przez Worker (index.js → playerFromToken): body.pl = { n, nick, avatar }.
-// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /upgrade /will /fightstart /fightfinish /abandon /history /analysis /skillorder /code /kurnik.
+// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /upgrade /will /fightstart /fightfinish /abandon /history /analysis /skillorder /code /kurnik /levelchoice /shopbuy /wear (Staż i Sklepik), start z { daily: true } = Dyżur dnia.
 // Odpowiedź: { ok, profile, run, ...wynik akcji } albo { err, code } z kodem 400/409.
 import { mix, hash } from './rng.js';
 import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, swapSkills, view, statsOf, pawn, redeem, upgrade, willOptions, ghostOf, RUN_V } from './rules.js';
-import { newProfile, poolFor, evaluate, evaluateAchievements, onBossKill, onRunEnd, onNemesisBeaten, markSeen, publicProfile, kurnikBuy } from './profile.js';
-import { MODES, CHARS, TILE_BY_ID, UNLOCK_BY_ID } from './data.js';
+import { newProfile, poolFor, evaluate, evaluateAchievements, onBossKill, onRunEnd, onNemesisBeaten, markSeen, publicProfile, kurnikBuy, levelChoose, shopBuyItem, wearItem, takeBuffs, dailyKey, dailyOf, dailyView } from './profile.js';
+import { MODES, CHARS, TILE_BY_ID, UNLOCK_BY_ID, STARTER_TILES } from './data.js';
 
 export class BgPlayer {
   constructor(ctx, env, now = () => Date.now()) { this.ctx = ctx; this.env = env; this.now = now; this.chain = Promise.resolve(); }
@@ -41,6 +41,13 @@ export class BgPlayer {
       case 'state': extra.myGhost = await this.myGhost(pl); break;
       case 'start': {
         if (run && run.phase !== 'over') return json({ err: 'Masz już aktywny run.', code: 'active', ...this.out(profile, run) }, 409);
+        if (b.daily) {   // Dyżur dnia: ten sam run dla wszystkich, jedno podejście na dzień, bez premii i Kurnika
+          const date = dailyKey(this.now()), d = dailyOf(date);
+          if (profile.daily && profile.daily.date === date) return json({ err: 'Dzisiejszy dyżur już odbyty. Wróć jutro.', code: 'daily', ...this.out(profile, run) }, 409);
+          r = newRun({ mode: d.mode, char: d.char, garnek: d.garnek, pool: STARTER_TILES.slice(), seed: d.seed, now: this.now(), curses: d.curses });
+          if (r.ok) { run = r.run; run.daily = date; profile.daily = { date, status: 'active', used: true, score: 0, rounds: 0, win: false }; }
+          break;
+        }
         const mode = b.mode, char = b.char, g = Number(b.garnek) | 0;
         if (!MODES[mode]) return json({ err: 'Nieznany tryb.', code: 'mode' }, 400);
         if (!CHARS[char] || !profile.chars.includes(char)) return json({ err: 'Ta postać jest jeszcze zablokowana.', code: 'char' }, 400);
@@ -49,7 +56,12 @@ export class BgPlayer {
         // Testament Pyrtka działa w runie inną postacią niż ta, która go spisała (chyba że masz tylko jedną postać).
         const w = profile.will, useWill = !!(w && TILE_BY_ID[w.tile] && !(profile.chars.length > 1 && w.char === char));
         r = newRun({ mode, char, garnek: g, pool: poolFor(profile), seed, now: this.now(), nemesis: profile.nemesis || null, will: useWill ? w.tile : null, curses: Array.isArray(b.curses) ? b.curses.map(String) : [], kurnik: profile.kurnik || {} });
-        if (r.ok) { run = r.run; if (useWill) profile.will = null; }
+        if (r.ok) {
+          run = r.run; if (useWill) profile.will = null;
+          const bf = takeBuffs(profile); run.buffs = bf;   // premie z nagród za poziom Stażu (jednorazowe)
+          if (bf.coins) { run.coins += bf.coins; run.stats.maxCoins = Math.max(run.stats.maxCoins, run.coins); }
+          if (bf.rerolls) run.freeLeft += bf.rerolls;
+        }
         break;
       }
       case 'pawn': r = need(run) || pawn(run, String(b.id || '')); break;
@@ -66,7 +78,7 @@ export class BgPlayer {
       case 'pick': {
         // Arena Duchów: duch (build innego gracza) pochodzi z BgRanks; bez niego pojawia się Odbicie gracza.
         const t = run && run.phase === 'offer' ? TILE_BY_ID[run.offer[Number(b.i)]] : null;
-        const ctx = t && t.event === 'arena' ? { ghost: await this.fetchGhost(pl, run) } : {};
+        const ctx = t && t.event === 'arena' && !run.daily ? { ghost: await this.fetchGhost(pl, run) } : {};
         r = need(run) || pickTile(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot), b.mut === undefined ? undefined : Number(b.mut), ctx);
         break;
       }
@@ -75,6 +87,17 @@ export class BgPlayer {
         if (r.ok) extra.kurnikBought = { id: r.id, lvl: r.lvl, cost: r.cost };
         break;
       }
+      case 'levelchoice': {   // nagroda za poziom Stażu: wybór 1 z 2
+        r = levelChoose(profile, Number(b.i));
+        if (r.ok) extra.rewardTaken = { reward: r.reward, lvl: r.lvl, v: r.v };
+        break;
+      }
+      case 'shopbuy': {   // Sklepik Zakładowy: kupno kosmetyku za Talony
+        r = shopBuyItem(profile, String(b.id || ''));
+        if (r.ok) extra.shopBought = { id: r.id, cost: r.cost };
+        break;
+      }
+      case 'wear': r = wearItem(profile, String(b.id || ''), !!b.on); break;
       case 'reroll': r = need(run) || reroll(run); break;
       case 'rest': r = need(run) || rest(run); break;
       case 'buy': r = need(run) || buyOffer(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot), b.mut === undefined ? undefined : Number(b.mut)); break;
@@ -129,12 +152,18 @@ export class BgPlayer {
         fresh.push(...evaluate(profile, run));
         extra.ach = evaluateAchievements(profile, run).map(a => ({ id: a.id, name: a.name, text: a.text, g: a.g, s: a.s, secret: !!a.secret }));
         extra.end = { ...end, score: run.score, rounds: run.done, ended: run.ended, endless: !!run.endless, deep: end.deep || 0 };
-        await this.saveGhost(pl, run);
+        if (!run.daily) await this.saveGhost(pl, run, profile);
         await this.saveHistory(st, pl, run, path === 'abandon');
-        if (run.done > 0 && this.env && this.env.BG_RANKS) {
+        if (run.daily && run.done > 0 && this.ranks()) {
+          try {
+            const res = await this.ranks().fetch('https://bg/daily-submit', { method: 'POST', body: JSON.stringify({ date: run.daily, entry: { n: pl.n, nick: pl.nick, avatar: pl.avatar || 0, score: run.score, rounds: run.done, win: run.ended === 'win', at: this.now(), ttl: (profile.wardrobe && profile.wardrobe.eq && profile.wardrobe.eq.title) || '' } }) });
+            extra.end.rank = (await res.json()).rank;
+          } catch {}
+        }
+        if (!run.daily && run.done > 0 && this.env && this.env.BG_RANKS) {
           try {
             const res = await this.env.BG_RANKS.get(this.env.BG_RANKS.idFromName('ranks')).fetch('https://bg/submit', {
-              method: 'POST', body: JSON.stringify({ mode: run.mode, entry: { n: pl.n, nick: pl.nick, avatar: pl.avatar || 0, score: run.score, rounds: run.done, win: run.ended === 'win', char: run.char, garnek: run.garnek, deep: end.deep || 0, at: this.now(), ...(path === 'abandon' ? {} : { fl: { round: run.round, died: run.ended !== 'win' && !run.endless } }) } }) });
+              method: 'POST', body: JSON.stringify({ mode: run.mode, entry: { n: pl.n, nick: pl.nick, avatar: pl.avatar || 0, score: run.score, rounds: run.done, win: run.ended === 'win', char: run.char, garnek: run.garnek, deep: end.deep || 0, at: this.now(), ttl: (profile.wardrobe && profile.wardrobe.eq && profile.wardrobe.eq.title) || '', ...(path === 'abandon' ? {} : { fl: { round: run.round, died: run.ended !== 'win' && !run.endless } }) } }) });
             const rj = await res.json();
             extra.end.rank = rj.rank; extra.end.above = rj.above || null; extra.end.floor = rj.floor || null;
           } catch {}
@@ -148,7 +177,7 @@ export class BgPlayer {
     const o = this.out(profile, run);
     const body = { ok: true, ...o, ...extra };
     if (r.setup) body.setup = r.setup;
-    for (const k of ['healed', 'result', 'reward', 'boss', 'bonus', 'event', 'crate', 'bought', 'price', 'bet', 'won', 'tile', 'cost', 'left', 'badge', 'automat', 'chose', 'interest', 'doorCoins', 'grew', 'revealed', 'nemesis', 'pawned', 'redeemed', 'upgraded', 'loot', 'looted', 'dino', 'will', 'door', 'victory', 'compUp', 'arena', 'bossVar', 'route', 'companion']) if (r[k] !== undefined) body[k] = r[k];
+    for (const k of ['reward', 'healed', 'result', 'reward', 'boss', 'bonus', 'event', 'crate', 'bought', 'price', 'bet', 'won', 'tile', 'cost', 'left', 'badge', 'automat', 'chose', 'interest', 'doorCoins', 'grew', 'revealed', 'nemesis', 'pawned', 'redeemed', 'upgraded', 'loot', 'looted', 'dino', 'will', 'door', 'victory', 'compUp', 'arena', 'bossVar', 'route', 'companion']) if (r[k] !== undefined) body[k] = r[k];
     return json(body);
   }
 
@@ -178,8 +207,9 @@ export class BgPlayer {
       const j = await res.json(); return j && j.ghost ? j.ghost : null;
     } catch { return null; }
   }
-  async saveGhost(pl, run) {
+  async saveGhost(pl, run, profile) {
     const R = this.ranks(), g = ghostOf(run); if (!R || !g) return;
+    if (profile && profile.wardrobe && profile.wardrobe.eq) g.wear = { ...profile.wardrobe.eq };   // duch pokazuje strój właściciela
     try { await R.fetch('https://bg/ghost-put', { method: 'POST', body: JSON.stringify({ n: pl.n, nick: pl.nick, avatar: pl.avatar || 0, ghost: g, at: this.now() }) }); } catch {}
   }
   ghostResult(run, a) {
@@ -191,7 +221,7 @@ export class BgPlayer {
     try { const res = await R.fetch('https://bg/ghost-get', { method: 'POST', body: JSON.stringify({ n: pl.n }) }); return (await res.json()).ghosts || null; } catch { return null; }
   }
 
-  out(profile, run) { return { profile: publicProfile(profile), run: view(run) }; }
+  out(profile, run) { return { profile: publicProfile(profile), run: view(run), daily: dailyView(profile, this.now()) }; }
 }
 
 function need(run) { return run ? null : { err: 'Nie masz aktywnego runu.', code: 'norun' }; }

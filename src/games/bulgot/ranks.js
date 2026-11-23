@@ -7,6 +7,7 @@
 // POST /submit { mode, entry: { n, nick, avatar, score, rounds, win, char, garnek, at, fl?: { round, died } } } → { rank, crank, above, floor };
 //  `above` = najbliższy wynik innego gracza nad tym i miejsce, jakie dałby ten wynik; `floor` = anonimowe liczniki pięter „f:<tryb>:<palnik>” { runs, wins, reach[], died[] }.
 // GET /list?mode=quick|full[&char=<id>][&garnek=<0-5>][&nick=<nick>][&kind=deep] → { mode, list, char, garnek, nick, total } (kind=deep: ranking Dogrywki wg liczby pięter ponad limit trybu).
+// Dyżur dnia: POST /daily-submit { date, entry: { n, nick, avatar, score, rounds, win, at, ttl } } → { rank } (jedno podejście na gracza i dzień, klucz „dy:<data>”), GET /daily-list?date=YYYY-MM-DD → { date, total, list }.
 // Arena Duchów: POST /ghost-put { n, nick, avatar, ghost, at } (jeden duch na gracza i tryb, klucz „g:<tryb>:<n>”), /ghost-pick { n, mode, round, salt } → { ghost },
 // /ghost-result { n, mode, ghostWon }, /ghost-get { n } → { ghosts: { quick, full } } (licznik zwycięstw i porażek ducha).
 import { MODES, CHARS } from './data.js';
@@ -39,6 +40,12 @@ export class BgRanks {
   async fetch(req) {
     const url = new URL(req.url);
     const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+    if (url.pathname === '/daily-list' && req.method === 'GET') {
+      const date = url.searchParams.get('date') || '';
+      if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)) return json({ err: 'Zła data.' }, 400);
+      const list = (await this.ctx.storage.get('dy:' + date)) || [];
+      return json({ date, total: list.length, list: list.slice(0, SHOW).map(pub) });
+    }
     if (url.pathname === '/list' && req.method === 'GET') {
       const mode = url.searchParams.get('mode');
       if (!MODES[mode]) return json({ err: 'Nieznany tryb.' }, 400);
@@ -68,6 +75,22 @@ export class BgRanks {
         list.sort(better);
       }
       return json({ mode, char, garnek, nick, total: list.length, list: list.slice(0, SHOW).map(pub) });
+    }
+    if (url.pathname === '/daily-submit' && req.method === 'POST') {
+      let b; try { b = await req.json(); } catch { return json({ err: 'Nieprawidłowe dane.' }, 400); }
+      const st = this.ctx.storage;
+      const date = String(b.date || ''), e = b.entry || {};
+      if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date) || typeof e.n !== 'string') return json({ err: 'Zły wpis.' }, 400);
+      const key = 'dy:' + date, list = (await st.get(key)) || [];
+      if (!list.some(x => x.n === e.n)) {
+        list.push({ n: e.n, nick: String(e.nick || '').slice(0, 16), avatar: e.avatar | 0, score: e.score | 0, rounds: e.rounds | 0, win: !!e.win, at: e.at | 0, ttl: String(e.ttl || '').slice(0, 16) });
+        list.sort(better);
+        await st.put(key, list.slice(0, KEEP));
+        // sprzątanie: trzymamy tylko ostatnie dni
+        const old = [...(await st.list({ prefix: 'dy:' })).keys()].sort();
+        while (old.length > 14) await st.delete(old.shift());
+      }
+      return json({ rank: list.findIndex(x => x.n === e.n) + 1 });
     }
     if (url.pathname === '/submit' && req.method === 'POST') {
       let b; try { b = await req.json(); } catch { return json({ err: 'Nieprawidłowe dane.' }, 400); }
@@ -141,7 +164,7 @@ export class BgRanks {
       }
       if (url.pathname === '/ghost-get') {
         const out = {};
-        for (const mode of Object.keys(MODES)) { const g = await st.get('g:' + mode + ':' + b.n); if (g) out[mode] = { floors: g.floors, win: g.win, char: g.char, wins: g.wins | 0, losses: g.losses | 0, at: g.at }; }
+        for (const mode of Object.keys(MODES)) { const g = await st.get('g:' + mode + ':' + b.n); if (g) out[mode] = { floors: g.floors, win: g.win, char: g.char, wear: g.wear || null, wins: g.wins | 0, losses: g.losses | 0, at: g.at }; }
         return json({ ghosts: out });
       }
       return json({ err: 'Nie znaleziono.' }, 404);

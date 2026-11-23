@@ -727,3 +727,65 @@ export const ACHIEVEMENTS = [
   { id: 'a-pelna-gra', g: 'meta', s: '♛', name: 'Szef Kuchni', text: 'Osiągnij 100% ukończenia gry w profilu.', secret: true },
 ];
 export const ACH_BY_ID = Object.fromEntries(ACHIEVEMENTS.map(a => [a.id, a]));
+
+// ---------- Staż: poziom konta w tle (Nadgodziny → poziomy → Talony do Sklepiku Zakładowego) ----------
+// Nadgodziny za run = ukończone piętra + premia za wygraną (jak Pióra), maks. xpCap. Koszt wejścia na poziom n rośnie wolno: pierwsze poziomy szybko, kolejne coraz wolniej.
+export const STAZ = { base: 20, pow: 1.15, talons: 2, xpCap: 40, winBonus: 8, garnekBonus: 2 };
+export const stazCost = n => Math.round(STAZ.base * Math.pow(n, STAZ.pow));
+export const STAZ_TITLES = ['Stażysta', 'Praktykant', 'Młodszy Pracownik', 'Pracownik', 'Starszy Pracownik', 'Specjalista', 'Brygadzista', 'Kierownik Zmiany', 'Kierownik', 'Dyrektor Działu', 'Wicedyrektor', 'Dyrektor Kurnika'];
+export const stazTitle = lvl => STAZ_TITLES[Math.min(STAZ_TITLES.length - 1, Math.floor(lvl / 3))];
+// Nagrody za poziom: serwer losuje 2 z puli (ziarno = nick i poziom), gracz bierze jedną. {v} = wartość z v(poziom).
+export const LEVEL_REWARDS = [
+  { id: 'piora', name: 'Premia kwartalna', text: '+{v} Piór do Kurnika', v: l => 10 + l, icon: '🪶' },
+  { id: 'talon', name: 'Dodatkowy Talon', text: '+{v} Talon do Sklepiku', v: () => 1, icon: '🎟️' },
+  { id: 'nadgodziny', name: 'Praca po godzinach', text: '+{v}% Nadgodzin w następnym runie', v: () => 30, icon: '⏱️' },
+  { id: 'prowiant', name: 'Prowiant z Kantyny', text: '+{v} Ziarna na starcie następnego runu', v: () => 3, icon: '🌾' },
+  { id: 'bon', name: 'Bon na przetasowanie', text: '+{v} darmowe przetasowania taśmy na starcie następnego runu', v: () => 2, icon: '🎫' },
+];
+export const REWARD_BY_ID = Object.fromEntries(LEVEL_REWARDS.map(r => [r.id, r]));
+
+// ---------- Sklepik Zakładowy (kosmetyka za Talony; nic nie zmienia siły) ----------
+export const SLOTS = { head: 'Głowa', eyes: 'Oczy', body: 'Ubranie', aura: 'Aura', title: 'Tytuł' };
+export const SHOP = {
+  kask: { id: 'kask', name: 'Kask Górniczy', slot: 'head', cost: 3, text: 'Z latarką. Do pracy na najniższych piętrach.' },
+  okulary: { id: 'okulary', name: 'Okulary Pilota', slot: 'eyes', cost: 2, text: 'Ciemne szkła, bo przyszłość świeci jasno.' },
+  dres: { id: 'dres', name: 'Dres Osiedlowy', slot: 'body', cost: 4, text: 'Kaptur, trzy paski i złoty łańcuch. Szacunek na osiedlu gwarantowany.' },
+  fartuch: { id: 'fartuch', name: 'Fartuch Kucharza', slot: 'body', cost: 5, text: 'Ironia losu w rozmiarze XS.' },
+  aura: { id: 'aura', name: 'Aura Rosołu', slot: 'aura', cost: 6, text: 'Para i pióra unoszą się za Tobą jak za szefem kuchni.' },
+  tytul: { id: 'tytul', name: 'Dyrektor Kurnika', slot: 'title', cost: 2, text: 'Tytuł pod Twoim nickiem w rankingu.' },
+};
+
+// ---------- Księga Rosołów: każda wygrana gotuje rosół zależny od buildu (kolejność = priorytet: specjalne, żywioły, postacie, domowy) ----------
+export const SOUPS = [
+  { id: 'nieskonczony', name: 'Nieskończony Rosół', kind: 'special', color: '#b388ff', hint: 'Przejdź co najmniej 5 pięter Dogrywki po pokonaniu Prezesa.', secret: true },
+  { id: 'piekielny', name: 'Rosół Piekielny', kind: 'special', color: '#ff5722', hint: 'Wygraj na palniku 4 lub wyżej.' },
+  { id: 'zakazany', name: 'Rosół Zakazany', kind: 'special', color: '#6d4c41', hint: 'Wygraj z co najmniej dwiema Klątwami Prezesa.' },
+  { id: 'ostatniego-tchu', name: 'Rosół Ostatniego Tchu', kind: 'special', color: '#ef9a9a', hint: 'Wygraj walkę z mniej niż 10% życia.' },
+  { id: 'bez-skazy', name: 'Rosół Bez Skazy', kind: 'special', color: '#fff3c4', hint: 'Pokonaj bossa, nie tracąc ani punktu życia.' },
+  { id: 'rozrzutnika', name: 'Rosół Rozrzutnika', kind: 'special', color: '#ffd54f', hint: 'Wygraj, dokupując co najmniej 10 kafelków.' },
+  { id: 'skapca', name: 'Rosół Skąpca', kind: 'special', color: '#9e9d24', hint: 'Wygraj, mając w kieszeni co najmniej 60 Ziaren.' },
+  { id: 'kompana', name: 'Rosół z Kompanem', kind: 'special', color: '#ffcc80', hint: 'Wygraj z towarzyszem na 3. poziomie.', secret: true },
+  { id: 'wulkaniczny', name: 'Rosół Wulkaniczny', kind: 'tag', tag: 'ogien', color: '#ff7043', hint: 'Wygraj z co najmniej 4 kafelkami Ognia (najwięcej ze wszystkich żywiołów).' },
+  { id: 'mrozony', name: 'Rosół Mrożony', kind: 'tag', tag: 'lod', color: '#81d4fa', hint: 'Wygraj z co najmniej 4 kafelkami Lodu (najwięcej ze wszystkich żywiołów).' },
+  { id: 'czerwony', name: 'Rosół Czerwony', kind: 'tag', tag: 'krew', color: '#c62828', hint: 'Wygraj z co najmniej 4 kafelkami Krwi (najwięcej ze wszystkich żywiołów).' },
+  { id: 'jajeczny', name: 'Rosół z Jajkiem', kind: 'tag', tag: 'jajo', color: '#ffe082', hint: 'Wygraj z co najmniej 4 kafelkami Jaj (najwięcej ze wszystkich żywiołów).' },
+  { id: 'zatruty', name: 'Rosół Zatruty', kind: 'tag', tag: 'trucizna', color: '#7cb342', hint: 'Wygraj z co najmniej 4 kafelkami Trucizny (najwięcej ze wszystkich żywiołów).' },
+  { id: 'korporacyjny', name: 'Rosół Korporacyjny', kind: 'tag', tag: 'korpo', color: '#90a4ae', hint: 'Wygraj z co najmniej 4 kafelkami Korporacyjnymi (najwięcej ze wszystkich żywiołów).' },
+  { id: 'zbozowy', name: 'Rosół Zbożowy', kind: 'tag', tag: 'ziarno', color: '#d4a84b', hint: 'Wygraj z co najmniej 4 kafelkami Zboża (najwięcej ze wszystkich żywiołów).' },
+  { id: 'c-pyrtek', name: 'Rosół Pyrtka', kind: 'char', char: 'pyrtek', color: '#f5c04a', hint: 'Wygraj Pyrtkiem.' },
+  { id: 'c-kwoka', name: 'Rosół Babci', kind: 'char', char: 'kwoka', color: '#e0b57a', hint: 'Wygraj Kwoką Babcią.' },
+  { id: 'c-kaczor', name: 'Rosół Kaczora', kind: 'char', char: 'kaczor', color: '#7fb77e', hint: 'Wygraj Kaczorem.' },
+  { id: 'c-indor', name: 'Rosół Indora', kind: 'char', char: 'indor', color: '#d9534f', hint: 'Wygraj Indorem.' },
+  { id: 'c-zjarany', name: 'Rosół Zjarany', kind: 'char', char: 'zjarany', color: '#a1887f', hint: 'Wygraj Zjaranym Kurczakiem.', secret: true },
+  { id: 'c-barista', name: 'Rosół Latte', kind: 'char', char: 'barista', color: '#c9a27a', hint: 'Wygraj Baristą.' },
+  { id: 'c-ges', name: 'Rosół z Bilansem', kind: 'char', char: 'ges', color: '#cfd8dc', hint: 'Wygraj Gęsią Księgową.' },
+  { id: 'c-lodziarz', name: 'Rosół Truskawkowy', kind: 'char', char: 'lodziarz', color: '#f8bbd0', hint: 'Wygraj Lodziarzem.' },
+  { id: 'c-pielegniarka', name: 'Rosół Wzmacniający', kind: 'char', char: 'pielegniarka', color: '#e1f5fe', hint: 'Wygraj Pielęgniarką.' },
+  { id: 'c-rzeznik', name: 'Rosół Mięsny', kind: 'char', char: 'rzeznik', color: '#8d3b2c', hint: 'Wygraj Kogutem Rzeźnikiem.' },
+  { id: 'c-wrozka', name: 'Rosół z Zaklęciem', kind: 'char', char: 'wrozka', color: '#ce93d8', hint: 'Wygraj Wróżką.' },
+  { id: 'c-stazysta', name: 'Rosół na Próbę', kind: 'char', char: 'stazysta', color: '#fff176', hint: 'Wygraj Stażystą.' },
+  { id: 'c-mutant', name: 'Rosół Radioaktywny', kind: 'char', char: 'mutant', color: '#9be564', hint: 'Wygraj Mutantem.' },
+  { id: 'c-dinozaur', name: 'Rosół Jurajski', kind: 'char', char: 'dinozaur', color: '#66bb6a', hint: 'Wygraj Dinozaurem.', secret: true },
+  { id: 'domowy', name: 'Rosół Domowy', kind: 'default', color: '#f2cf7a', hint: 'Wygraj run, który nie pasuje do żadnego innego przepisu.' },
+];
+export const SOUP_BY_ID = Object.fromEntries(SOUPS.map(s => [s.id, s]));
