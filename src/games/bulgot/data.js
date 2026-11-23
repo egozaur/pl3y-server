@@ -615,7 +615,7 @@ export const KURNIK = {
   skarbiec: { name: 'Skarbiec Prezesa', icon: 'skarbiec', text: '+1 Ziarno za każdego pokonanego bossa za poziom.', cost: [15, 35, 65] },
   kantyna: { name: 'Kantyna', icon: 'kantyna', text: '+1 darmowy reroll za poziom na pierwszym piętrze każdej strefy.', cost: [12, 28, 55] },
   szkola: { name: 'Szkoła Kurzych Sztuczek', icon: 'szkola', text: 'Umiejętności mają o 4% krótszy cooldown za poziom.', cost: [15, 35, 65] },
-  pisklecarnia: { name: 'Pisklęcarnia', icon: 'pisklecarnia', text: 'Poz. 1: zaczynasz z losowym towarzyszem. Poz. 2: w Schronisku wybierasz z 4. Poz. 3: towarzysz zaczyna o poziom wyżej.', cost: [25, 60, 110] },
+  pisklecarnia: { name: 'Pisklęcarnia', icon: 'pisklecarnia', text: 'Poz. 1: zaczynasz z losowym towarzyszem. Poz. 2: towarzysza wybierasz z 3 na starcie runu. Poz. 3: wybierasz z 3, a towarzysz zaczyna o poziom wyżej.', cost: [25, 60, 110] },
 };
 export const KURNIK_MAX = 3;
 

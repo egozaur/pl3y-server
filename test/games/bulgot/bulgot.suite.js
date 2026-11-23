@@ -1387,7 +1387,7 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
 });
 
 test('RUN_V = 7: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 11, 'wersja reguł');
+  eq(R.RUN_V, 12, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1819,7 +1819,7 @@ test('Kurnik: Pióra za run, kupno poziomów, efekty na starcie runu i w statyst
   eq(k.coins, 2, 'Spiżarnia +2 Ziarna (poz. 2)'); eq(k.freeLeft, 2, 'Kantyna: darmowe rerolle na starcie');
   const S0 = R.statsOf(fresh()), S1 = R.statsOf(k);
   assert(S1.maxHp > S0.maxHp && S1.atk >= S0.atk && S1.restBonus === 10 && S1.cdPct === 4, 'Siłownia, Gabinet, Szkoła');
-  assert(k.companion && k.companion.lvl === 2, 'Pisklęcarnia 3: towarzysz startuje na poz. 2'); const k1 = fresh({ kurnik: { pisklecarnia: 1 } }); eq(k1.companion.lvl, 1, 'Pisklęcarnia 1: poz. 1');
+  assert(!k.companion && k.phase === 'event' && k.pending && k.pending.kind === 'adopt' && k.pending.start && k.pending.opts.length === 3, 'Pisklęcarnia 2+: na starcie wybierasz towarzysza z 3'); assert(R.choose(k, 0).ok && k.phase === 'offer' && !k.pending && k.companion && k.companion.lvl === 2 && k.offer.length > 0, 'wybór na starcie: towarzysz na poz. 2 (Pisklęcarnia 3), potem oferta'); const k2 = fresh({ kurnik: { pisklecarnia: 2 } }); assert(R.choose(k2, 1).ok && k2.companion.lvl === 1, 'Pisklęcarnia 2: towarzysz na poz. 1'); const k1 = fresh({ kurnik: { pisklecarnia: 1 } }); eq(k1.companion.lvl, 1, 'Pisklęcarnia 1: poz. 1');
   const b = strong(fresh({ kurnik: { skarbiec: 2 } })); const b0 = strong(fresh()); b.round = 6; b0.round = 6; const c1 = b.coins, c0 = b0.coins; fightWin(b); fightWin(b0);
   eq((b.coins - c1) - (b0.coins - c0), 2, 'Skarbiec: +2 Ziarna za bossa');
   assert(R.newRun({ mode: 'full', char: 'pyrtek', garnek: 0, pool: ALL, seed: 3, kurnik: { spizarnia: 99, zly: 2 } }).run.kurnik.spizarnia === D.KURNIK_MAX, 'poziom przycięty do maksimum, nieznane budynki ignorowane');
@@ -1838,7 +1838,7 @@ test('Nowości: kompletność danych (klątwy, trasy, bossowie, osiągnięcia), 
   for (const id of D.SUPER_BOSSES) assert(D.BOSSES[id].super, 'super-boss ' + id);
   for (const [id, b] of Object.entries(D.KURNIK)) { assert(b.name && b.text && b.cost.length === 3 && b.cost[0] < b.cost[2], 'budynek ' + id); }
   for (const a of ['a-klatwa', 'a-klatwy3', 'a-dogrywka', 'a-dogrywka15', 'a-duch', 'a-towarzysz', 'a-trasy', 'a-kurnik', 'a-kurnik-max']) assert(D.ACH_BY_ID[a], 'osiągnięcie ' + a);
-  eq(R.RUN_V, 11, 'RUN_V 11');
+  eq(R.RUN_V, 12, 'RUN_V 12');
 });
 
 test('Jajko Dinozaura: tylko jedno na run (po wykluciu nie wraca do ofert)', () => {

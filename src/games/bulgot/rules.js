@@ -57,7 +57,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 11;
+export const RUN_V = 12;
 
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null, curses = [], kurnik = {} }) {
   const M = MODES[mode], ch = CHARS[char];
@@ -76,7 +76,7 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null
   };
   run.decrees = decreesOf(run.seed);
   run.coins += kLv(run, 'spizarnia');   // Kurnik: Spiżarnia
-  if (kLv(run, 'pisklecarnia') >= 1) { const ks = Object.keys(COMPANIONS); run.companion = { id: makeRng(mix(run.seed, hash('startcomp'))).pick(ks), lvl: compLevel(run) }; }   // Kurnik: Pisklęcarnia
+  if (kLv(run, 'pisklecarnia') === 1) { const ks = Object.keys(COMPANIONS); run.companion = { id: makeRng(mix(run.seed, hash('startcomp'))).pick(ks), lvl: compLevel(run) }; }   // Kurnik: Pisklęcarnia
   if (ch.startTiles) run.tiles = ch.startTiles.slice();   // Dinozaur zaczyna z Jajkiem
   if (ch.randomSkill) run.skills = [{ id: makeRng(mix(run.seed, hash('mutskill'))).pick(Object.keys(SKILLS)), lvl: 1 }];   // Kurczak Mutant: losowa umiejętność na start
   if (nemesis && ENEMIES[nemesis.enemy]) run.nemesis = { ...nemesis, round: nemesisRound(run, nemesis), beaten: false };
@@ -86,6 +86,11 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null
   setOffer(run, 0);
   run.freeLeft = freeRerolls(run) + kLv(run, 'kantyna');
   run.cur = freshCur(run);
+  if (kLv(run, 'pisklecarnia') >= 2) {   // Kurnik: Pisklęcarnia 2+: towarzysza wybierasz z 3 losowych jeszcze przed pierwszą ofertą
+    const rr = makeRng(mix(run.seed, hash('startadopt'))), keys = Object.keys(COMPANIONS), opts = [];
+    while (opts.length < Math.min(keys.length, COMPANION_OFFER)) { const k = rr.pick(keys); if (!opts.includes(k)) opts.push(k); }
+    run.pending = { kind: 'adopt', opts, start: true }; run.phase = 'event';
+  }
   return { ok: true, run };
 }
 
@@ -316,7 +321,7 @@ export function pickTile(run, i, slot, mut, ctx = {}) {
   }
   if (t.event === 'schronisko') {
     const rr = makeRng(mix(run.seed, run.round, hash('adopt'))), keys = Object.keys(COMPANIONS), opts = [];
-    const n = Math.min(keys.length, COMPANION_OFFER + (kLv(run, 'pisklecarnia') >= 2 ? 1 : 0));
+    const n = Math.min(keys.length, COMPANION_OFFER);
     while (opts.length < n) { const k = rr.pick(keys); if (!opts.includes(k)) opts.push(k); }
     run.pending = { kind: 'adopt', opts }; run.phase = 'event'; run.offer = [];
     return { ok: true, event: 'adopt' };
@@ -542,11 +547,11 @@ export function choose(run, i) {
     return Object.assign(nextRound(run), { chose: 0 });
   }
   if (run.phase === 'event' && P && P.kind === 'adopt') {   // Schronisko dla Piskląt
-    if (i === -1) { enterFight(run); return { ok: true, chose: -1 }; }
+    if (i === -1) { if (P.start) { run.pending = null; run.phase = 'offer'; } else enterFight(run); return { ok: true, chose: -1 }; }
     const id = P.opts[i];
     if (!id) return fail('Nie ma takiego towarzysza.', 'index');
     run.companion = { id, lvl: compLevel(run) }; run.stats.adopts = (run.stats.adopts || 0) + 1; cur(run).adopt = id;
-    enterFight(run);
+    if (P.start) { run.pending = null; run.phase = 'offer'; } else enterFight(run);
     return { ok: true, chose: i, companion: run.companion };
   }
   if (run.phase === 'event' && P && P.kind === 'crate') {   // Skrzynka przy pełnych slotach: który slot zastąpić (-1 = zostaw nagrodę)
