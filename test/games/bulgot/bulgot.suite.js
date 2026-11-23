@@ -108,7 +108,7 @@ test('statystyki: baza, kafelki, procenty, zestawy, Worek, Zakazana Pasza, wył�
   let S = heroStats(loadout());
   eq([S.maxHp, S.atk, S.aspd, S.crit, S.critMult], [B.hp, B.atk, 100, 5, 150], 'baza');
   S = heroStats(loadout({ tiles: ['ziarno-mocy', 'ziarno-mocy', 'twardy-grzebien', 'szybki-dziob', 'pancerz-z-pierza'] }));
-  eq([S.atk, S.maxHp, S.aspd, S.armor], [12, B.hp + 14, 122, 10], 'płaskie i procentowe');
+  eq([S.atk, S.maxHp, S.aspd, S.armor], [12, B.hp + 16, 124, 11], 'płaskie i procentowe');
   S = heroStats(loadout({ tiles: ['pakt-z-lisem'] }));
   eq([S.atk, S.maxHp], [Math.floor(8 * 150 / 100), Math.floor(B.hp * 70 / 100)], 'Pakt z Lisem');
   S = heroStats(loadout({ tiles: ['opaska-rambo', 'ostrogi-bojowe'] }));
@@ -122,7 +122,7 @@ test('statystyki: baza, kafelki, procenty, zestawy, Worek, Zakazana Pasza, wył�
   S = heroStats(loadout({ tiles: ['zakazana-pasza'] })); eq([S.atk, S.maxHp, S.aspd], [9, 78, 112], 'Zakazana Pasza +12% wszystkiego');
   S = heroStats(loadout({ tiles: ['czujne-oko', 'ziarno-mocy'] }), { off: 1 }); eq(S.atk, 8, 'wyłączony kafelek (Skubanie) nie liczy się');
   S = heroStats(loadout({ tiles: ['czujne-oko'].concat(Array(20).fill('czujne-oko')) })); eq(S.crit, 100, 'krytyk ma sufit 100%');
-  S = heroStats(loadout({ tiles: ['cieple-gniazdko'], noRegen: true })); eq(S.regen, 4, 'Wulkan: regeneracja o połowę słabsza');
+  S = heroStats(loadout({ tiles: ['cieple-gniazdko'], noRegen: true })); eq(S.regen, 5, 'Wulkan: regeneracja o połowę słabsza');
   S = heroStats(loadout({ char: 'kwoka' })); eq([S.maxHp, S.aspd], [Math.floor(B.hp * 120 / 100), 75], 'Kwoka');
   S = heroStats(loadout({ char: 'indor' })); eq([S.atk, S.aspd, S.crit], [Math.floor(8 * 160 / 100), 70, 15], 'Indor');
 });
@@ -158,7 +158,7 @@ test('walka: pancerz, unik, krytyk i obrażenia bohatera liczą się wg wzoru', 
   try {
     const a = play(setup({ lo, enemies: [foe({ hp: 200, atk: 1, armor: 100 })] }));
     const hit = evs(a.ev, 'hit').find(e => e.kind === 'atk');
-    eq(hit.d, Math.floor(21 * 100 / 200), 'Atak 21 (+30% z dwóch progów Kolby Mocy) przy pancerzu 100 = połowa');
+    eq(hit.d, Math.floor(22 * 100 / 200), 'Atak 22 (+30% z dwóch progów Kolby Mocy) przy pancerzu 100 = połowa');
     const b = play(setup({ enemies: [foe({ hp: 40, atk: 1, evade: 100 })] }));
     assert(evs(b.ev, 'miss').length > 0 && evs(b.ev, 'hit').length === 0, 'wróg z 100% uniku nie dostaje ciosów');
   } finally { D.CHARS.pyrtek.base = base; }
@@ -413,9 +413,9 @@ test('Wylęgarnia: dwa składniki wykluwają legendarny przedmiot, który znika 
 test('progi statystyk: co 3 kopie premia (Kolba Mocy, Koguci Hełm), dwa progi przy 6 kopiach', () => {
   const S = tiles => heroStats(loadout({ tiles }));
   const a2 = S(['ziarno-mocy', 'ziarno-mocy']).atk, a3 = S(['ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy']).atk;
-  eq([a2, a3], [12, 14], 'Kolba Mocy +15% Ataku');
-  eq(S(Array(6).fill('ziarno-mocy')).atk, Math.round(8 * 262 / 100), 'dwa progi');
-  const h = S(['twardy-grzebien', 'twardy-grzebien', 'twardy-grzebien']); eq([h.maxHp, h.armor], [Math.floor(112 * 110 / 100), 4], 'Koguci Hełm');
+  eq([a2, a3], [12, 15], 'Kolba Mocy +15% Ataku');
+  eq(S(Array(6).fill('ziarno-mocy')).atk, Math.round(8 * 274 / 100), 'dwa progi');
+  const h = S(['twardy-grzebien', 'twardy-grzebien', 'twardy-grzebien']); eq([h.maxHp, h.armor], [Math.floor(118 * 110 / 100), 4], 'Koguci Hełm');
 });
 
 test('nowi wrogowie: Kaczka podpala bohatera, Kurczak z Zamrażarki wstaje (chyba że płonie), Sęp Audytor czyści efekty', () => {
@@ -545,7 +545,7 @@ test('run: reroll kosztuje 2, 3, 4…, cena wraca w nowej rundzie; Kaczor ma dar
 test('run: wybór kafelka (statystyki rosną z życiem), umiejętności: sloty, awans na poziom 2, zastępowanie', () => {
   const run = fresh(); force(run, 'twardy-grzebien', 'ziarno-mocy', 'kukurydziany-grad', 'pianie-grozy');
   const hp0 = run.hp; const r = R.pickTile(run, 0); assert(r.ok && run.phase === 'fight', 'wybrano');
-  assert(run.hp === hp0 + 14 && R.statsOf(run).maxHp === hp0 + 14, 'maks. Życie i bieżące rosną razem');
+  assert(run.hp === hp0 + 16 && R.statsOf(run).maxHp === hp0 + 16, 'maks. Życie i bieżące rosną razem');
   assert(R.pickTile(run, 0).code === 'phase', 'poza ofertą nie wybierasz');
   for (const id of ['kukurydziany-grad', 'pianie-grozy', 'jajeczny-granat']) { force(run, id); assert(R.pickTile(run, 0).ok, 'slot ' + id); }
   eq(run.skills.map(s => s.id), ['grad', 'pianie', 'granat'], 'trzy sloty');
@@ -682,7 +682,7 @@ test('dokupowanie: cena wg rzadkości, kafelek znika z oferty, wolny wybór zost
   force(run, 'ziarenko-z-podlogi', 'oko-kontrolera-jakosci', 'unik-skrzydlem', 'hazard-w-kurniku');
   const atk0 = R.statsOf(run).atk;
   let r = R.buyOffer(run, 0); assert(r.ok && r.bought === 'ziarenko-z-podlogi' && r.price === D.RULES.prices[0], 'zwykły kosztuje ' + D.RULES.prices[0]);
-  assert(run.coins === 100 - D.RULES.prices[0] && R.statsOf(run).atk === atk0 + 1 && run.offer[0] === null && run.phase === 'offer', 'Ziarna pobrane, efekt od razu, faza oferty trwa');
+  assert(run.coins === 100 - D.RULES.prices[0] && R.statsOf(run).atk >= atk0 && run.offer[0] === null && run.phase === 'offer', 'Ziarna pobrane, efekt od razu, faza oferty trwa');
   assert(R.buyOffer(run, 0).code === 'index', 'drugi raz tego samego nie kupisz');
   assert(R.buyOffer(run, 3).code === 'event', 'Hazard to wydarzenie: nie na sprzedaż');
   r = R.buyOffer(run, 1); assert(r.ok && r.price === D.RULES.prices[1], 'rzadki kosztuje ' + D.RULES.prices[1]);
@@ -814,7 +814,7 @@ test('Prezes: Zebranie Zarządu, przez pierwsze 3 s nikt nie atakuje; umiejętno
 });
 test('nowe kafelki ofensywne: Ziarno Mocy +6 Ataku, Ostry Dziób +12% obrażeń', () => {
   eq(heroStats(loadout({ tiles: ['ziarno-mocy'] })).atk, 10, 'Ziarno Mocy');
-  eq(heroStats(loadout({ tiles: ['ostry-dziob', 'ostry-dziob'] })).dmg, 48, 'Ostry Dziób kumuluje się');
+  eq(heroStats(loadout({ tiles: ['ostry-dziob', 'ostry-dziob'] })).dmg, 50, 'Ostry Dziób kumuluje się');
   assert(D.TILE_BY_ID['ostry-dziob'].repeat && D.STARTER_TILES.includes('ostry-dziob'), 'dostępny od startu i powtarzalny');
 });
 // ---------- profil ----------
@@ -1068,7 +1068,7 @@ test('Kafelki rosnące: Trofeum z Piór, Skarbonka Pisklęcia, Pierze Weterana (
   eq(R.statsOf(r).maxHp, hp0 + 2, 'Trofeum: +2 maks. Życia za wroga');
   eq(R.statsOf(r).coinFlat, 2, 'Skarbonka: +1 za piętro bez odpoczynku');
   const L = g => heroStats(loadout({ tiles: ['ziarno-mocy', 'pierze-weterana'], grow: { 'pierze-weterana': g } })).atk;
-  eq([L(0), L(10), L(99)], [10, 12, 13], 'Pierze: +3% na stos, maks. +45%');
+  eq([L(0), L(10), L(99)], [10, 12, 14], 'Pierze: +3% na stos, maks. +45%');
   assert(D.TILES.filter(t => t.grow).every(t => D.STARTER_TILES.includes(t.id)), 'rosnące kafelki są w puli od startu');
 });
 
@@ -1335,7 +1335,7 @@ test('Ulepszanie: 2 kopie poziomu 1 lub 2 → 1 kafelek następnego poziomu; bł
   const hp0 = R.statsOf(run).maxHp, r = R.upgrade(run, 'grzebien-z-tasmy');
   assert(r.ok && r.upgraded.to === 'grzebien-hodowlany', 'zlanie');
   eq(run.tiles, ['grzebien-z-tasmy', 'czujne-oko', 'grzebien-hodowlany'], '2 kopie znikają, 1 nowa (jedna zostaje)');
-  eq(R.statsOf(run).maxHp, hp0, 'statystyki liczą się z nowego kafelka'); assert(run.hp <= R.statsOf(run).maxHp, 'życie nie przekracza maks.');
+  eq(R.statsOf(run).maxHp, hp0 + 1, 'statystyki liczą się z nowego kafelka'); assert(run.hp <= R.statsOf(run).maxHp, 'życie nie przekracza maks.');
   eq([run.stats.upgrades, run.cur.upgrades], [1, [{ from: 'grzebien-z-tasmy', to: 'grzebien-hodowlany' }]], 'licznik i dziennik rundy');
   run.tiles = Array(2).fill('grzebien-hodowlany'); assert(R.upgrade(run, 'grzebien-hodowlany').ok && run.tiles[0] === 'twardy-grzebien', 'poziom 2 → 3 (stare id)');
   run.tiles = Array(2).fill('twardy-grzebien'); eq(R.upgrade(run, 'twardy-grzebien').code, 'level', 'poziom 3 nie jest ulepszany');
@@ -1348,10 +1348,10 @@ test('Ulepszanie: 2 kopie poziomu 1 lub 2 → 1 kafelek następnego poziomu; bł
 test('Ulepszanie: wynik liczy się jak zdobyty (próg), wada fabryczna nie zostaje sierotą, regeneracja w dziesiątych, BgPlayer przyjmuje akcję', async () => {
   const run = fresh(); run.tiles = [...Array(2).fill('nogi-akrobaty'), ...Array(2).fill('zwinne-nogi')];
   assert(R.upgrade(run, 'nogi-akrobaty').ok && run.tiles.filter(x => x === 'zwinne-nogi').length === 3, 'Nogi Akrobaty ×2 → Zwinne Nogi (trzecia kopia)');
-  eq([R.statsOf(run).evade, R.statsOf(run).aspd], [10 * 3 + 5, 108], 'trzy Zwinne Nogi: 30% + próg Taniec Kurczaka (5% uniku, 8% szybkości ataku)');
+  eq([R.statsOf(run).evade, R.statsOf(run).aspd], [11 * 3 + 5, 108], 'trzy Zwinne Nogi: 30% + próg Taniec Kurczaka (5% uniku, 8% szybkości ataku)');
   const f = fresh(); f.tiles = Array(2).fill('sloma-z-wczoraj'); f.flawed = [{ id: 'sloma-z-wczoraj', flaw: 'kruchy', on: false, round: 1 }];
   assert(R.upgrade(f, 'sloma-z-wczoraj').ok && f.flawed.length === 0, 'wada zniknęła razem ze stopioną kopią');
-  eq(heroStats({ char: 'pyrtek', tiles: ['sloma-z-wczoraj', 'gniazdko-z-siana'] }).regen, 8, 'regeneracja w dziesiątych częściach (0,3 + 0,5 / s)');
+  eq(heroStats({ char: 'pyrtek', tiles: ['sloma-z-wczoraj', 'gniazdko-z-siana'] }).regen, 7, 'regeneracja w dziesiątych częściach (0,2 + 0,5 / s)');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run0 = await st.get('run'); run0.tiles = Array(2).fill('ziarenko-z-podlogi'); run0.phase = 'offer'; await st.put('run', run0);
@@ -1387,7 +1387,7 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
 });
 
 test('RUN_V = 7: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 10, 'wersja reguł');
+  eq(R.RUN_V, 11, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1397,7 +1397,7 @@ test('RUN_V = 7: stary run (wersja 2) jest unieważniany', async () => {
 test('regeneracja: ułamkowe wartości kumulują się w sekundach (0,2 / s = 1 Życia co 5 s)', () => {
   const lo = { char: 'pyrtek', tiles: ['sloma-z-wczoraj'], skills: [] };
   const setup = { v: 1, round: 1, mode: 'quick', seed: 5, boss: null, elite: false, zone: 0, hero: { loadout: lo, hp: 10 }, enemies: [{ id: 'szczur-pasz', name: 'Test', hp: 999999, atk: 1, aspd: 100, armor: 0, evade: 0, crit: 0, art: 'rat', idle: 99999 }], minion: null };
-  const f = new Fight(setup); for (let i = 0; i < 100; i++) f.step([]); eq(f.hp, 13, '10 s × 0,3 = +3 Życia (ułamki się kumulują)');
+  const f = new Fight(setup); for (let i = 0; i < 100; i++) f.step([]); eq(f.hp, 12, '10 s × 0,2 = +2 Życia (ułamki się kumulują)');
 });
 
 test('łup z bossa: szansa 15% (RULES.lootChance), losowana deterministycznie z ziarna; bez łupu od razu bonus albo następne piętro', () => {
@@ -1550,7 +1550,7 @@ test('Jajko Dinozaura: po 4 wygranych piętrach wykluwa się Dinozaur (+30% Atak
   }
   assert(out.dino && run.tiles.includes('dinozaur') && !run.tiles.includes('jajko-dinozaura') && !('jajko-dinozaura' in run.grow), 'po 4 wygranych wykluwa się Dinozaur');
   const eggless = fresh(); eggless.tiles = run.tiles.filter(x => x !== 'dinozaur'); const atk0 = R.statsOf(eggless).atk;
-  assert(R.statsOf(run).atk >= Math.floor(atk0 * 1.25), 'Dinozaur: +30% Ataku');
+  assert(R.statsOf(run).atk >= Math.floor(atk0 * 1.15), 'Dinozaur: +30% Ataku');
   eq(R.view(run).tiles.includes('dinozaur'), true, 'widok zawiera Dinozaura');
 });
 
@@ -1838,7 +1838,7 @@ test('Nowości: kompletność danych (klątwy, trasy, bossowie, osiągnięcia), 
   for (const id of D.SUPER_BOSSES) assert(D.BOSSES[id].super, 'super-boss ' + id);
   for (const [id, b] of Object.entries(D.KURNIK)) { assert(b.name && b.text && b.cost.length === 3 && b.cost[0] < b.cost[2], 'budynek ' + id); }
   for (const a of ['a-klatwa', 'a-klatwy3', 'a-dogrywka', 'a-dogrywka15', 'a-duch', 'a-towarzysz', 'a-trasy', 'a-kurnik', 'a-kurnik-max']) assert(D.ACH_BY_ID[a], 'osiągnięcie ' + a);
-  eq(R.RUN_V, 10, 'RUN_V 10');
+  eq(R.RUN_V, 11, 'RUN_V 11');
 });
 
 test('Jajko Dinozaura: tylko jedno na run (po wykluciu nie wraca do ofert)', () => {

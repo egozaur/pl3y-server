@@ -12,9 +12,9 @@ export const TYPES = { stat: 'Statystyka', skill: 'Umiejętność', item: 'Przed
 // grow: o ile rośnie życie i atak wrogów z każdą rundą (mnożnik). bosses: runda -> boss. bonusAfter: po tych bossach dodatkowa oferta.
 // elite: rundy z elitą (nagroda: Odznaka). zoneMul: dodatkowy mnożnik życia/ataku zwykłych wrogów w strefie (%, null = brak).
 export const MODES = {
-  quick: { name: 'Zupka Chińska', rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.088, atk: 1.058 }, bossPct: { hp: 80, atk: 90 },
+  quick: { name: 'Szybki', rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.090, atk: 1.060 }, bossPct: { hp: 80, atk: 90 },
     zones: [{ upTo: 5, zone: 0 }, { upTo: 10, zone: 1 }], elite: [4, 8], doors: [2, 6, 9] },
-  full: { name: 'Bulion Babci', rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 135, atk: 80 }, grow: { hp: 1.087, atk: 1.052 }, bossPct: { hp: 100, atk: 100 },
+  full: { name: 'Pełny', rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 135, atk: 80 }, grow: { hp: 1.091, atk: 1.056 }, bossPct: { hp: 100, atk: 100 },
     zones: [{ upTo: 6, zone: 0 }, { upTo: 12, zone: 1 }, { upTo: 20, zone: 2 }], elite: [4, 10, 16], zoneMul: [null, null, { hp: 130, atk: 112 }], doors: [2, 5, 8, 11, 14, 17] },
 };
 // doors: piętra z Rozwidleniem Korytarza (wybór: zwykłe piętro albo wróg z cechą elity za nagrodę).
@@ -203,49 +203,49 @@ export const SETS = {
 const tenths = v => String(v / 10).replace('.', ',');
 const STAT_FAMILIES = [
   { fam: 'zycie', k: 'hpFlat', fmt: v => `+${v} maks. Życia`, lv: [
-    ['grzebien-z-tasmy', 'Grzebień z Taśmy', 4, 'Wyszedł z taśmy lekko krzywy, ale czerwony.'],
-    ['grzebien-hodowlany', 'Grzebień Hodowlany', 8, 'Z hodowli, gdzie każdy grzebień ma metrykę.'],
-    ['twardy-grzebien', 'Grzebień Barberski', 14, 'Im czerwieńszy, tym trudniej go zgasić.'],
+    ['grzebien-z-tasmy', 'Grzebień z Taśmy', 3, 'Wyszedł z taśmy lekko krzywy, ale czerwony.'],
+    ['grzebien-hodowlany', 'Grzebień Hodowlany', 7, 'Z hodowli, gdzie każdy grzebień ma metrykę.'],
+    ['twardy-grzebien', 'Grzebień Barberski', 16, 'Im czerwieńszy, tym trudniej go zgasić.'],
     ['grzebien-rosolowego-krola', 'Grzebień Rosołowego Króla', 24, 'Korona założona przed pierwszą zupą. Do dziś ciepła.']] },
   { fam: 'atak', k: 'atkPct', fmt: v => `+${v}% Ataku`, lv: [
-    ['ziarenko-z-podlogi', 'Ziarenko z Podłogi', 7, 'Spadło ze stołu. Zasada pięciu sekund obowiązuje także w kurniku.'],
-    ['ziarno-selekcjonowane', 'Ziarno Selekcjonowane', 14, 'Wybrane przez komisję, która nie przyjmowała odwołań.'],
-    ['ziarno-mocy', 'Ziarno Mocy', 22, 'Jedno ziarno, a w nim cała sprawiedliwość.'],
+    ['ziarenko-z-podlogi', 'Ziarenko z Podłogi', 5, 'Spadło ze stołu. Zasada pięciu sekund obowiązuje także w kurniku.'],
+    ['ziarno-selekcjonowane', 'Ziarno Selekcjonowane', 11, 'Wybrane przez komisję, która nie przyjmowała odwołań.'],
+    ['ziarno-mocy', 'Ziarno Mocy', 24, 'Jedno ziarno, a w nim cała sprawiedliwość.'],
     ['ziarno-pierwszego-jajka', 'Ziarno Pierwszego Jajka', 38, 'Z niego wszystko się zaczęło. Kura wolałaby, żebyś o to nie pytał.']] },
   { fam: 'obrazenia', k: 'dmg', fmt: v => `+${v}% obrażeń`, lv: [
-    ['nadpilowany-dziob', 'Nadpiłowany Dziób', 7, 'Ktoś zaczął go piłować i się znudził.'],
-    ['dziob-szlifowany', 'Dziób Szlifowany', 14, 'Szlif końcowy robi dział jakości, po godzinach.'],
-    ['ostry-dziob', 'Ostry Dziób', 24, 'Naostrzony na kamieniu, na którym ostrzy się cennik.'],
+    ['nadpilowany-dziob', 'Nadpiłowany Dziób', 5, 'Ktoś zaczął go piłować i się znudził.'],
+    ['dziob-szlifowany', 'Dziób Szlifowany', 11, 'Szlif końcowy robi dział jakości, po godzinach.'],
+    ['ostry-dziob', 'Ostry Dziób', 25, 'Naostrzony na kamieniu, na którym ostrzy się cennik.'],
     ['dziob-prezesa', 'Dziób Prezesa', 40, 'Podpisuje wyroki szybciej niż zarządzenia.']] },
   { fam: 'szybkosc', k: 'aspdPct', fmt: v => `+${v}% szybkości ataku`, lv: [
-    ['dziob-po-kawie', 'Dziób po Kawie', 7, 'Pierwsza kawa z automatu, pierwsze drgania.'],
-    ['dziob-po-espresso', 'Dziób po Espresso', 13, 'Drgania zaczynają być zauważalne dla ubezpieczyciela.'],
-    ['szybki-dziob', 'Szybki Dziób', 22, 'Stuk, stuk, stuk. Księgowość nie nadąża.'],
+    ['dziob-po-kawie', 'Dziób po Kawie', 5, 'Pierwsza kawa z automatu, pierwsze drgania.'],
+    ['dziob-po-espresso', 'Dziób po Espresso', 11, 'Drgania zaczynają być zauważalne dla ubezpieczyciela.'],
+    ['szybki-dziob', 'Szybki Dziób', 24, 'Stuk, stuk, stuk. Księgowość nie nadąża.'],
     ['dziob-maszynowy', 'Dziób Maszynowy', 38, 'Stuka tak szybko, że księgowość wezwała mechanika.']] },
   { fam: 'pancerz', k: 'armor', fmt: v => `+${v} Pancerza`, lv: [
-    ['puch-zbity-w-kule', 'Puch Zbity w Kulę', 3, 'Wygląda jak pompon. Chroni jak pompon z ambicjami.'],
-    ['pierze-prasowane', 'Pierze Prasowane', 6, 'Prasowane na gorąco, jak kołnierzyk dyrektora.'],
-    ['pancerz-z-pierza', 'Pancerz z Pierza', 10, 'Miękki w dotyku, twardy w boju.'],
+    ['puch-zbity-w-kule', 'Puch Zbity w Kulę', 2, 'Wygląda jak pompon. Chroni jak pompon z ambicjami.'],
+    ['pierze-prasowane', 'Pierze Prasowane', 5, 'Prasowane na gorąco, jak kołnierzyk dyrektora.'],
+    ['pancerz-z-pierza', 'Pancerz z Pierza', 11, 'Miękki w dotyku, twardy w boju.'],
     ['zbroja-wyroczni-kurnika', 'Zbroja Wyroczni Kurnika', 17, 'Wyrocznia przewidziała ciosy. Zbroja już je zna.']] },
   { fam: 'krytyk', k: 'crit', fmt: v => `+${v}% szansy na trafienie krytyczne`, lv: [
-    ['zezowate-oko', 'Zezowate Oko', 8, 'Patrzy w dwie strony naraz. Czasem trafia w obie.'],
-    ['oko-kontrolera-jakosci', 'Oko Kontrolera Jakości', 15, 'Odrzuca wszystko, w tym twoich wrogów.'],
-    ['czujne-oko', 'Czujne Oko', 26, 'Widzi słabe punkty. Szczególnie Prezesa.'],
+    ['zezowate-oko', 'Zezowate Oko', 5, 'Patrzy w dwie strony naraz. Czasem trafia w obie.'],
+    ['oko-kontrolera-jakosci', 'Oko Kontrolera Jakości', 12, 'Odrzuca wszystko, w tym twoich wrogów.'],
+    ['czujne-oko', 'Czujne Oko', 28, 'Widzi słabe punkty. Szczególnie Prezesa.'],
     ['oko-cyklopa-z-chlodni', 'Oko Cyklopa z Chłodni', 44, 'Jedno oko, zero litości, temperatura minus dwadzieścia.']] },
   { fam: 'unik', k: 'evade', fmt: v => `+${v}% uniku`, lv: [
-    ['slieskie-nozki', 'Śliskie Nóżki', 3, 'Posmarowane tłuszczem po wczorajszym rosole.'],
-    ['nogi-akrobaty', 'Nogi Akrobaty', 6, 'Cyrk wyjechał, nogi zostały.'],
-    ['zwinne-nogi', 'Zwinne Nogi', 10, 'Kto biega, ten się nie gotuje.'],
+    ['slieskie-nozki', 'Śliskie Nóżki', 2, 'Posmarowane tłuszczem po wczorajszym rosole.'],
+    ['nogi-akrobaty', 'Nogi Akrobaty', 5, 'Cyrk wyjechał, nogi zostały.'],
+    ['zwinne-nogi', 'Zwinne Nogi', 11, 'Kto biega, ten się nie gotuje.'],
     ['cien-skrzydla', 'Cień Skrzydła', 17, 'Nie widać go nawet po fakcie.']] },
   { fam: 'regeneracja', k: 'regen', fmt: v => `+${tenths(v)} Regeneracji / s`, lv: [
-    ['sloma-z-wczoraj', 'Słoma z Wczoraj', 3, 'Trochę wilgotna, ale własna.'],
+    ['sloma-z-wczoraj', 'Słoma z Wczoraj', 2, 'Trochę wilgotna, ale własna.'],
     ['gniazdko-z-siana', 'Gniazdko z Siana', 5, 'Siano pachnie latem, którego tu nie było.'],
-    ['cieple-gniazdko', 'Ciepłe Gniazdko', 9, 'Nawet w fabryce znajdzie się kąt na drzemkę.'],
-    ['wieczny-ogien-kuchenki', 'Wieczny Ogień Kuchenki', 15, 'Nikt nie pamięta, kto go zapalił. Nikt go nie gasi.']] },
+    ['cieple-gniazdko', 'Ciepłe Gniazdko', 11, 'Nawet w fabryce znajdzie się kąt na drzemkę.'],
+    ['wieczny-ogien-kuchenki', 'Wieczny Ogień Kuchenki', 17, 'Nikt nie pamięta, kto go zapalił. Nikt go nie gasi.']] },
   { fam: 'szczescie', k: 'luck', fmt: v => `+${v} Szczęścia (lepsze kafelki w ofertach)`, lv: [
-    ['trojlistna-koniczyna', 'Trójlistna Koniczyna', 6, 'Zwykła, ale ktoś ją pogłaskał.'],
-    ['koniczyna-z-kapliczki', 'Koniczyna z Kapliczki', 12, 'Wyrosła pod figurką świętego Rosołu.'],
-    ['czterolistna-koniczyna', 'Czterolistna Koniczyna', 20, 'Rzadkie jak kurczak, który wraca z ubojni.'],
+    ['trojlistna-koniczyna', 'Trójlistna Koniczyna', 4, 'Zwykła, ale ktoś ją pogłaskał.'],
+    ['koniczyna-z-kapliczki', 'Koniczyna z Kapliczki', 9, 'Wyrosła pod figurką świętego Rosołu.'],
+    ['czterolistna-koniczyna', 'Czterolistna Koniczyna', 21, 'Rzadkie jak kurczak, który wraca z ubojni.'],
     ['piecio-koniczyna-zarzadu', 'Pięciolistna Koniczyna Zarządu', 34, 'Wyhodowana na koszt akcjonariuszy. Szczęście wypłacane w ratach.']] },
 ];
 export const STAT_TILES = [];
@@ -659,8 +659,8 @@ export const ACH_GROUPS = { win: { name: 'Zwycięstwa', color: '#f0b429' }, styl
 export const ACHIEVEMENTS = [
   // zwycięstwa
   { id: 'a-wygrana', g: 'win', s: '★', name: 'Pierwsza Zupa', text: 'Wygraj dowolny run.' },
-  { id: 'a-szybka', g: 'win', s: '⚡', name: 'Zupka Zalana', text: 'Wygraj tryb Zupka Chińska.' },
-  { id: 'a-babcia', g: 'win', s: '♛', name: 'Babcia Przytakuje', text: 'Wygraj tryb Bulion Babci.' },
+  { id: 'a-szybka', g: 'win', s: '⚡', name: 'Szybciej niż Zupka', text: 'Wygraj tryb szybki. Szybciej, niż zdąży się zaparzyć zupka chińska.' },
+  { id: 'a-babcia', g: 'win', s: '♛', name: 'Babcia Przytakuje', text: 'Wygraj tryb pełny.' },
   { id: 'a-g1', g: 'win', s: '♨', name: 'Ciepło, ciepło', text: 'Wygraj run na palniku 1 lub wyższym.' },
   { id: 'a-g2', g: 'win', s: '♨', name: 'Gazówka Dzwoni', text: 'Wygraj run na palniku 2 lub wyższym.' },
   { id: 'a-g3', g: 'win', s: '♨', name: 'Piec Nie Prosi', text: 'Wygraj run na palniku 3 lub wyższym.' },
