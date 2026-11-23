@@ -924,6 +924,25 @@ test('BgRanks: jeden wpis na gracza (najlepszy), sortowanie, brak klucza gracza,
   assert((await rk.fetch(new Request('https://bg/list?mode=zly'))).status === 400, 'zły tryb');
   assert((await post(rk, 'submit', { mode: 'full', entry: { n: 'x', score: 'dużo' } })).status === 400, 'zły wpis');
 });
+test('BgRanks: „prawie” (najbliższy wynik nad tobą) i anonimowe liczniki pięter dla ciekawostek', async () => {
+  const rk = new BgRanks({ storage: mkStorage() }, {});
+  const sub = (n, score, fl, win = false) => post(rk, 'submit', { mode: 'quick', entry: { n, nick: n.toUpperCase(), avatar: 1, score, rounds: 3, win, char: 'pyrtek', garnek: 1, at: 1, ...(fl ? { fl } : {}) } });
+  assert((await sub('ala', 5000)).j.above === null, 'pierwszy wynik: nikt nad nim');
+  await sub('ola', 3000, { round: 4, died: true });
+  const r = (await sub('ewa', 2500, { round: 4, died: true })).j;
+  assert(r.above && r.above.nick === 'OLA' && r.above.gap === 500 && r.above.place === 3, 'nad wynikiem Ewy jest Ola (500 pkt), miejsce 3: ' + JSON.stringify(r.above));
+  assert((await sub('ola', 3500, { round: 2, died: true })).j.above.nick === 'ALA', 'własny wcześniejszy wpis nie liczy się jako „nad tobą”');
+  const f = (await sub('jan', 9000, { round: 10, died: false }, true)).j.floor, M = D.MODES.quick;
+  assert(f.runs === 4 && f.wins === 1 && f.reach.length === M.rounds && f.reach[0] === 4 && f.reach[3] === 3 && f.reach[9] === 1, 'dotarcie na piętra: ' + JSON.stringify(f.reach));
+  assert(f.died[3] === 2 && f.died[1] === 1 && f.died.reduce((a, b) => a + b, 0) === 3, 'odpadnięcia na piętrach: ' + JSON.stringify(f.died));
+  const g = (await sub('kot', 100, null)).j.floor;
+  assert(g.runs === 4, 'wpis bez `fl` (poddanie) nie zmienia liczników pięter');
+  assert((await post(rk, 'submit', { mode: 'quick', entry: { n: 'x', nick: 'X', score: 10, rounds: 1, win: false, char: 'pyrtek', garnek: 3, at: 1 } })).j.floor === null, 'inny palnik: osobne liczniki, puste');
+});
+test('Sim: wynik walki ma liczniki krytyków do ciekawostek (critRolls ≥ critHits, critPct = szansa bohatera)', () => {
+  const res = runFight(R.buildSetup(fresh()), [[2, 0], [30, 0], [60, 0]]);
+  assert(Number.isInteger(res.critRolls) && Number.isInteger(res.critHits) && res.critHits <= res.critRolls && res.critPct >= 0, JSON.stringify([res.critRolls, res.critHits, res.critPct]));
+});
 test('BgRanks: widoki po postaci, poziomie Garnka i graczu, jeden wpis na gracza w przekroju, migracja starych wpisów', async () => {
   const rk = new BgRanks({ storage: mkStorage() }, {});
   const sub = (n, score, char, garnek) => post(rk, 'submit', { mode: 'full', entry: { n, nick: n.toUpperCase(), avatar: 1, score, rounds: 5, win: false, char, garnek, at: 1 } });

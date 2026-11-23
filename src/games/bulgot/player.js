@@ -134,8 +134,9 @@ export class BgPlayer {
         if (run.done > 0 && this.env && this.env.BG_RANKS) {
           try {
             const res = await this.env.BG_RANKS.get(this.env.BG_RANKS.idFromName('ranks')).fetch('https://bg/submit', {
-              method: 'POST', body: JSON.stringify({ mode: run.mode, entry: { n: pl.n, nick: pl.nick, avatar: pl.avatar || 0, score: run.score, rounds: run.done, win: run.ended === 'win', char: run.char, garnek: run.garnek, deep: end.deep || 0, at: this.now() } }) });
-            extra.end.rank = (await res.json()).rank;
+              method: 'POST', body: JSON.stringify({ mode: run.mode, entry: { n: pl.n, nick: pl.nick, avatar: pl.avatar || 0, score: run.score, rounds: run.done, win: run.ended === 'win', char: run.char, garnek: run.garnek, deep: end.deep || 0, at: this.now(), ...(path === 'abandon' ? {} : { fl: { round: run.round, died: run.ended !== 'win' && !run.endless } }) } }) });
+            const rj = await res.json();
+            extra.end.rank = rj.rank; extra.end.above = rj.above || null; extra.end.floor = rj.floor || null;
           } catch {}
         }
       }

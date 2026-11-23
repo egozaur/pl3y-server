@@ -43,6 +43,7 @@ export class Fight {
     this.chain = 0; this.chainT = -99; this.chainSlots = []; this.skillBonus = 0; this.chains = 0; this.reacts = 0; this.reactSeen = [];
     if (this.S.startBurn || this.S.startFrost) for (const e of this.enemies) { if (this.S.startBurn) this.applyStatus(e, 'burn', this.S.startBurn); if (this.S.startFrost) this.applyStatus(e, 'frost', this.S.startFrost); }
     this.stolen = 0; this.dealt = 0; this.taken = 0; this.maxHit = 0; this.kills = 0; this.used = 0; this.lowest = this.hp;
+    this.critRolls = 0; this.critHits = 0;   // tylko do ciekawostek: ile razy losowano krytyk i ile razy wypadł
   }
 
   mk(e) {
@@ -86,7 +87,11 @@ export class Fight {
     raw = fl(raw * (100 + this.S.dmg + this.skillBonus + (this.S.overtime && this.tick >= 200 ? this.S.overtime : 0) + (this.S.vsCold && (t.frost > 0 || this.tick < t.frozenUntil) ? this.S.vsCold : 0) + (this.S.vsBurn && t.burn > 0 ? this.S.vsBurn : 0) + (this.tick < this.dmgUntil ? this.dmgBonus : 0)) / 100);
     let crit = false;
     if (t.brittle) { t.brittle = false; crit = true; raw = fl(raw * this.S.critMult / 100); }   // Kruchość: trafienie zawsze krytyczne
-    else if ((canCrit || (this.S.skillCrit && this.inSkill)) && (this.tick < this.critUntil || this.rng.int(100) < this.S.crit)) { crit = true; raw = fl(raw * this.S.critMult / 100); }
+    else if (canCrit || (this.S.skillCrit && this.inSkill)) {
+      const forced = this.tick < this.critUntil;   // jak wcześniej: wymuszony krytyk nie losuje (kolejność losowań bez zmian)
+      if (!forced) this.critRolls++;
+      if (forced || this.rng.int(100) < this.S.crit) { crit = true; if (!forced) this.critHits++; raw = fl(raw * this.S.critMult / 100); }
+    }
     let d = Math.max(1, fl(raw * 100 / (100 + Math.max(0, t.armor))));
     if (t.shieldHits > 0) { t.shieldHits--; this.push({ k: 'shield', to: t.uid }); return 0; }
     if (t.shield > 0) { const a = Math.min(t.shield, d); t.shield -= a; d -= a; this.push({ k: 'shieldhit', to: t.uid, d: a }); if (d <= 0) return a; }
@@ -597,7 +602,7 @@ export class Fight {
       foeLeft: tot ? Math.ceil(left * 100 / tot) : 0, foes: foes.map(e => e.name).filter(Boolean),
       win: this.win, ticks: this.tick, hp: Math.max(0, this.hp), maxHp: this.S.maxHp, timeout: this.timeout,
       usedRevive: this.revived, stolen: this.stolen, dealt: this.dealt, taken: this.taken, maxHit: this.maxHit,
-      kills: this.kills, skillsUsed: this.used, chains: this.chains, reactions: this.reacts, reactSeen: this.reactSeen, coinsWon: this.coinsWon, burnDealt: this.burnDealt, freezes: this.freezes, lowest: this.lowest, boss: this.win && boss ? boss.boss : null,
+      kills: this.kills, skillsUsed: this.used, critRolls: this.critRolls, critHits: this.critHits, critPct: this.S.crit, chains: this.chains, reactions: this.reacts, reactSeen: this.reactSeen, coinsWon: this.coinsWon, burnDealt: this.burnDealt, freezes: this.freezes, lowest: this.lowest, boss: this.win && boss ? boss.boss : null,
     };
   }
 }

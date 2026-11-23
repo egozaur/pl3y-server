@@ -111,7 +111,7 @@ export function onRunEnd(p, r) {
   const feathers = r.done + (win ? RULES.featherWin + RULES.featherGarnek * (r.garnek | 0) : 0) + RULES.featherEndless * deep;
   p.feathers = (p.feathers | 0) + feathers; p.counters.feathers = (p.counters.feathers || 0) + feathers;
   if (deep > (p.counters.deepest || 0)) p.counters.deepest = deep;
-  return { newBest, garnekUnlocked, feathers, deep };
+  return { newBest, garnekUnlocked, feathers, deep, prevBest: prev ? prev.score : 0 };
 }
 
 // Osiągnięcia sprawdzane po zakończeniu runu (profil już zaktualizowany przez onRunEnd). Zwraca świeżo zdobyte.

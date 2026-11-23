@@ -4,7 +4,8 @@
 //  • per postać i poziom Garnka: klucze „c:<tryb>:<postać>:<garnek>”, w każdym jeden wpis na gracza (najlepszy w tej kombinacji);
 //  • per gracz: wszystkie jego wpisy z kluczy „c:…” (każda kombinacja postaci i Garnka osobno).
 // Kolekcja „do analizy” (partie wysłane przez graczy): POST /analysis-put { entry }, GET /analysis-list, POST /analysis-del { ids }.
-// POST /submit { mode, entry: { n, nick, avatar, score, rounds, win, char, garnek, at } } → { rank, crank };
+// POST /submit { mode, entry: { n, nick, avatar, score, rounds, win, char, garnek, at, fl?: { round, died } } } → { rank, crank, above, floor };
+//  `above` = najbliższy wynik innego gracza nad tym i miejsce, jakie dałby ten wynik; `floor` = anonimowe liczniki pięter „f:<tryb>:<palnik>” { runs, wins, reach[], died[] }.
 // GET /list?mode=quick|full[&char=<id>][&garnek=<0-5>][&nick=<nick>][&kind=deep] → { mode, list, char, garnek, nick, total } (kind=deep: ranking Dogrywki wg liczby pięter ponad limit trybu).
 // Arena Duchów: POST /ghost-put { n, nick, avatar, ghost, at } (jeden duch na gracza i tryb, klucz „g:<tryb>:<n>”), /ghost-pick { n, mode, round, salt } → { ghost },
 // /ghost-result { n, mode, ghostWon }, /ghost-get { n } → { ghosts: { quick, full } } (licznik zwycięstw i porażek ducha).
@@ -90,9 +91,24 @@ export class BgRanks {
         }
         return list.findIndex(x => x.n === row.n) + 1;
       };
+      // „Prawie”: kto jest tuż nad tym wynikiem (bez samego gracza) i które miejsce dałby ten wynik. Do ciekawostek na ekranie końca.
+      const others = ((await st.get('r:' + b.mode)) || []).filter(x => x.n !== row.n && x.score > row.score);
+      const nearest = others[others.length - 1];
+      const above = nearest ? { nick: nearest.nick, score: nearest.score, place: others.length + 1, gap: nearest.score - row.score } : null;
       const rank = await put('r:' + b.mode);
       const crank = CHARS[row.char] ? await put(cKey(b.mode, row.char, row.garnek)) : 0;
-      return json({ rank, crank });
+      // Anonimowe liczniki pięter (tryb × palnik): ilu graczy dotarło na piętro i ilu na nim odpadło. Tylko normalne zakończenia (bez poddania).
+      const fl = e.fl, M = MODES[b.mode], fkey = 'f:' + b.mode + ':' + row.garnek;
+      let floor = (await st.get(fkey)) || { runs: 0, wins: 0, reach: [], died: [] };
+      if (fl && Number.isFinite(fl.round)) {
+        const last = Math.max(1, Math.min(M.rounds, fl.round | 0));
+        for (let i = 0; i < M.rounds; i++) { floor.reach[i] = floor.reach[i] | 0; floor.died[i] = floor.died[i] | 0; }
+        for (let i = 0; i < last; i++) floor.reach[i]++;
+        if (fl.died) floor.died[last - 1]++;
+        floor.runs++; if (row.win) floor.wins++;
+        await st.put(fkey, floor);
+      }
+      return json({ rank, crank, above, floor: floor.runs ? floor : null });
     }
     if (url.pathname.startsWith('/ghost-') && req.method === 'POST') {
       let b; try { b = await req.json(); } catch { return json({ err: 'Nieprawidłowe dane.' }, 400); }
