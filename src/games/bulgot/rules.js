@@ -57,7 +57,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 9;
+export const RUN_V = 10;
 
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null, curses = [], kurnik = {} }) {
   const M = MODES[mode], ch = CHARS[char];
@@ -95,6 +95,7 @@ function tileAvailable(run, t) {
   if (t.minRound && run.round < t.minRound) return false;   // np. Arena Duchów dopiero od 3. piętra
   if (t.event === 'arena' && (bossAt(run) || isElite(run) || isNemesisRound(run) || riskyDoor(run))) return false;
   if (t.legend && (run.round - 1) / MODES[run.mode].rounds < 0.6) return false;   // legendarne przedmioty dopiero od 60% runu (strefa III w trybie pełnym)   // wyklute i legendarne z bossów nie trafiają do ofert
+  if (t.dino && run.tiles.includes('dinozaur')) return false;   // Jajko Dinozaura tylko raz na run: po wyklutym Dinozaurze nie wraca do ofert
   if (t.repeat) return true;
   if (RECIPES.some(r => r.of.includes(t.id) && run.tiles.includes(r.out))) return false;   // składnik już wyklutego przedmiotu
   if (t.type === 'skill') { const s = run.skills.find(x => x.id === t.skill); return !s || s.lvl < RULES.maxSkillLvl; }

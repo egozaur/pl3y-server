@@ -1387,7 +1387,7 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
 });
 
 test('RUN_V = 7: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 9, 'wersja reguł');
+  eq(R.RUN_V, 10, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1838,5 +1838,21 @@ test('Nowości: kompletność danych (klątwy, trasy, bossowie, osiągnięcia), 
   for (const id of D.SUPER_BOSSES) assert(D.BOSSES[id].super, 'super-boss ' + id);
   for (const [id, b] of Object.entries(D.KURNIK)) { assert(b.name && b.text && b.cost.length === 3 && b.cost[0] < b.cost[2], 'budynek ' + id); }
   for (const a of ['a-klatwa', 'a-klatwy3', 'a-dogrywka', 'a-dogrywka15', 'a-duch', 'a-towarzysz', 'a-trasy', 'a-kurnik', 'a-kurnik-max']) assert(D.ACH_BY_ID[a], 'osiągnięcie ' + a);
-  eq(R.RUN_V, 9, 'RUN_V 9');
+  eq(R.RUN_V, 10, 'RUN_V 10');
+});
+
+test('Jajko Dinozaura: tylko jedno na run (po wykluciu nie wraca do ofert)', () => {
+  const seen = (hatched, egg) => {
+    let n = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const r = fresh({ seed }); r.round = 28;
+      if (hatched) r.tiles.push('dinozaur');
+      if (egg) r.tiles.push('jajko-dinozaura');
+      for (let salt = 0; salt < 6; salt++) if (R.makeOffer(r, salt, { size: 12 }).includes('jajko-dinozaura')) n++;
+    }
+    return n;
+  };
+  assert(seen(false, false) > 0, 'bez Dinozaura jajko trafia do ofert');
+  eq(seen(true, false), 0, 'po wykluciu jajka nie ma w ofertach');
+  eq(seen(false, true), 0, 'gdy jajko już rośnie, drugiego nie ma');
 });
