@@ -243,7 +243,7 @@ export function publicProfile(p) {
     nemesis: p.nemesis ? { ...p.nemesis, name: nemesisName(p.nemesis) } : null, will: p.will || null, feathers: p.feathers | 0, kurnik: p.kurnik || {},
     staz: { ...stazLevel(p.xp | 0), xp: p.xp | 0, title: stazTitle(stazLevel(p.xp | 0).level), talons: p.talons | 0 },
     lvlPending: p.lvlPending && p.lvlPending[0] ? { lvl: p.lvlPending[0].lvl, opts: p.lvlPending[0].opts, left: p.lvlPending.length } : null,
-    wardrobe: p.wardrobe || { owned: [], eq: {} }, buffs: p.buffs || {}, soups: p.soups || {},
+    wardrobe: p.wardrobe || { owned: [], eq: {} }, buffs: p.buffs || {}, soups: p.soups || {}, casino: p.casino || null,
     // Ukryte odblokowania (secret) nie zdradzają warunku, dopóki gracz ich nie zdobędzie.
     locks: UNLOCKS.filter(u => !p.unlocked.includes(u.id)).map(u => ({ id: u.id, kind: u.kind, target: u.target, secret: !!u.secret, text: u.secret ? '???' : u.text })),
     modes: Object.keys(MODES),

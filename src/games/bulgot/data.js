@@ -789,3 +789,6 @@ export const SOUPS = [
   { id: 'domowy', name: 'Rosół Domowy', kind: 'default', color: '#f2cf7a', hint: 'Wygraj run, który nie pasuje do żadnego innego przepisu.' },
 ];
 export const SOUP_BY_ID = Object.fromEntries(SOUPS.map(s => [s.id, s]));
+
+// ---------- Tryb kasynowy: automat przy przetasowaniu. Odblokowuje się, gdy gracz przetasuje ofertę tyle razy na jednym piętrze. ----------
+export const CASINO_REROLLS = 5;

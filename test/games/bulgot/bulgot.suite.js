@@ -1938,3 +1938,34 @@ test('Przetasowanie: Klątwa Zakaz Wymian daje cenę null (klient pokazuje zablo
   const run = R.newRun({ mode: 'quick', char: 'pyrtek', garnek: 0, pool: D.STARTER_TILES.slice(), seed: 5, curses: ['zakaz-wymian'] }).run;
   eq(R.view(run).rerollCost, null, 'zablokowane'); eq(R.reroll(run).code !== undefined, true, 'reroll odrzucony');
 });
+
+// ---------- Tryb kasynowy ----------
+test('Tryb kasynowy: domyślnie wyłączony i zablokowany; 5 przetasowań na jednym piętrze odblokowuje pytanie, odpowiedź włącza, przełącznik wyłącza', async () => {
+  const env = mkEnv(), o = new BgPlayer({ storage: mkStorage() }, env);
+  const s0 = await post(o, 'state', { pl: PL }); eq(s0.j.profile.casino, null, 'na starcie nic nie jest odblokowane');
+  const locked = await post(o, 'casino', { pl: PL, on: true }); eq([locked.status, locked.j.code], [409, 'casino'], 'bez odblokowania nie da się włączyć');
+  await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
+  // Ziarna na rerolle: wpisujemy je w zapisany run (to test, nie gra)
+  const st = o.ctx.storage, run = await st.get('run'); run.coins = 500; run.freeLeft = 0; await st.put('run', run);
+  let last = null;
+  for (let i = 1; i <= 4; i++) { last = (await post(o, 'reroll', { pl: PL })).j; assert(last.ok && !last.casinoAsk, i + '. przetasowanie: jeszcze bez pytania'); }
+  eq(last.profile.casino, null, 'cztery to za mało');
+  last = (await post(o, 'reroll', { pl: PL })).j;
+  assert(last.casinoAsk === true, 'piąte przetasowanie na piętrze pyta o tryb kasynowy'); eq(last.profile.casino, { unlocked: true, on: false, asked: false }, 'odblokowany, ale wciąż wyłączony do odpowiedzi');
+  const again = (await post(o, 'reroll', { pl: PL })).j; assert(!again.casinoAsk, 'pytanie tylko raz');
+  const yes = await post(o, 'casino', { pl: PL, on: true }); assert(yes.j.ok && yes.j.profile.casino.on && yes.j.profile.casino.asked, 'odpowiedź „tak” włącza i zapisuje, że zapytano');
+  const off = await post(o, 'casino', { pl: PL, on: false }); assert(off.j.ok && !off.j.profile.casino.on && off.j.profile.casino.unlocked, 'ustawienia wyłączają tryb, ale zostaje odblokowany');
+  const on2 = await post(o, 'casino', { pl: PL, on: true }); assert(on2.j.profile.casino.on, 'i można włączyć z powrotem');
+});
+
+test('Tryb kasynowy: przetasowania rozłożone na różne piętra nie odblokowują (liczy się jedno piętro)', async () => {
+  const env = mkEnv(), o = new BgPlayer({ storage: mkStorage() }, env);
+  await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
+  const st = o.ctx.storage, run = await st.get('run'); run.coins = 900; run.freeLeft = 0; await st.put('run', run);
+  let r = (await post(o, 'state', { pl: PL })).j;
+  for (let k = 0; k < 4; k++) { assert((await post(o, 'reroll', { pl: PL })).j.ok, 'reroll'); }
+  // następne piętro: nowa „kartka rundy” (run.cur) zeruje licznik
+  const run2 = await st.get('run'); run2.cur.rerolls = 0; await st.put('run', run2);
+  for (let k = 0; k < 4; k++) { const j = (await post(o, 'reroll', { pl: PL })).j; assert(j.ok && !j.casinoAsk, 'cztery na nowym piętrze to wciąż za mało'); }
+  eq((await post(o, 'state', { pl: PL })).j.profile.casino, null, 'nic nie odblokowane');
+});

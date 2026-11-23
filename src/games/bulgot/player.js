@@ -2,12 +2,12 @@
 // i aktywny run. Całą logikę gry liczy serwer: oferty, rerolle, zakupy, walki (powtórka z wejść gracza).
 //
 // Gracz przychodzi już sprawdzony przez Worker (index.js → playerFromToken): body.pl = { n, nick, avatar }.
-// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /upgrade /will /fightstart /fightfinish /abandon /history /analysis /skillorder /code /kurnik /levelchoice /shopbuy /wear (Staż i Sklepik), start z { daily: true } = Dyżur dnia.
+// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /upgrade /will /fightstart /fightfinish /abandon /history /analysis /skillorder /code /kurnik /levelchoice /shopbuy /wear (Staż i Sklepik) /casino (tryb kasynowy), start z { daily: true } = Dyżur dnia.
 // Odpowiedź: { ok, profile, run, ...wynik akcji } albo { err, code } z kodem 400/409.
 import { mix, hash } from './rng.js';
 import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, swapSkills, view, statsOf, pawn, redeem, upgrade, willOptions, ghostOf, RUN_V } from './rules.js';
 import { newProfile, poolFor, evaluate, evaluateAchievements, onBossKill, onRunEnd, onNemesisBeaten, markSeen, publicProfile, kurnikBuy, levelChoose, shopBuyItem, wearItem, takeBuffs, dailyKey, dailyOf, dailyView } from './profile.js';
-import { MODES, CHARS, TILE_BY_ID, UNLOCK_BY_ID, STARTER_TILES } from './data.js';
+import { MODES, CHARS, TILE_BY_ID, UNLOCK_BY_ID, STARTER_TILES, CASINO_REROLLS } from './data.js';
 
 export class BgPlayer {
   constructor(ctx, env, now = () => Date.now()) { this.ctx = ctx; this.env = env; this.now = now; this.chain = Promise.resolve(); }
@@ -98,7 +98,17 @@ export class BgPlayer {
         break;
       }
       case 'wear': r = wearItem(profile, String(b.id || ''), !!b.on); break;
-      case 'reroll': r = need(run) || reroll(run); break;
+      case 'reroll':
+        r = need(run) || reroll(run);
+        // Tryb kasynowy: 5 przetasowań na jednym piętrze odblokowuje pytanie (jednorazowo); domyślnie wyłączony do odpowiedzi gracza.
+        if (r.ok && run.cur && run.cur.rerolls >= CASINO_REROLLS && !profile.casino) { profile.casino = { unlocked: true, on: false, asked: false }; extra.casinoAsk = true; }
+        break;
+      case 'casino': {   // włączenie i wyłączenie trybu kasynowego (tylko po odblokowaniu)
+        const c = profile.casino;
+        if (!c || !c.unlocked) return json({ err: 'Tryb kasynowy jest jeszcze zablokowany.', code: 'casino', ...this.out(profile, run) }, 409);
+        c.on = !!b.on; c.asked = true;
+        break;
+      }
       case 'rest': r = need(run) || rest(run); break;
       case 'buy': r = need(run) || buyOffer(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot), b.mut === undefined ? undefined : Number(b.mut)); break;
       case 'shop': r = need(run) || shopBuy(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot), b.mut === undefined ? undefined : Number(b.mut)); break;
