@@ -57,7 +57,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 14;
+export const RUN_V = 15;
 
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null, curses = [], kurnik = {} }) {
   const M = MODES[mode], ch = CHARS[char];
@@ -823,7 +823,7 @@ export function fightFinish(run, inputs) {
   const rt = routeOf(run);
   let coins = (setup.boss ? RULES.coinsBoss + S.bossCoins + kLv(run, 'skarbiec') : RULES.coinsRound) + S.coinFlat - (gm.coinMinus || 0) - (hasCurse(run, 'podatek') ? 2 : 0) + ((rt && rt.coins) || 0) + (setup.arena ? RULES.arenaCoins : 0);
   coins = fl(coins * (100 + S.coinPct + (setup.elite ? RULES.eliteCoinsPct : 0)) / 100);
-  if (S.interest) coins += Math.min(5, fl(run.coins * S.interest / 100));
+  if (S.interest) coins += Math.min(5 + (S.interestPlus || 0), fl(run.coins * S.interest / 100));
   if (S.bigInterest) coins += Math.min(12, fl(run.coins * S.bigInterest / 100));   // Akcje Zarządu
   if (decreeIs(run, 'premia')) coins += 3;
   // Odsetki w Spiżarni: +1 Ziarno za każde 10 niewydanych (po kradzieżach), najwyżej 3 (Kaczor 5).

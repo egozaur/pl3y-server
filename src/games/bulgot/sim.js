@@ -34,7 +34,7 @@ export class Fight {
     const cmp = this.loadout.companion && COMPANIONS[this.loadout.companion.id];   // Towarzysz: czynność co L.every ticków
     this.comp = cmp ? { id: cmp.id, L: cmp.lv[Math.min(3, Math.max(1, this.loadout.companion.lvl | 0)) - 1] } : null;
     if (this.comp) this.comp.next = this.comp.L.every || 0;
-    this.revive = !!h.revive; this.revived = false; this.okUsed = false;
+    this.revive = !!h.revive; this.revived = false; this.okUsed = 0; this.volleyN = 0;
     this.uid = 0;
     this.enemies = setup.enemies.map(e => this.mk(e));
     if (this.S.scare) for (const e of this.enemies) e.stunUntil = Math.max(e.stunUntil, e.boss ? fl(this.S.scare / 2) : this.S.scare);   // Strach na Wróble
@@ -98,7 +98,8 @@ export class Fight {
     let crit = false;
     if (t.brittle) { t.brittle = false; crit = true; raw = fl(raw * this.S.critMult / 100); }   // Kruchość: trafienie zawsze krytyczne
     else if (canCrit || (this.S.skillCrit && this.inSkill)) {
-      const forced = this.tick < this.critUntil;   // jak wcześniej: wymuszony krytyk nie losuje (kolejność losowań bez zmian)
+      const volley = this.S.volley && kind === 'atk' && this.volleyN++ % 5 === 0;   // Armia Jednego Kurczaka: pierwszy i co piąty atak
+      const forced = this.tick < this.critUntil || !!volley;   // jak wcześniej: wymuszony krytyk nie losuje (kolejność losowań bez zmian)
       if (!forced) this.critRolls++;
       if (forced || this.rng.int(100) < this.S.crit + (this.tick < this.buffUntil ? this.buffCrit : 0)) { crit = true; if (!forced) this.critHits++; raw = fl(raw * this.S.critMult / 100); }
     }
@@ -163,14 +164,14 @@ export class Fight {
       if (!this.hasSt(t, other) || !this.hasSt(t, kind)) continue;
       t.rcd = t.rcd || {};
       if (this.tick < (t.rcd[R.id] || 0)) continue;
-      t.rcd[R.id] = this.tick + R.cd;
+      t.rcd[R.id] = this.tick + R.cd - (R.id === 'kruchosc' ? this.S.brittleCut || 0 : 0);
       this.reacts++; if (!this.reactSeen.includes(R.id)) this.reactSeen.push(R.id);
       this.push({ k: 'react', uid: t.uid, r: R.id });
       if (R.id === 'szok') {
         const stacks = t.burn + (this.tick < t.frozenUntil ? STATUS.frost.need : t.frost);
         t.frost = 0; t.burn = fl(t.burn / 2);
-        this.heroHit(t, Math.min(R.max, R.per * stacks), false, 'szok');
-      } else if (R.id === 'goraczka') t.feverUntil = this.tick + R.dur;
+        this.heroHit(t, fl(Math.min(R.max, R.per * stacks) * (100 + (this.S.szokMult || 0)) / 100), false, 'szok');
+      } else if (R.id === 'goraczka') t.feverUntil = this.tick + R.dur + (this.S.feverPlus || 0);
       else if (R.id === 'kruchosc') t.brittle = true;
       if (t.dead) return;
     }
@@ -193,6 +194,7 @@ export class Fight {
         if (e.immune) continue;
         let d = e[kind] * this.dotPer(kind);
         if (kind !== 'burn' && this.tick < (e.feverUntil || 0)) d = fl(d * (100 + REACTIONS.goraczka.pct) / 100);   // Gorączka
+        if (kind === 'bleed' && this.S.burnBleed && e.burn > 0) d = fl(d * (100 + this.S.burnBleed) / 100);   // Krwawy Rosół
         e.hp -= d; this.dealt += d; if (kind === 'burn') this.burnDealt += d;
         this.push({ k: 'hit', to: e.uid, d, crit: false, kind });
         if (kind === 'burn' && this.S.burnHeal) this.heal(fl(e.burn * this.S.burnHeal / 10));
@@ -584,7 +586,7 @@ export class Fight {
     if (e.vamp && !e.dead) e.hp = Math.min(e.maxHp, e.hp + fl(d * e.vamp / 100));
     if (e.ignite) { this.hburn = Math.min(10, this.hburn + 1); this.hburnT = this.tick + 40; this.hburnPer = Math.max(1, fl(e.atk * e.ignite / 100)); }
     if (this.hp > 0 && this.S.medkit && !this.medUsed && this.hp * 100 < this.S.maxHp * 50) { this.medUsed = true; this.push({ k: 'medkit' }); this.heal(fl(this.S.maxHp * this.S.medkit / 100)); }   // Apteczka Polowa
-    if (this.hp > 0 && this.S.okrzyk && !this.okUsed && this.hp * 100 < this.S.maxHp * 20) { this.okUsed = true; this.invulnUntil = this.tick + 30; this.push({ k: 'okrzyk' }); }
+    if (this.hp > 0 && this.S.okrzyk && this.okUsed < this.S.okrzykN && this.hp * 100 < this.S.maxHp * 20 && this.tick >= this.invulnUntil) { this.okUsed++; this.invulnUntil = this.tick + 30; this.push({ k: 'okrzyk' }); }
     if (this.hp <= 0) this.heroDown();
   }
   stolenBy(e) { return e.stole || 0; }

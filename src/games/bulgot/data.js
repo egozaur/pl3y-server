@@ -229,14 +229,42 @@ export const ELEMENTS = {
 };
 
 // ---------- Zestawy przedmiotów ----------
+// Progi: 2, 3, 4 i 6 sztuk (b2, b3, b4, b6). `x` = Nadwyżka: stały bonus za każdą sztukę ponad 4 (liczy się od 5. sztuki).
+export const SET_STEPS = [2, 3, 4, 6];
 export const SETS = {
-  jajeczne: { name: 'Jajeczne', b2: 'Tykające Jajo wybucha co 6 s', b3: 'Wybuchy leczą 3% maks. Życia' },
-  zbozowe: { name: 'Zbożowe', b2: '+10% Ziaren z nagród', b3: 'Worek Kukurydzy bez limitu premii' },
-  rambo: { name: 'Rambo', b2: '+20% Ataku', b3: 'Ostatni Okrzyk: raz na walkę 3 s nietykalności poniżej 20% Życia' },
-  rosolowe: { name: 'Rosołowe', b2: '+25% obrażeń od Oparzenia', b3: 'Ataki zawsze nakładają Oparzenie', b4: 'Wrogowie zaczynają walkę z 3 stosami Oparzenia' },
-  chlodnicze: { name: 'Chłodnicze', b2: 'Każdy stos Mrozu spowalnia o 12% zamiast 8%', b3: 'Zamrożenie wywołuje Lodową Falę: 80% Ataku we wszystkich wrogów', b4: 'Wrogowie zaczynają walkę z 2 stosami Mrozu' },
-  korpo: { name: 'Korporacyjne', b2: 'Odpoczynek tańszy o 2 Ziarna', b3: 'Dokupowanie kafelków 25% taniej', b4: 'Odsetki: po każdej wygranej +10% posiadanych Ziaren (maks. 5)' },
+  jajeczne: { name: 'Jajeczne', b2: 'Tykające Jajo wybucha co 6 s', b3: 'Wybuchy leczą 3% maks. Życia', b4: 'Jaja wybuchają o 25% szybciej', b6: 'Pełne Gniazdo: +2 Ziarna po wygranej, wybuchy leczą 6% maks. Życia', x: '+1 Ziarno po wygranej (maks. +3)' },
+  zbozowe: { name: 'Zbożowe', b2: '+10% Ziaren z nagród', b3: 'Worek Kukurydzy bez limitu premii', b4: 'Siewnik daje +2 Ataku za wygraną zamiast +1', b6: 'Żniwa: +2% maks. Życia za każde 10 Ziaren w kieszeni (maks. 30%)', x: '+3% Ziaren z nagród' },
+  rambo: { name: 'Rambo', b2: '+20% Ataku', b3: 'Ostatni Okrzyk: raz na walkę 3 s nietykalności poniżej 20% Życia', b4: 'Okrzyk działa dwa razy na walkę, +10% szansy na krytyk', b6: 'Armia Jednego Kurczaka: pierwszy atak i co piąty zwykły atak to krytyk', x: '+2% obrażeń' },
+  rosolowe: { name: 'Rosołowe', b2: '+25% obrażeń od Oparzenia', b3: 'Ataki zawsze nakładają Oparzenie', b4: 'Wrogowie zaczynają walkę z 3 stosami Oparzenia', b6: 'Wrzątek: +50% obrażeń od Oparzenia, limit Oparzenia +3 stosy', x: '+3% obrażeń od Oparzenia' },
+  chlodnicze: { name: 'Chłodnicze', b2: 'Każdy stos Mrozu spowalnia o 12% zamiast 8%', b3: 'Zamrożenie wywołuje Lodową Falę: 80% Ataku we wszystkich wrogów', b4: 'Wrogowie zaczynają walkę z 2 stosami Mrozu', b6: 'Wieczna Zima: +25% obrażeń przeciw wrogom z Mrozem albo zamrożonym', x: '+1 stos Mrozu na start walki (maks. +3)' },
+  korpo: { name: 'Korporacyjne', b2: 'Odpoczynek tańszy o 2 Ziarna', b3: 'Dokupowanie kafelków 25% taniej', b4: 'Odsetki: po każdej wygranej +10% posiadanych Ziaren (maks. 5)', b6: 'Zarząd: -15% cooldownu umiejętności, Odsetki do 8 Ziaren', x: '+1 darmowy reroll za każde 2 sztuki ponad 4' },
 };
+
+// Powiązania zestawów i żywiołów (ikonki ↔ pod paskami). Klucze: 'set:<zestaw>' (liczba sztuk zestawu) albo 'tag:<żywioł>' (znaczniki
+// przedmiotów i umiejętności razem). Konflikt działa od `need` po obu stronach, chyba że w sprzęcie jest kafelek z `fix` (mediator).
+// Synergia działa od `need` po obu stronach. Efekty liczy stats.js (heroStats), nie ma ich tu.
+export const SET_LINKS = [
+  { id: 'ogien-lod', kind: 'conflict', a: 'tag:ogien', b: 'tag:lod', need: 3, fix: ['termos'], name: 'Ogień kontra Lód',
+    text: 'Rosołowe i Chłodnicze tracą progi 4 i 6 oraz Nadwyżkę, ale Szok Termiczny bije 2 razy mocniej.' },
+  { id: 'jajo-lod', kind: 'conflict', a: 'tag:jajo', b: 'tag:lod', need: 3, fix: ['feniks-z-rosolu'], name: 'Zamrożone Gniazdo',
+    text: 'Jaja wybuchają o 20% wolniej.' },
+  { id: 'rambo-korpo', kind: 'conflict', a: 'set:rambo', b: 'set:korpo', need: 3, fix: ['zloty-spadochron'], name: 'Brud kontra Garnitur',
+    text: '-10% Ataku.' },
+  { id: 'zboze-korpo', kind: 'conflict', a: 'set:zbozowe', b: 'set:korpo', need: 3, fix: ['kompostownik'], name: 'Wieś kontra Biuro',
+    text: 'Odsetki są o połowę słabsze.' },
+  { id: 'ogien-jajo', kind: 'synergy', a: 'tag:ogien', b: 'tag:jajo', need: 2, name: 'Twarde Jajko',
+    text: 'Wybuchy jaj nakładają dodatkowy stos Oparzenia.' },
+  { id: 'trucizna-krew', kind: 'synergy', a: 'tag:trucizna', b: 'tag:krew', need: 2, name: 'Gorączka Zakaźna',
+    text: 'Gorączka trwa o 2 s dłużej.' },
+  { id: 'lod-krew', kind: 'synergy', a: 'tag:lod', b: 'tag:krew', need: 2, name: 'Mroźna Kruchość',
+    text: 'Kruchość odnawia się o 1 s szybciej.' },
+  { id: 'zboze-jajo', kind: 'synergy', a: 'set:zbozowe', b: 'set:jajeczne', need: 2, name: 'Kurnik',
+    text: '+1 Ziarno po każdej wygranej rundzie.' },
+  { id: 'zboze-rambo', kind: 'synergy', a: 'set:zbozowe', b: 'set:rambo', need: 2, name: 'Wojsko Żywi się Chlebem',
+    text: '+1 Pancerza za każde 10 Ziaren w kieszeni (maks. +15).' },
+  { id: 'ogien-krew', kind: 'synergy', a: 'tag:ogien', b: 'tag:krew', need: 2, name: 'Krwawy Rosół',
+    text: 'Płonący wróg krwawi o 25% mocniej.' },
+];
 
 // ---------- Rodziny statystyk ----------
 // Każda rodzina ma 3 poziomy zwykłe (1 Zwykły, 2 Rzadki, 3 Epicki; poziom 3 ma STARE id, więc profile i Księga się nie psują)

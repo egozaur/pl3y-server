@@ -2,7 +2,7 @@
 // Durable Objects BgPlayer i BgRanks oraz cały Worker (z autoryzacją gracza).
 import { mix, hash, makeRng } from '../../../src/games/bulgot/rng.js';
 import * as D from '../../../src/games/bulgot/data.js';
-import { heroStats } from '../../../src/games/bulgot/stats.js';
+import { heroStats, activeLinks, elemCounts, setCounts } from '../../../src/games/bulgot/stats.js';
 import { Fight, runFight, MAX_TICKS, FURY_FROM } from '../../../src/games/bulgot/sim.js';
 import * as R from '../../../src/games/bulgot/rules.js';
 import { BgPlayer } from '../../../src/games/bulgot/player.js';
@@ -1388,7 +1388,7 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
 });
 
 test('RUN_V = 7: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 14, 'wersja reguł');
+  eq(R.RUN_V, 15, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1476,7 +1476,7 @@ test('przedmioty etapu 2: Wywar Dnia, Tłusta Pokrywka, Szczypta Soli, Lodowa Sp
   f = new Fight(setup({ lo: { tiles: ['jajko-niespodzianka'] }, enemies: [big()] })); for (let i = 0; i < 280; i++) f.step(); let eggs = 0; const g2 = new Fight(setup({ lo: { tiles: ['jajko-niespodzianka'] }, enemies: [big()] })); for (let i = 0; i < 280; i++) { g2.step(); eggs += evs(g2.ev, 'egg').length; } eq(eggs, 3, 'co 9 s: 3 wybuchy w 28 s');
   // Kura Nioska
   eq(S(['kura-nioska', 'zlote-jajo', 'tykajace-jajo']).coinFlat, 3 + 3, 'Kura Nioska: +1 za każdy przedmiot Jajeczny (3 sztuki) plus Złote Jajo +3');
-  eq(S(Array(6).fill('kura-nioska')).coinFlat, 4, 'limit +4');
+  eq(S(Array(6).fill('kura-nioska')).coinFlat, 4 + 2 + 2, 'limit Kury +4, plus próg 6 Jajecznych (+2) i Nadwyżka (+2)');
   // Kombajn: obrażenia dla pozostałych wrogów
   f = new Fight(setup({ lo: { tiles: ['kombajn-zbozowy', 'kombajn-zbozowy', 'kombajn-zbozowy', 'kombajn-zbozowy', 'kombajn-zbozowy'] }, enemies: [big(), big()] })); for (let i = 0; i < 200; i++) f.step(); assert(f.enemies[1].hp < 100000, 'Kombajn: pozostali wrogowie obrywają');
   // Strach na Wróble
@@ -1839,7 +1839,7 @@ test('Nowości: kompletność danych (klątwy, trasy, bossowie, osiągnięcia), 
   for (const id of D.SUPER_BOSSES) assert(D.BOSSES[id].super, 'super-boss ' + id);
   for (const [id, b] of Object.entries(D.KURNIK)) { assert(b.name && b.text && b.cost.length === 3 && b.cost[0] < b.cost[2], 'budynek ' + id); }
   for (const a of ['a-klatwa', 'a-klatwy3', 'a-dogrywka', 'a-dogrywka15', 'a-duch', 'a-towarzysz', 'a-trasy', 'a-kurnik', 'a-kurnik-max']) assert(D.ACH_BY_ID[a], 'osiągnięcie ' + a);
-  eq(R.RUN_V, 14, 'RUN_V 14');
+  eq(R.RUN_V, 15, 'RUN_V 15');
 });
 
 test('Jajko Dinozaura: tylko jedno na run (po wykluciu nie wraca do ofert)', () => {
@@ -2076,9 +2076,65 @@ test('etap 4: wzmocnienia: Pobudka, Echo, Przyspieszony Obieg', () => {
   const o0 = ob(0); assert(o0[1] < o0[0], 'Obieg skraca cooldown pozostałych'); const o1 = ob(1); assert(o1[1] < o0[1], 'Turbo Obieg skraca mocniej');
   const o2 = new Fight(setup({ hp: 400, lo: { skills: [{ id: 'obieg', lvl: 3, mut: 2 }] }, enemies: [foe({ hp: 1e7, atk: 1, aspd: 10 })] })); o2.hp = 50; o2.skills[0].cd = 0; o2.step([0]); assert(o2.hp > 50, 'Obieg Zamknięty leczy');
 });
-test('etap 4: RUN_V 14, nowe umiejętności trafiają do ofert', () => {
-  eq(R.RUN_V, 14, 'RUN_V');
+test('etap 4: RUN_V 15, nowe umiejętności trafiają do ofert', () => {
+  eq(R.RUN_V, 15, 'RUN_V');
   const seen = new Set();
   for (let seed = 1; seed < 300; seed++) { const r = R.newRun({ mode: 'full', char: 'pyrtek', garnek: 0, pool: ALL, seed }); const run = r.run; for (const o of (run.cur && run.cur.offer) || []) { const t = D.TILE_BY_ID[o.id || o]; if (t && t.skill && NEW20.includes(t.skill)) seen.add(t.skill); } }
   assert(seen.size >= 5, 'nowe umiejętności pojawiają się w ofertach (widziano ' + seen.size + ')');
+});
+
+test('zestawy: progi 4 i 6 oraz Nadwyżka', () => {
+  const S = (tiles, o = {}) => heroStats(loadout({ tiles, ...o }));
+  for (const [id, st] of Object.entries(D.SETS)) for (const k of ['b2', 'b3', 'b4', 'b6', 'x']) assert(st[k], id + ' ma ' + k);
+  const rb = ['opaska-rambo', 'kamizelka-kuloodporna', 'ostrogi-bojowe', 'okulary-aviatory', 'kolczatka', 'karabin-maszynowy', 'apteczka-polowa'];
+  eq(S(rb.slice(0, 3)).okrzykN, 1, 'Rambo 3: jeden Okrzyk'); eq(S(rb.slice(0, 4)).okrzykN, 2, 'Rambo 4: dwa Okrzyki');
+  assert(!S(rb.slice(0, 5)).volley && S(rb.slice(0, 6)).volley, 'Rambo 6: Armia Jednego Kurczaka');
+  assert(S(rb.slice(0, 5)).dmg - S(rb.slice(0, 4)).dmg >= 2, 'Rambo: Nadwyżka +2% obrażeń od 5. sztuki');
+  const zb = ['worek-kukurydzy', 'mlocarnia', 'siewnik', 'mokra-pasza', 'kombajn-zbozowy', 'spichlerz', 'strach-na-wroble'];
+  assert(S(zb.slice(0, 4), { bonusAtk: 3 }).atk > S(zb.slice(0, 3), { bonusAtk: 3 }).atk, 'Zbożowe 4: Siewnik podwojony');
+  assert(S(zb.slice(0, 6), { coins: 50 }).maxHp > S(zb.slice(0, 5), { coins: 50 }).maxHp, 'Zbożowe 6: Żniwa dają Życie za Ziarna');
+  const ro = ['wywar-dnia', 'tlusta-pokrywka', 'szczypta-soli', 'chochla', 'kostka-rosolowa', 'lubczyk', 'garnek-cisnieniowy'];
+  eq(S(ro.slice(0, 6)).burnPct - S(ro.slice(0, 5)).burnPct, 53, 'Rosołowe 6: Wrzątek +50% i Nadwyżka +3%'); eq(S(ro.slice(0, 6)).burnMax - S(ro.slice(0, 5)).burnMax, 3, 'Rosołowe 6: limit +3');
+  const ch = ['lodowa-spodnica', 'szron-poranny', 'kostka-lodu', 'termometr', 'zamrazarka', 'szron'];
+  eq(S(ch).vsCold - S(ch.slice(0, 5)).vsCold, 25, 'Chłodnicze 6: +25% przeciw mroźnym');
+  const ko = ['sluzbowy-samochod', 'open-space', 'teczka', 'krawat', 'polisa', 'premia-kwartalna'];
+  eq(S(ko).cdPct, 15, 'Korpo 6: -15% cooldownu'); eq(S(ko).interestPlus, 3, 'Korpo 6: Odsetki do 8');
+  const je = ['zlote-jajo', 'tykajace-jajo', 'gniazdo-zapasowe', 'zepsute-jajo', 'jajko-niespodzianka', 'kura-nioska'];
+  eq(S(je.slice(0, 3)).egg, 60, 'Jajeczne 3: Jajo co 6 s'); eq(S(je.slice(0, 4)).egg, 45, 'Jajeczne 4: o 25% szybciej');
+});
+
+test('zestawy: konflikty i synergie (SET_LINKS)', () => {
+  const S = (tiles, skills = [], o = {}) => heroStats(loadout({ tiles, skills, ...o }));
+  const ogien = ['wywar-dnia', 'chochla', 'szczypta-soli'], lod = ['kostka-lodu', 'lodowa-spodnica', 'termometr'];
+  const s1 = S([...ogien, ...lod]);
+  assert(s1.links['ogien-lod'] && s1.szokMult === 100, 'Ogień kontra Lód: konflikt działa od 3 po obu stronach');
+  assert(!S([...ogien, ...lod.slice(0, 2)]).links['ogien-lod'], 'przy 2 stronie lodu brak konfliktu');
+  assert(!S([...ogien, ...lod, 'termos']).links['ogien-lod'], 'Termos zdejmuje konflikt');
+  const all = [...ogien, ...lod, 'termos'];
+  assert(activeLinks(all, [], setCounts(all)).find(l => l.id === 'ogien-lod').fixed, 'stan fixed dla mediatora');
+  const ro4 = ['wywar-dnia', 'chochla', 'szczypta-soli', 'kostka-rosolowa'];
+  eq(S(ro4).startBurn, 3, 'bez konfliktu Rosołowe 4 dają stosy na start');
+  eq(S([...ro4, ...lod]).startBurn, 0, 'w konflikcie próg 4 jest zawieszony');
+  const sk3 = ['rosolowy-chlust', 'wrzatek-z-kotla', 'podpalka'].map(id => ({ id: D.TILE_BY_ID[id].skill, lvl: 1 }));
+  assert(elemCounts([], sk3).ogien === 3, 'umiejętności ogniowe liczą się do żywiołów');
+  assert(S(lod, sk3).links['ogien-lod'], 'Ogień z umiejętności + Lód z przedmiotów = konflikt');
+  const tr = ['zepsute-jajo', 'mokra-pasza'], kr = ['kolczatka', 'karabin-maszynowy'];
+  assert(S([...tr, ...kr]).feverPlus === 20, 'Trucizna + Krew: Gorączka dłuższa');
+  assert(S(['kostka-lodu', 'termometr', ...kr]).brittleCut === 10, 'Lód + Krew: Kruchość szybsza');
+  assert(S(['wywar-dnia', 'chochla', ...kr]).burnBleed === 25, 'Ogień + Krew: Krwawy Rosół');
+  assert(S(['wywar-dnia', 'chochla', 'jajko-niespodzianka', 'zepsute-jajo']).eggBurn >= 1, 'Ogień + Jajo: Twarde Jajko');
+  assert(S(['worek-kukurydzy', 'spichlerz', 'zlote-jajo', 'tykajace-jajo']).links['zboze-jajo'], 'Zboże + Jajo: Kurnik');
+  assert(S(['worek-kukurydzy', 'spichlerz', 'opaska-rambo', 'ostrogi-bojowe'], [], { coins: 80 }).armor >= 8, 'Zboże + Rambo: Pancerz z Ziaren');
+  const ko = ['sluzbowy-samochod', 'open-space', 'teczka'], zb = ['worek-kukurydzy', 'mlocarnia', 'spichlerz'];
+  assert(S([...ko, ...zb]).links['zboze-korpo'], 'Wieś kontra Biuro'); assert(!S([...ko, ...zb, 'kompostownik']).links['zboze-korpo'], 'Kompostownik mediuje');
+});
+
+test('zestawy: Szok Termiczny w konflikcie bije mocniej, pierwszy atak Armii to krytyk', () => {
+  const big = () => foe({ hp: 1000000, atk: 1, aspd: 10 });
+  const shock = tiles => { const f = new Fight(setup({ lo: { tiles }, enemies: [big()] })); const t = f.enemies[0]; f.applyStatus(t, 'burn', 4); f.applyStatus(t, 'frost', 2); let d = 0; for (const e of f.ev) if (e.kind === 'szok') d += e.d; return d; };
+  const ogien = ['wywar-dnia', 'chochla', 'szczypta-soli'], lod = ['kostka-lodu', 'lodowa-spodnica', 'termometr'];
+  const a = shock([]), b = shock([...ogien, ...lod]); assert(a > 0, 'Szok występuje'); assert(b > a, 'Szok w konflikcie jest silniejszy (' + a + ' vs ' + b + ')');
+  const rb6 = ['opaska-rambo', 'kamizelka-kuloodporna', 'ostrogi-bojowe', 'okulary-aviatory', 'kolczatka', 'karabin-maszynowy'];
+  const f = new Fight(setup({ lo: { tiles: rb6 }, enemies: [big()] })); let first = null; for (let i = 0; i < 40 && !first; i++) { f.step(); first = f.ev.find(e => e.k === 'hit' && e.kind === 'atk'); }
+  assert(first && first.crit, 'pierwszy atak jest krytyczny');
 });
