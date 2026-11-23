@@ -57,7 +57,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 8;
+export const RUN_V = 9;
 
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null, curses = [], kurnik = {} }) {
   const M = MODES[mode], ch = CHARS[char];
@@ -338,9 +338,13 @@ export function pickTile(run, i, slot, mut, ctx = {}) {
     const epics = run.pool.map(x => TILE_BY_ID[x]).filter(x => x && x.rarity >= 2 && x.type !== 'stat' && !x.event && tileAvailable(run, x));   // wyklutych nie ma w puli (tileAvailable)
     const prize = epics.length ? rr.pick(epics) : null;
     const note = { crate: { tile: prize ? prize.id : null, trap } };
-    if (prize) { const e = applyTile(run, prize, undefined, 1); if (e && e.code === 'slot') applyTile(run, prize, 0, 1); }   // pełne sloty: umiejętność ze skrzynki zastępuje pierwszy slot; Mutacja ze skrzynki to zawsze gałąź 1
+    const e = prize ? applyTile(run, prize, undefined, 1) : null;   // Mutacja ze skrzynki to zawsze gałąź 1
     if (trap) run.hp = Math.max(1, run.hp - Math.max(1, fl(statsOf(run).maxHp * 15 / 100)));
     run.stats.riskPicks++;
+    if (e && e.code === 'slot') {   // pełne sloty: gracz sam wybiera, którą umiejętność zastąpić (albo rezygnuje z nagrody)
+      run.pending = { kind: 'crate', tile: prize.id }; run.phase = 'event'; run.offer = [];
+      return { ok: true, event: 'crate', crate: { ...note.crate, pick: true } };
+    }
     enterFight(run);
     return { ok: true, ...note };
   }
@@ -543,6 +547,14 @@ export function choose(run, i) {
     run.companion = { id, lvl: compLevel(run) }; run.stats.adopts = (run.stats.adopts || 0) + 1; cur(run).adopt = id;
     enterFight(run);
     return { ok: true, chose: i, companion: run.companion };
+  }
+  if (run.phase === 'event' && P && P.kind === 'crate') {   // Skrzynka przy pełnych slotach: który slot zastąpić (-1 = zostaw nagrodę)
+    if (i === -1) { run.pending = null; enterFight(run); return { ok: true, chose: -1 }; }
+    if (!Number.isInteger(i) || i < 0 || i >= run.skills.length) return fail('Nie ma takiego slotu.', 'index');
+    const e = applyTile(run, TILE_BY_ID[P.tile], i, 1);
+    if (e) return e;
+    run.pending = null; enterFight(run);
+    return { ok: true, chose: i, tile: P.tile };
   }
   if (run.phase === 'event' && P && P.kind === 'arena') {   // Arena Duchów: walka albo odwrót
     if (i !== 0 && i !== 1) return fail('Nie ma takiego wyboru.', 'index');

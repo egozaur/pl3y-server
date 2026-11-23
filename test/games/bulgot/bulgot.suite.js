@@ -574,6 +574,25 @@ test('run: wydarzenia: Sklepik, Hazard, Skrzynka', () => {
   if (c.crate.tile) assert(D.TILE_BY_ID[c.crate.tile].rarity >= 2, 'nagroda epicka');
   const sk2 = fresh(); force(sk2, 'tajemnicza-skrzynka'); eq(R.pickTile(sk2, 0).crate, c.crate, 'skrzynka deterministyczna');
 });
+
+test('Skrzynka przy pełnych slotach: gracz wybiera slot do zastąpienia (albo zostawia nagrodę)', () => {
+  const skills = ['wrzatek', 'podpalka', 'chlust'];
+  let seen = 0;
+  for (let seed = 1; seed < 400 && seen < 3; seed++) {
+    const mk = () => { const r = fresh({ seed }); r.skills = skills.map(id => ({ id, lvl: 1 })); force(r, 'tajemnicza-skrzynka'); return r; };
+    const a = mk(), j = R.pickTile(a, 0);
+    if (!j.crate || !j.crate.pick) continue;
+    seen++;
+    assert(a.phase === 'event' && a.pending.kind === 'crate' && a.skills.length === 3 && skills.every((id, k) => a.skills[k].id === id), 'nic nie zastąpione po cichu');
+    eq(R.choose(a, 3).code, 'index', 'zły slot');
+    const prize = D.TILE_BY_ID[j.crate.tile].skill;
+    const b = mk(); R.pickTile(b, 0);
+    const c = R.choose(b, 1); assert(c.ok && b.phase === 'fight' && b.skills[1].id === prize && b.skills[0].id === 'wrzatek', 'zastąpiony wybrany slot');
+    const d = mk(); R.pickTile(d, 0);
+    assert(R.choose(d, -1).ok && d.phase === 'fight' && d.skills.every((s, k) => s.id === skills[k]), 'rezygnacja zostawia sloty');
+  }
+  assert(seen >= 1, 'znaleziono ziarno ze skrzynką z umiejętnością');
+});
 test('run: walka → nagrody, leczenie, następna runda; bonus po bossie; zwycięstwo kończy run z wynikiem', () => {
   const run = fresh(); force(run, 'ziarno-mocy'); R.pickTile(run, 0);
   const sset = R.fightSetup(run); assert(sset.ok && sset.setup.enemies.length === 1 && sset.setup.hero.hp === run.hp, 'setup');
@@ -1368,7 +1387,7 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
 });
 
 test('RUN_V = 7: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 8, 'wersja reguł');
+  eq(R.RUN_V, 9, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1819,5 +1838,5 @@ test('Nowości: kompletność danych (klątwy, trasy, bossowie, osiągnięcia), 
   for (const id of D.SUPER_BOSSES) assert(D.BOSSES[id].super, 'super-boss ' + id);
   for (const [id, b] of Object.entries(D.KURNIK)) { assert(b.name && b.text && b.cost.length === 3 && b.cost[0] < b.cost[2], 'budynek ' + id); }
   for (const a of ['a-klatwa', 'a-klatwy3', 'a-dogrywka', 'a-dogrywka15', 'a-duch', 'a-towarzysz', 'a-trasy', 'a-kurnik', 'a-kurnik-max']) assert(D.ACH_BY_ID[a], 'osiągnięcie ' + a);
-  eq(R.RUN_V, 8, 'RUN_V 8');
+  eq(R.RUN_V, 9, 'RUN_V 9');
 });
