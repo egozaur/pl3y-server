@@ -48,7 +48,7 @@ export const RULES = {
   // Arena Duchów: Duch ma tyle % statystyk gracza z tego samego piętra jego runu; nagroda: Ziarna i wybór rzadkiego kafelka.
   ghostPct: 95, ghostAtk: 120, arenaCoins: 6,
   // Dogrywka: po Prezesie wrogowie rosną dodatkowo o tyle % Życia i Ataku na każde piętro ponad limit trybu; super-boss co 5 pięter.
-  endlessHp: 6, endlessAtk: 3, superEvery: 5,
+  endlessHp: 7, endlessAtk: 5, superEvery: 5,
   // Kurnik: Pióra za run = ukończone piętra + premia za wygraną (+ palnik) + 2 za każde piętro Dogrywki.
   featherWin: 8, featherGarnek: 2, featherEndless: 2,
 };
@@ -592,30 +592,30 @@ export const cursePct = list => (list || []).reduce((a, id) => a + (CURSES[id] ?
 // lv[i] = poziom i+1: act = czynność w walce (peck: cios w % Ataku, heal: leczenie w % maks. Życia, burn/frost: stosy na celu, honk: ogłuszenie wrogów w tickach), every w tickach, fx = stałe premie.
 export const COMPANIONS = {
   pisklak: { id: 'pisklak', name: 'Pisklę Bojowe', forms: ['Pisklę Bojowe', 'Kurczę Bojowe', 'Kogucik Bojowy'], text: 'Dziobie wroga co kilka sekund (cios w % twojego Ataku).',
-    lv: [{ act: 'peck', every: 30, v: 30 }, { act: 'peck', every: 26, v: 45 }, { act: 'peck', every: 22, v: 65 }] },
+    lv: [{ act: 'peck', every: 30, v: 18 }, { act: 'peck', every: 28, v: 28 }, { act: 'peck', every: 26, v: 40 }] },
   trzmiel: { id: 'trzmiel', name: 'Trzmiel Medyk', forms: ['Trzmiel Medyk', 'Trzmiel Felczer', 'Trzmiel Chirurg'], text: 'Co kilka sekund leczy cię (% maks. Życia).',
-    lv: [{ act: 'heal', every: 40, v: 3 }, { act: 'heal', every: 35, v: 4 }, { act: 'heal', every: 30, v: 5 }] },
+    lv: [{ act: 'heal', every: 40, v: 2 }, { act: 'heal', every: 36, v: 3 }, { act: 'heal', every: 32, v: 4 }] },
   salamandra: { id: 'salamandra', name: 'Salamandra', forms: ['Salamandra', 'Salamandra Paleniskowa', 'Smok Rosołowy'], text: 'Podpala wroga: dokłada stosy Oparzenia.',
-    lv: [{ act: 'burn', every: 40, v: 1 }, { act: 'burn', every: 35, v: 2 }, { act: 'burn', every: 30, v: 3 }] },
+    lv: [{ act: 'burn', every: 45, v: 1 }, { act: 'burn', every: 40, v: 1 }, { act: 'burn', every: 35, v: 2 }] },
   balwanek: { id: 'balwanek', name: 'Bałwanek', forms: ['Bałwanek', 'Bałwan Chłodniczy', 'Lodowy Kolos'], text: 'Mrozi wroga: dokłada stosy Mrozu.',
-    lv: [{ act: 'frost', every: 30, v: 1 }, { act: 'frost', every: 28, v: 2 }, { act: 'frost', every: 26, v: 2 }] },
+    lv: [{ act: 'frost', every: 40, v: 1 }, { act: 'frost', every: 36, v: 1 }, { act: 'frost', every: 32, v: 2 }] },
   gasior: { id: 'gasior', name: 'Gąsior Stróż', forms: ['Gąsior Stróż', 'Gęsi Ochroniarz', 'Gęsi Generał'], text: 'Blokuje pierwsze ciosy wrogów, a co kilka sekund syczy i ogłusza ich.',
-    lv: [{ act: 'honk', every: 120, v: 8, fx: [{ k: 'parasol', v: 1 }] }, { act: 'honk', every: 100, v: 10, fx: [{ k: 'parasol', v: 2 }] }, { act: 'honk', every: 80, v: 12, fx: [{ k: 'parasol', v: 3 }] }] },
+    lv: [{ act: 'honk', every: 140, v: 6, fx: [{ k: 'parasol', v: 1 }] }, { act: 'honk', every: 120, v: 8, fx: [{ k: 'parasol', v: 1 }] }, { act: 'honk', every: 100, v: 10, fx: [{ k: 'parasol', v: 2 }] }] },
   kot: { id: 'kot', name: 'Kot Skarbnik', forms: ['Kot Skarbnik', 'Kot Księgowy', 'Kot Prezesa'], text: 'Przynosi Ziarna po każdej wygranej walce.',
-    lv: [{ fx: [{ k: 'coinFlat', v: 1 }] }, { fx: [{ k: 'coinFlat', v: 2 }] }, { fx: [{ k: 'coinFlat', v: 2 }, { k: 'luck', v: 10 }] }] },
+    lv: [{ fx: [{ k: 'coinFlat', v: 1 }] }, { fx: [{ k: 'coinFlat', v: 1 }, { k: 'luck', v: 5 }] }, { fx: [{ k: 'coinFlat', v: 2 }, { k: 'luck', v: 10 }] }] },
 };
 export const COMPANION_OFFER = 3;
 
 // ---------- Kurnik (meta-progres: Pióra za runy → trwałe ulepszenia, maks. 3 poziomy) ----------
 // Efekty liczone w rules.js (start: Ziarna, towarzysz; kantyna: rerolle; skarbiec: Ziarna za bossa) i stats.js (siłownia, gabinet, szkoła).
 export const KURNIK = {
-  spizarnia: { name: 'Spiżarnia', icon: 'spizarnia', text: '+2 Ziarna na start runu za poziom.', cost: [12, 28, 55] },
+  spizarnia: { name: 'Spiżarnia', icon: 'spizarnia', text: '+1 Ziarno na start runu za poziom.', cost: [12, 28, 55] },
   gabinet: { name: 'Gabinet Lekarski', icon: 'gabinet', text: 'Odpoczynek leczy o 5 pkt proc. więcej za poziom.', cost: [12, 28, 55] },
-  silownia: { name: 'Siłownia', icon: 'silownia', text: '+3% maks. Życia i +3% Ataku za poziom.', cost: [20, 45, 80] },
+  silownia: { name: 'Siłownia', icon: 'silownia', text: '+1% maks. Życia i +1% Ataku za poziom.', cost: [20, 45, 80] },
   skarbiec: { name: 'Skarbiec Prezesa', icon: 'skarbiec', text: '+1 Ziarno za każdego pokonanego bossa za poziom.', cost: [15, 35, 65] },
   kantyna: { name: 'Kantyna', icon: 'kantyna', text: '+1 darmowy reroll za poziom na pierwszym piętrze każdej strefy.', cost: [12, 28, 55] },
   szkola: { name: 'Szkoła Kurzych Sztuczek', icon: 'szkola', text: 'Umiejętności mają o 4% krótszy cooldown za poziom.', cost: [15, 35, 65] },
-  pisklecarnia: { name: 'Pisklęcarnia', icon: 'pisklecarnia', text: 'Poz. 1: zaczynasz z losowym towarzyszem. Poz. 2: towarzysz zaczyna na poziomie 2. Poz. 3: w Schronisku wybierasz z 4.', cost: [25, 60, 110] },
+  pisklecarnia: { name: 'Pisklęcarnia', icon: 'pisklecarnia', text: 'Poz. 1: zaczynasz z losowym towarzyszem. Poz. 2: w Schronisku wybierasz z 4. Poz. 3: towarzysz zaczyna o poziom wyżej.', cost: [25, 60, 110] },
 };
 export const KURNIK_MAX = 3;
 

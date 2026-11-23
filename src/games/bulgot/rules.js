@@ -49,7 +49,7 @@ export function routeOptions(run) {
   while (out.length < 2) { const k = rr.pick(keys); if (!out.includes(k)) out.push(k); }
   return out;
 }
-export const compLevel = run => Math.min(3, 1 + ((run.kurnik && run.kurnik.pisklecarnia) >= 2 ? 1 : 0) + (run.bossWins | 0));
+export const compLevel = run => Math.min(3, 1 + ((run.kurnik && run.kurnik.pisklecarnia) >= 3 ? 1 : 0) + (run.bossWins | 0));
 
 // Notatki bieżącej rundy (do historii gier): co zaoferowano, co wybrano, co dokupiono, ile rerolli.
 const freshCur = run => ({ offer: run.offer.slice(), picked: null, rerolls: 0, bought: [], event: null });
@@ -75,7 +75,7 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null
     grow: {}, flawed: [], flawAt: -1, pawned: null, foxDebt: 0, door: null, nemesis: null, will: null, willUsed: false,
   };
   run.decrees = decreesOf(run.seed);
-  run.coins += 2 * kLv(run, 'spizarnia');   // Kurnik: Spiżarnia
+  run.coins += kLv(run, 'spizarnia');   // Kurnik: Spiżarnia
   if (kLv(run, 'pisklecarnia') >= 1) { const ks = Object.keys(COMPANIONS); run.companion = { id: makeRng(mix(run.seed, hash('startcomp'))).pick(ks), lvl: compLevel(run) }; }   // Kurnik: Pisklęcarnia
   if (ch.startTiles) run.tiles = ch.startTiles.slice();   // Dinozaur zaczyna z Jajkiem
   if (ch.randomSkill) run.skills = [{ id: makeRng(mix(run.seed, hash('mutskill'))).pick(Object.keys(SKILLS)), lvl: 1 }];   // Kurczak Mutant: losowa umiejętność na start
@@ -315,7 +315,7 @@ export function pickTile(run, i, slot, mut, ctx = {}) {
   }
   if (t.event === 'schronisko') {
     const rr = makeRng(mix(run.seed, run.round, hash('adopt'))), keys = Object.keys(COMPANIONS), opts = [];
-    const n = Math.min(keys.length, COMPANION_OFFER + (kLv(run, 'pisklecarnia') >= 3 ? 1 : 0));
+    const n = Math.min(keys.length, COMPANION_OFFER + (kLv(run, 'pisklecarnia') >= 2 ? 1 : 0));
     while (opts.length < n) { const k = rr.pick(keys); if (!opts.includes(k)) opts.push(k); }
     run.pending = { kind: 'adopt', opts }; run.phase = 'event'; run.offer = [];
     return { ok: true, event: 'adopt' };
@@ -617,7 +617,7 @@ const arenaOn = run => !!(run.arena && run.arena.round === run.round);
 function scale(mode, round) {
   const M = MODES[mode], g = M.grow; let h = 1, a = 1;
   for (let i = 1; i < round; i++) { h *= g.hp; a *= g.atk; }
-  if (round > M.rounds) { const x = round - M.rounds; h *= 1 + RULES.endlessHp * x / 100; a *= 1 + RULES.endlessAtk * x / 100; }   // Dogrywka: wrogowie rosną szybciej
+  for (let i = M.rounds; i < round; i++) { h *= 1 + RULES.endlessHp / 100; a *= 1 + RULES.endlessAtk / 100; }   // Dogrywka: wrogowie rosną szybciej (procent składany na każde piętro ponad limit)
   return { h, a };
 }
 // Strefa (0..2) dla tła i wrogów. Prezes zawsze rezyduje w Biurze Zarządu (strefa III), także w trybie szybkim.
@@ -917,6 +917,7 @@ export function view(run) {
     id: run.id, mode: run.mode, char: run.char, garnek: run.garnek, round: run.round, rounds: M.rounds, phase: run.phase,
     hp: run.hp, maxHp: S.maxHp, coins: run.coins, tiles: run.tiles, skills: run.skills, offer: run.offer, pending: viewPending(run),
     curses: run.curses || [], routes: run.routes || [null, null, null], route: (run.routes && run.routes[zoneOf(run.mode, run.round)]) || null, companion: run.companion || null, kurnik: run.kurnik || {},
+    arenaGhost: arenaOn(run) ? { nick: run.arena.ghost.nick, avatar: run.arena.ghost.avatar | 0, char: run.arena.ghost.char, mirror: !!run.arena.ghost.mirror, floors: run.arena.ghost.floors, stats: ghostStats(run.arena.ghost, run.round) } : null,
     endless: !!run.endless, cleared: run.cleared === undefined ? null : run.cleared, fell: !!run.fell, maxSkills: maxSkillsOf(run), cursePct: cursePct(run.curses), arenaNow: !!(run.arena && run.arena.round === run.round),
     rerollCost: run.phase === 'offer' ? rerollCost(run) : null, freeLeft: run.freeLeft, rested: run.rested, restCost: restCost(run), restPct: RULES.restPct + S.restBonus, badges: run.badges || [], affixes: !over && isElite(run) && !hideFoes(run) ? eliteAffixes(run) : null, buyDisc: S.buyDisc, stats: run.stats, flags: { bossHpBonus: run.flags.bossHpBonus, revived: run.flags.revived, bonusAtk: run.flags.bonusAtk },
     score: over ? run.score : liveScore(run), done: run.done, timeBonus: run.timeBonus, ended: run.ended, killer: over && run.killer ? { enemy: run.killer.enemy, nemesis: !!run.killer.nemesis } : null, form: formFor(run.mode, run.round).id, zone: zoneOf(run.mode, run.round),

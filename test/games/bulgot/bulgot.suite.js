@@ -1759,7 +1759,7 @@ test('Towarzysz: Schronisko, poziomy po bossach, premie i czynności w walce', (
   const heal = play(setup({ hp: 20, lo: { companion: { id: 'trzmiel', lvl: 3 } }, enemies: [foe({ hp: 600, atk: 1, aspd: 30 })] })); assert(evs(heal.ev, 'heal').length >= 2, 'Trzmiel leczy');
   const bu = play(setup({ hp: 100000, lo: { companion: { id: 'salamandra', lvl: 2 } }, enemies: [foe({ hp: 300, atk: 1, aspd: 20 })] })); assert(bu.f.enemies[0].burn >= 0 && bu.res.burnDealt > 0, 'Salamandra podpala');
   const fr = play(setup({ hp: 100000, lo: { companion: { id: 'balwanek', lvl: 3 } }, enemies: [foe({ hp: 500, atk: 1, aspd: 20 })] })); assert(fr.res.freezes >= 1, 'Bałwanek mrozi');
-  const ho = play(setup({ hp: 100000, lo: { companion: { id: 'gasior', lvl: 3 } }, enemies: [foe({ hp: 900, atk: 3, aspd: 100 })] })); assert(evs(ho.ev, 'stun').length >= 1 && evs(ho.ev, 'block').length >= 3, 'Gąsior ogłusza i blokuje ciosy');
+  const ho = play(setup({ hp: 100000, lo: { companion: { id: 'gasior', lvl: 3 } }, enemies: [foe({ hp: 900, atk: 3, aspd: 100 })] })); assert(evs(ho.ev, 'stun').length >= 1 && evs(ho.ev, 'block').length >= 2, 'Gąsior ogłusza i blokuje ciosy');
   eq(heroStats(loadout({ companion: { id: 'kot', lvl: 3 } })).coinFlat, 2, 'Kot: Ziarna'); eq(heroStats(loadout({ companion: { id: 'kot', lvl: 3 } })).luck, 10, 'Kot poz. 3: Szczęście');
   eq(Object.keys(D.COMPANIONS).length, 6, '6 towarzyszy'); for (const c of Object.values(D.COMPANIONS)) assert(c.lv.length === 3 && c.forms.length === 3, 'dane ' + c.id);
 });
@@ -1777,11 +1777,11 @@ test('Kurnik: Pióra za run, kupno poziomów, efekty na starcie runu i w statyst
   eq(kurnikBuy(q, 'spizarnia').code, 'max', 'maks. poziom'); eq(kurnikBuy(q, 'nie-ma').code, 'index', 'nieznany budynek');
   q.feathers = 0; eq(kurnikBuy(q, 'gabinet').code, 'feathers', 'brak Piór');
   // efekty na starcie
-  const k = fresh({ kurnik: { spizarnia: 2, silownia: 3, gabinet: 2, szkola: 1, kantyna: 2, skarbiec: 1, pisklecarnia: 2 } });
-  eq(k.coins, 4, 'Spiżarnia +4 Ziarna'); eq(k.freeLeft, 2, 'Kantyna: darmowe rerolle na starcie');
+  const k = fresh({ kurnik: { spizarnia: 2, silownia: 3, gabinet: 2, szkola: 1, kantyna: 2, skarbiec: 1, pisklecarnia: 3 } });
+  eq(k.coins, 2, 'Spiżarnia +2 Ziarna (poz. 2)'); eq(k.freeLeft, 2, 'Kantyna: darmowe rerolle na starcie');
   const S0 = R.statsOf(fresh()), S1 = R.statsOf(k);
   assert(S1.maxHp > S0.maxHp && S1.atk >= S0.atk && S1.restBonus === 10 && S1.cdPct === 4, 'Siłownia, Gabinet, Szkoła');
-  assert(k.companion && k.companion.lvl === 2, 'Pisklęcarnia: towarzysz na poz. 2');
+  assert(k.companion && k.companion.lvl === 2, 'Pisklęcarnia 3: towarzysz startuje na poz. 2'); const k1 = fresh({ kurnik: { pisklecarnia: 1 } }); eq(k1.companion.lvl, 1, 'Pisklęcarnia 1: poz. 1');
   const b = strong(fresh({ kurnik: { skarbiec: 2 } })); const b0 = strong(fresh()); b.round = 6; b0.round = 6; const c1 = b.coins, c0 = b0.coins; fightWin(b); fightWin(b0);
   eq((b.coins - c1) - (b0.coins - c0), 2, 'Skarbiec: +2 Ziarna za bossa');
   assert(R.newRun({ mode: 'full', char: 'pyrtek', garnek: 0, pool: ALL, seed: 3, kurnik: { spizarnia: 99, zly: 2 } }).run.kurnik.spizarnia === D.KURNIK_MAX, 'poziom przycięty do maksimum, nieznane budynki ignorowane');
@@ -1790,7 +1790,7 @@ test('Kurnik: Pióra za run, kupno poziomów, efekty na starcie runu i w statyst
   assert((await post(o, 'kurnik', { pl: PL, id: 'spizarnia' })).j.code === 'feathers', 'bez Piór błąd');
   const prof = await o.ctx.storage.get('profile'); await post(o, 'state', { pl: PL }); const pr = (await o.ctx.storage.get('profile')) || newProfile(); pr.feathers = 50; await o.ctx.storage.put('profile', pr);
   const buy = await post(o, 'kurnik', { pl: PL, id: 'spizarnia' }); assert(buy.j.ok && buy.j.kurnikBought.lvl === 1 && buy.j.profile.kurnik.spizarnia === 1 && buy.j.profile.feathers === 50 - 12, 'zakup przez BgPlayer');
-  const st = await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' }); eq(st.j.run.coins, 2, 'run startuje z poziomami Kurnika'); assert(st.j.run.kurnik.spizarnia === 1, 'poziomy w widoku');
+  const st = await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' }); eq(st.j.run.coins, 1, 'run startuje z poziomami Kurnika'); assert(st.j.run.kurnik.spizarnia === 1, 'poziomy w widoku');
 });
 
 test('Nowości: kompletność danych (klątwy, trasy, bossowie, osiągnięcia), RUN_V', () => {

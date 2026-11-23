@@ -25,7 +25,7 @@ export function heroStats(loadout, opt = {}) {
   const co = loadout.companion && COMPANIONS[loadout.companion.id];
   if (co) for (const f of (co.lv[Math.min(3, Math.max(1, loadout.companion.lvl | 0)) - 1].fx || [])) add(f.k, f.v);
   const ku = loadout.kurnik || {};
-  if (ku.silownia) { add('hpPct', 3 * ku.silownia); add('atkPct', 3 * ku.silownia); }
+  if (ku.silownia) { add('hpPct', ku.silownia); add('atkPct', ku.silownia); }
   if (ku.gabinet) add('restBonus', 5 * ku.gabinet);
   if (ku.szkola) add('cdPct', 4 * ku.szkola);
   if ((loadout.curses || []).includes('kruche-kosci')) add('hpPct', -25);
