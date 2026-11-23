@@ -1075,17 +1075,20 @@ test('Kafelki rosnące: Trofeum z Piór, Skarbonka Pisklęcia, Pierze Weterana (
 
 test('Rozwidlenie Korytarza: drzwi na stałych piętrach, ryzykowny wróg z cechą elity, nagroda Ziarna albo rzadki kafelek', () => {
   const d = fresh(); force(d, 'ziarno-mocy'); R.pickTile(d, 0); win(d);
-  assert(d.phase === 'door' && d.pending.kind === 'door' && D.AFFIXES[d.pending.affix] && ['coins', 'rare'].includes(d.pending.reward), 'drzwi po 1. piętrze');
+  assert(d.phase === 'door' && d.pending.kind === 'door' && D.AFFIXES[d.pending.affix] && d.pending.reward === 'rare', 'drzwi po 1. piętrze (nagroda zawsze rzadki kafelek lub Ziarna)');
   assert(R.choose(d, 5).code === 'index', 'złe drzwi'); assert(R.choose(d, 1).ok && d.door.risky && d.phase === 'offer', 'ryzykowne drzwi');
   eq(R.view(d).doors, D.MODES.full.doors, 'widok zna piętra z drzwiami');
   const strong = x => { x.tiles = [...Array(12).fill('ziarno-mocy'), ...Array(8).fill('twardy-grzebien')]; x.hp = R.statsOf(x).maxHp; return x; };
-  const c = strong(fresh()); c.round = 5; c.door = { risky: true, affix: 'szybki', reward: 'coins' };
+  const c = strong(fresh()); c.round = 5; c.door = { risky: true, affix: 'szybki', reward: 'rare' };
   const st = R.buildSetup(c); assert(st.door && st.enemies[0].elite && st.enemies[0].affixes[0] === 'szybki' && st.enemies.length <= 2, 'wróg z cechą');
   const plain = strong(fresh()); plain.round = 5; assert(R.floorTemplate(c) === null, 'ryzykowne drzwi bez szablonu piętra');
   plain.door = null; assert(R.buildSetup({ ...plain, door: { risky: false } }).enemies.every(e => !e.elite), 'zwykłe drzwi: bez elity');
   const same = { ...c, door: null }; const tp = R.floorTemplate(same);
   if (!tp || tp === 'roj' || tp === 'para') assert(R.buildSetup(same).enemies[0].hp < st.enemies[0].hp, 'mocniejszy niż zwykle');
-  const oc = win(c); assert(oc.result.win && oc.doorCoins === D.RULES.doorCoins && !oc.badge, 'nagroda: Ziarna, bez Odznaki');
+  c.hp = Math.floor(R.statsOf(c).maxHp / 2); const hp0 = c.hp; const oc = win(c); assert(oc.result.win && !oc.badge && c.phase === 'bonus', 'ryzykowne drzwi: łup do wyboru');
+  assert(c.hp === hp0 - 0 || c.hp <= hp0, 'ryzykowne drzwi: brak leczenia po walce (' + hp0 + ' → ' + c.hp + ')');
+  const c0 = c.coins; const sk = R.bonusPick(c, -1); assert(sk.ok && c.coins === c0 + D.RULES.doorCoins, 'zamiast kafelka można wziąć Ziarna');
+  const nb = strong(fresh()); nb.round = 5; nb.door = null; assert(R.bonusPick({ ...nb, phase: 'bonus', door: { risky: false }, log: [] }, -1).code, 'bez ryzykownych drzwi nie ma Ziaren za łup');
   const rr = strong(fresh()); rr.round = 5; rr.door = { risky: true, affix: 'szybki', reward: 'rare' }; const orr = win(rr);
   assert(orr.result.win && rr.phase === 'bonus' && rr.offer.length === 3 && rr.offer.every(id => D.TILE_BY_ID[id].rarity >= 1), 'nagroda: rzadki kafelek');
   assert(!D.MODES.full.doors.some(n => D.MODES.full.bosses[n] || D.MODES.full.elite.includes(n)) && !D.MODES.quick.doors.some(n => D.MODES.quick.bosses[n] || D.MODES.quick.elite.includes(n)), 'drzwi nie trafiają na bossa ani elitę');
@@ -2137,4 +2140,12 @@ test('zestawy: Szok Termiczny w konflikcie bije mocniej, pierwszy atak Armii to 
   const rb6 = ['opaska-rambo', 'kamizelka-kuloodporna', 'ostrogi-bojowe', 'okulary-aviatory', 'kolczatka', 'karabin-maszynowy'];
   const f = new Fight(setup({ lo: { tiles: rb6 }, enemies: [big()] })); let first = null; for (let i = 0; i < 40 && !first; i++) { f.step(); first = f.ev.find(e => e.k === 'hit' && e.kind === 'atk'); }
   assert(first && first.crit, 'pierwszy atak jest krytyczny');
+});
+
+test('zwykłe drzwi: darmowy Odpoczynek na wejściu', () => {
+  const d = fresh(); force(d, 'ziarno-mocy'); R.pickTile(d, 0); win(d);
+  assert(d.phase === 'door', 'drzwi'); const S = R.statsOf(d); d.hp = Math.floor(S.maxHp / 2); const before = d.hp, coins = d.coins;
+  const r = R.choose(d, 0); assert(r.ok && r.healed > 0 && d.hp > before && d.coins === coins && !d.rested, 'zwykłe drzwi leczą za darmo i nie zużywają odpoczynku');
+  const e = fresh(); force(e, 'ziarno-mocy'); R.pickTile(e, 0); win(e); e.hp = Math.floor(R.statsOf(e).maxHp / 2); const hb = e.hp;
+  assert(R.choose(e, 1).ok && e.hp === hb, 'ryzykowne drzwi nie leczą');
 });

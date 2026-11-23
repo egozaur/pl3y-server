@@ -256,7 +256,7 @@ function startFloor(run) {
   if (isDoor(run)) {
     const rr = makeRng(mix(run.seed, run.round, hash('door')));
     run.phase = 'door'; run.offer = []; run.flawAt = -1;
-    run.pending = { kind: 'door', affix: rr.pick(Object.keys(AFFIXES)), reward: rr.int(2) ? 'rare' : 'coins', coins: RULES.doorCoins };
+    run.pending = { kind: 'door', affix: rr.pick(Object.keys(AFFIXES)), reward: 'rare', coins: RULES.doorCoins };
     run.cur = freshCur(run);
     return { ok: true, door: true };
   }
@@ -513,7 +513,10 @@ export function choose(run, i) {
     setOffer(run, 0);
     run.cur = freshCur(run); cur(run).door = i;
     if (i === 1) run.stats.doors = (run.stats.doors || 0) + 1;
-    return { ok: true, chose: i };
+    // Zwykłe drzwi: darmowy Odpoczynek (leczy jak zwykły, nie zużywa odpoczynku rundy).
+    let healed = 0;
+    if (i === 0) { const S = statsOf(run), before = run.hp; run.hp = Math.min(S.maxHp, run.hp + Math.max(1, fl(S.maxHp * restPctOf(run, S) / 100))); healed = run.hp - before; cur(run).doorHeal = healed; }
+    return { ok: true, chose: i, healed };
   }
   if (run.phase === 'badge' && P && P.kind === 'badge') {
     const b = P.offer[i];
@@ -608,6 +611,12 @@ function afterFight(run, bonus, loot) {
 
 export function bonusPick(run, i, slot, mut) {
   if (run.phase !== 'bonus') return fail('Teraz nie ma oferty bonusowej.', 'phase');
+  // Łup zza ryzykownych drzwi: zamiast kafelka można wziąć Ziarna (i = -1).
+  if (i === -1 && run.door && run.door.risky && !(run.log.length && run.log[run.log.length - 1].boss)) {
+    setCoins(run, run.coins + RULES.doorCoins);
+    if (run.log.length) run.log[run.log.length - 1].bonus = 'coins';
+    const r = nextRound(run); if (r && r.ok) r.coins = RULES.doorCoins; return r;
+  }
   const t = TILE_BY_ID[run.offer[i]];
   if (!t) return fail('Nie ma takiego kafelka.', 'index');
   const e = applyTile(run, t, slot, mut);
@@ -829,7 +838,7 @@ export function fightFinish(run, inputs) {
   // Odsetki w Spiżarni: +1 Ziarno za każde 10 niewydanych (po kradzieżach), najwyżej 3 (Kaczor 5).
   const interest = Math.min(CHARS[run.char].interestMax || RULES.interestMax, fl(run.coins / RULES.interestPer));
   coins += interest; out.interest = interest;
-  if (setup.door && run.door.reward === 'coins') { coins += RULES.doorCoins; out.doorCoins = RULES.doorCoins; }
+  if (setup.door && run.door.reward === 'coins') { coins += RULES.doorCoins; out.doorCoins = RULES.doorCoins; }   // stare runy (sprzed zmiany drzwi) mogą mieć nagrodę Ziarnami
   coins = Math.max(0, coins);
   // Kafelki rosnące.
   const gw = (id, n, why) => { if (n > 0 && run.tiles.includes(id)) { const t = TILE_BY_ID[id]; const v = Math.min(t.grow.max, (run.grow[id] || 0) + n); if (v !== (run.grow[id] || 0)) { run.grow[id] = v; (out.grew = out.grew || []).push(id); } } };
@@ -855,7 +864,7 @@ export function fightFinish(run, inputs) {
   run.stats.maxBurn = Math.max(run.stats.maxBurn || 0, res.burnDealt || 0);
   run.stats.freezes = (run.stats.freezes || 0) + (res.freezes || 0);
   setCoins(run, run.coins + coins); out.reward = coins;
-  run.hp = Math.min(statsOf(run).maxHp, run.hp + fl(S.maxHp * Math.max(0, gm.healPct + S.healBonus + ((rt && rt.heal) || 0) - (decreeIs(run, 'homeoffice') ? 10 : 0)) / 100));
+  if (!setup.door) run.hp = Math.min(statsOf(run).maxHp, run.hp + fl(S.maxHp * Math.max(0, gm.healPct + S.healBonus + ((rt && rt.heal) || 0) - (decreeIs(run, 'homeoffice') ? 10 : 0)) / 100));
   if (res.hp * 10 < S.maxHp) run.stats.lowWin = true;
   if (res.taken > S.maxHp) run.stats.tankWin = true;
   if (run.tiles.includes('siewnik')) run.flags.bonusAtk++;

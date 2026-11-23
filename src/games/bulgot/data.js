@@ -32,7 +32,7 @@ export const RULES = {
   // Odsetki w Spiżarni: +1 Ziarno za każde `interestPer` niewydanych Ziaren po wygranej walce, najwyżej `interestMax` (Kaczor: CHARS.kaczor.interestMax).
   interestPer: 10, interestMax: 3,
   // Rozwidlenie Korytarza: ryzykowne drzwi = pierwszy wróg z cechą elity (życie/atak w %), nagroda: Ziarna albo wybór rzadkiego kafelka.
-  doorCoins: 8, doorHp: 165, doorAtk: 125,
+  doorCoins: 10, doorHp: 161, doorAtk: 124,   // doorCoins: zamiast rzadkiego kafelka można wziąć tyle Ziaren; zwykłe drzwi leczą jak Odpoczynek, ryzykowne odbierają leczenie po walce
   // Łup z bossa: po pokonaniu bossa (poza ostatnim) wybierasz 1 z `lootSize` legendarnych statystyk (kafelki z flagą boss).
   lootSize: 3, lootChance: 15, upgradeCost: 2,   // % szans, że po bossie (nie ostatnim) pojawia się okno wyboru łupu
   // Lombard Lisa: zastaw = pełna cena rzadkości teraz, wykup na następnym piętrze za `pawnBack`% ceny; przepadek wzmacnia Lisy o `pawnFox`%.
