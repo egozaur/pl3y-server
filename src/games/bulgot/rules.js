@@ -2,7 +2,7 @@
 // Wszystkie losowania biorą ziarno z run.seed, więc ten sam run daje te same oferty i spotkania.
 // Każda funkcja zwraca { ok: true, ... } albo { err, code }. Stan zapisuje i autoryzuje BgPlayer (player.js).
 import { mix, hash, makeRng } from './rng.js';
-import { SKILLS, TILES, RECIPES, BADGES, BADGE_OFFER, BADGE_POOL, AFFIXES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, FLOOR_TPL, garnekRamp, RARITY_WEIGHTS, TYPE_WEIGHTS, DECREES, FLAWS, NEMESIS_TITLES, NEMESIS_NAMES, garnekMods, formFor, BOSS_POOL, SUPER_BOSSES, ROUTES, CURSES, CURSE_MAX, cursePct, COMPANIONS, COMPANION_OFFER, KURNIK, KURNIK_MAX } from './data.js';
+import { SKILLS, TILES, RECIPES, BADGES, BADGE_OFFER, BADGE_POOL, AFFIXES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, FLOOR_TPL, garnekRamp, RARITY_WEIGHTS, TYPE_WEIGHTS, DECREES, FLAWS, NEMESIS_TITLES, NEMESIS_NAMES, garnekMods, formFor, BOSS_POOL, SUPER_BOSSES, EXTRA_AT, EXTRA_DOG, ROUTES, CURSES, CURSE_MAX, cursePct, COMPANIONS, COMPANION_OFFER, KURNIK, KURNIK_MAX } from './data.js';
 import { heroStats, setCounts } from './stats.js';
 import { runFight } from './sim.js';
 
@@ -57,7 +57,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 15;
+export const RUN_V = 16;
 
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null, curses = [], kurnik = {} }) {
   const M = MODES[mode], ch = CHARS[char];
@@ -238,7 +238,7 @@ function nextRound(run) {
   const M = MODES[run.mode];
   if (run.round > M.rounds && !run.endless) return endRun(run, 'win');
   run.stats.maxRound = Math.max(run.stats.maxRound, run.round);
-  run.phase = 'offer'; run.pending = null; run.rested = false; run.rerolls = 0; run.paid = 0; run.door = null; run.arena = null;
+  run.phase = 'offer'; run.pending = null; run.rested = false; run.rerolls = 0; run.paid = 0; run.door = null; run.arena = null; run.extra = null;
   // Lombard Lisa: niewykupiony zastaw przepada, a Lisy Windykatory rosną w siłę.
   if (run.pawned && run.round > run.pawned.round + 1) { run.foxDebt = (run.foxDebt || 0) + 1; run.lostPawn = run.pawned.id; run.pawned = null; }
   // Wybór trasy na początku strefy II i III.
@@ -398,6 +398,7 @@ export function rest(run) {
   if (run.phase !== 'offer' && run.phase !== 'fight') return fail('Teraz nie można odpoczywać.', 'phase');
   if (hasCurse(run, 'zakaz-drzemek')) return fail('Klątwa „Zakaz Drzemek”: odpoczynek jest wyłączony.', 'curse');
   if (run.phase === 'fight' && run.fight) return fail('Walka już się zaczęła.', 'fighting');
+  if (extraOn(run)) return fail('Przed dodatkową rundą nie ma odpoczynku: walczysz z życiem, które ci zostało.', 'extra');
   if (run.rested) return fail('W tej rundzie już odpoczywałeś.', 'rested');
   const S = statsOf(run);
   if (run.hp >= S.maxHp) return fail('Masz pełne życie.', 'full');
@@ -568,6 +569,18 @@ export function choose(run, i) {
     run.pending = null; enterFight(run);
     return { ok: true, chose: i, tile: P.tile };
   }
+  if (run.phase === 'event' && P && P.kind === 'extra') {   // Dodatkowa runda (Gruszka, Pipsztal): walka z życiem po poprzedniej walce albo odwrót
+    if (i !== 0 && i !== 1) return fail('Nie ma takiego wyboru.', 'index');
+    run.pending = null;
+    if (i === 0) {
+      run.extra = { id: P.boss, round: run.round, heal: P.heal | 0, after: P.after };
+      run.stats.extraFights = (run.stats.extraFights || 0) + 1;
+      enterFight(run);
+      return { ok: true, chose: 0 };
+    }
+    run.hp = Math.min(statsOf(run).maxHp, run.hp + (P.heal | 0));   // odwrót: leczenie z wygranej walki dopiero teraz
+    return Object.assign(winTail(run, P.after), { chose: 1 });
+  }
   if (run.phase === 'event' && P && P.kind === 'arena') {   // Arena Duchów: walka albo odwrót
     if (i !== 0 && i !== 1) return fail('Nie ma takiego wyboru.', 'index');
     if (i === 0) { run.arena = { ghost: P.ghost, round: run.round }; run.stats.arenaFights = (run.stats.arenaFights || 0) + 1; cur(run).arena = P.ghost.nick; }
@@ -641,6 +654,7 @@ export function ghostStats(g, round) {
   return { hp: Math.max(1, fl(maxHp * RULES.ghostPct / 100)), atk: Math.max(1, fl(atk * RULES.ghostPct / 100 * RULES.ghostAtk / 100)), aspd: Math.max(20, aspd), armor, crit: Math.min(60, crit), evade: Math.min(50, evade) };
 }
 const ghostEnemy = run => { const g = run.arena.ghost, st = ghostStats(g, run.round); return { id: 'duch', name: 'Duch: ' + g.nick, ...st, art: 'ghost', ghost: true, gchar: g.char, gwear: g.wear || null }; };
+const extraOn = run => !!(run.extra && run.extra.round === run.round);
 const arenaOn = run => !!(run.arena && run.arena.round === run.round);
 
 // ---------- Walka ----------
@@ -716,13 +730,24 @@ function concrete(def, s, gm, extra = {}, early = null) {
   let atk = Math.max(1, Math.round(def.atk * s.a * (100 + gm.enemyAtk) / 100));
   if (early) { hp = Math.max(1, Math.round(hp * early.hp / 100)); atk = Math.max(1, Math.round(atk * early.atk / 100)); }
   const e = { id: def.id, name: def.name, hp, atk, aspd: def.aspd, armor: def.armor, evade: def.evade, crit: def.crit, art: def.art };
-  for (const k of ['steal', 'slow', 'spec', 'shieldHits', 'shield', 'minion', 'ignite', 'rise', 'resist', 'audit', 'vamp', 'mech', 'summon', 'rage', 'night', 'blizzard', 'tint']) if (def[k]) e[k] = def[k];
+  for (const k of ['steal', 'slow', 'spec', 'shieldHits', 'shield', 'minion', 'ignite', 'rise', 'resist', 'audit', 'vamp', 'mech', 'summon', 'rage', 'night', 'blizzard', 'tint', 'stunHero']) if (def[k]) e[k] = def[k];
   return Object.assign(e, extra);
 }
 
 export function buildSetup(run) {
   const M = MODES[run.mode], gm0 = garnekMods(run.garnek), s = scale(run.mode, run.round);
   const rp = garnekRamp(run.mode, run.round), gm = { ...gm0, enemyHp: fl(gm0.enemyHp * rp / 100), enemyAtk: fl(gm0.enemyAtk * rp / 100), bossHp: fl(gm0.bossHp * rp / 100) };   // premie palnika rosną z piętrem
+  if (extraOn(run)) {   // dodatkowa runda: sam boss (Pipsztal z psem), bez szablonów, tras i cech
+    const def = BOSSES[run.extra.id];
+    const be = concrete(def, s, gm, { boss: def.id, title: def.title, aspd: fl(def.aspd * (100 + gm.bossAspd) / 100), idle: def.idle || 0 });
+    if (gm.bossHp) be.hp = fl(be.hp * (100 + gm.bossHp) / 100);
+    const bp = M.extraPct || { hp: 100, atk: 100 }; be.hp = Math.max(1, fl(be.hp * bp.hp / 100)); be.atk = Math.max(1, fl(be.atk * bp.atk / 100));
+    const foes = [be];
+    if ((def.mech || []).includes('pet')) foes.unshift(concrete(EXTRA_DOG, s, gm, { pet: true }));
+    const S0 = statsOf(run);
+    return { v: 1, round: run.round, mode: run.mode, seed: mix(run.seed, run.round, hash('extra')), boss: null, extra: def.id, elite: false, zone: zoneOf(run.mode, run.round), door: false, nemesis: false,
+      hero: { loadout: loadoutOf(run), hp: Math.min(run.hp, S0.maxHp), revive: S0.revive && !run.flags.revived }, enemies: foes, minion: concrete(ENEMIES['pisklak-stazysta'], s, gm, { minion: true }) };
+  }
   const arena = arenaOn(run), ids = arena ? [] : encounterIds(run), boss = arena ? null : bossAt(run), elite = !arena && isElite(run);
   let enemies;
   if (arena) enemies = [ghostEnemy(run)];
@@ -807,7 +832,7 @@ export function fightFinish(run, inputs) {
   for (const w of (run.flawed || [])) if (!w.on) { w.on = true; revealed.push({ id: w.id, flaw: w.flaw }); }
   run.stats.reactions = [...new Set([...(run.stats.reactions || []), ...(res.reactSeen || [])])];
   run.stats.chains = (run.stats.chains || 0) + (res.chains || 0);
-  if (run.stats.v2) {
+  if (run.stats.v2 && !setup.extra) {
     run.stats.skillUses = (run.stats.skillUses || 0) + (res.skillsUsed || 0);
     if ((res.chains || 0) > (run.stats.maxChainsFight || 0)) run.stats.maxChainsFight = res.chains;
     if (Object.values(setCounts(run.tiles)).some(n => n >= 2)) run.stats.syn = true;
@@ -827,12 +852,28 @@ export function fightFinish(run, inputs) {
     // Awans Wroga: zwykły wróg, który zakończył run, awansuje (albo Nemezis awansuje wyżej).
     if (setup.nemesis) run.killer = { enemy: run.nemesis.enemy, nemesis: true };
     else if (!setup.boss) { const k = setup.enemies.filter(e => !e.minion && !e.guard && ENEMIES[e.id]).sort((a, b) => b.atk - a.atk)[0]; if (k) run.killer = { enemy: k.id, nemesis: false, next: makeNemesis(run, k.id) }; }
-    run.arena = null;
-    run.log.push(entry()); endRun(run, 'lose'); out.ended = run.ended; return out;
+    run.arena = null; run.extra = null;
+    if (setup.extra && run.log.length) run.log[run.log.length - 1].extra = { id: setup.extra, won: false, ticks: res.ticks };   // dodatkowa runda nie dubluje wpisu piętra
+    else run.log.push(entry());
+    endRun(run, 'lose'); out.ended = run.ended; return out;
   }
 
+  // Dodatkowa runda wygrana: Ziarna, legendarny łup i dalej zwykły ciąg po piętrze (Odznaka, oferta bonusowa, następna runda).
+  if (setup.extra) {
+    const X = run.extra; run.extra = null; run.fight = null;
+    setCoins(run, run.coins + RULES.extraCoins); out.reward = RULES.extraCoins; out.extra = { id: setup.extra, won: true };
+    run.stats.extraWins = (run.stats.extraWins || 0) + 1;
+    (run.stats.extras = run.stats.extras || []).includes(setup.extra) || run.stats.extras.push(setup.extra);
+    run.hp = Math.min(statsOf(run).maxHp, run.hp + (X.heal | 0));
+    if (run.log.length) run.log[run.log.length - 1].extra = { id: setup.extra, won: true, ticks: res.ticks, reward: RULES.extraCoins };
+    const t = winTail(run, { ...X.after, loot: X.after.loot || RULES.extraLoot });
+    if (t.badge) out.badge = true; if (t.bonus) out.bonus = true; if (t.loot) out.loot = true;
+    return out;
+  }
   // Wygrana: nagrody, leczenie, rozliczenie wyniku.
   const rt = routeOf(run);
+  const exId = !run.endless && !setup.arena && run.round < MODES[run.mode].rounds && EXTRA_AT[run.round] || null;   // po wygranej na piętrze 3 i 6: opcjonalna dodatkowa runda
+  let extraHeal = 0;
   let coins = (setup.boss ? RULES.coinsBoss + S.bossCoins + kLv(run, 'skarbiec') : RULES.coinsRound) + S.coinFlat - (gm.coinMinus || 0) - (hasCurse(run, 'podatek') ? 2 : 0) + ((rt && rt.coins) || 0) + (setup.arena ? RULES.arenaCoins : 0);
   coins = fl(coins * (100 + S.coinPct + (setup.elite ? RULES.eliteCoinsPct : 0)) / 100);
   if (S.interest) coins += Math.min(5 + (S.interestPlus || 0), fl(run.coins * S.interest / 100));
@@ -867,7 +908,11 @@ export function fightFinish(run, inputs) {
   run.stats.maxBurn = Math.max(run.stats.maxBurn || 0, res.burnDealt || 0);
   run.stats.freezes = (run.stats.freezes || 0) + (res.freezes || 0);
   setCoins(run, run.coins + coins); out.reward = coins;
-  if (!setup.door) run.hp = Math.min(statsOf(run).maxHp, run.hp + fl(S.maxHp * Math.max(0, gm.healPct + S.healBonus + ((rt && rt.heal) || 0) - (decreeIs(run, 'homeoffice') ? 10 : 0)) / 100));
+  if (!setup.door) {
+    const heal = fl(S.maxHp * Math.max(0, gm.healPct + S.healBonus + ((rt && rt.heal) || 0) - (decreeIs(run, 'homeoffice') ? 10 : 0)) / 100);
+    if (exId) extraHeal = heal;   // dodatkowa runda zaczyna się z życiem po walce; leczenie dopiero po niej (albo po odwrocie)
+    else run.hp = Math.min(statsOf(run).maxHp, run.hp + heal);
+  }
   if (res.hp * 10 < S.maxHp) run.stats.lowWin = true;
   if (res.taken > S.maxHp) run.stats.tankWin = true;
   if (run.tiles.includes('siewnik')) run.flags.bonusAtk++;
@@ -892,19 +937,25 @@ export function fightFinish(run, inputs) {
   }
   const bonus = MODES[run.mode].bonusAfter.includes(run.round) || (setup.door && run.door.reward === 'rare') || !!setup.arena;
   const loot = !!setup.boss && lootRoll(run);   // szansa RULES.lootChance %; ostatni boss kończy run wcześniej (return powyżej)
-  const avail = BADGE_POOL.filter(b => !(run.badges || []).includes(b));
   run.fight = null;
-  if ((setup.boss || setup.elite) && avail.length) {
+  const after = { bonus, loot, badge: !!(setup.boss || setup.elite) };
+  if (exId) { run.offer = []; run.phase = 'event'; run.pending = { kind: 'extra', boss: exId, heal: extraHeal, after }; out.extraOffer = exId; return out; }
+  const t = winTail(run, after);
+  if (t.badge) out.badge = true;
+  if (t.bonus) out.bonus = true;
+  if (t.loot) out.loot = true;
+  return out;
+}
+// Ciąg po wygranym piętrze: Odznaka (po bossie i elicie), potem łup, oferta bonusowa albo następna runda. after = { bonus, loot, badge }.
+function winTail(run, after) {
+  const avail = BADGE_POOL.filter(b => !(run.badges || []).includes(b));
+  if (after.badge && avail.length) {
     const rr = makeRng(mix(run.seed, run.round, hash('badge')));
     const offer = []; while (offer.length < Math.min(BADGE_OFFER, avail.length)) { const b = rr.pick(avail); if (!offer.includes(b)) offer.push(b); }
-    run.phase = 'badge'; run.pending = { kind: 'badge', offer, bonus, loot }; run.offer = [];
-    out.badge = true;
-    return out;
+    run.phase = 'badge'; run.pending = { kind: 'badge', offer, bonus: after.bonus, loot: after.loot }; run.offer = [];
+    return { ok: true, badge: true };
   }
-  const r2 = afterFight(run, bonus, loot);
-  if (r2.bonus) out.bonus = true;
-  if (r2.loot) out.loot = true;
-  return out;
+  return afterFight(run, after.bonus, after.loot);
 }
 
 // Testament Pyrtka: po przegranej gracz zapisuje jeden kafelek (zwykły albo rzadki) do pierwszej oferty następnego runu.
@@ -948,7 +999,7 @@ export function view(run) {
     hp: run.hp, maxHp: S.maxHp, coins: run.coins, tiles: run.tiles, skills: run.skills, offer: run.offer, pending: viewPending(run),
     daily: run.daily || null, curses: run.curses || [], routes: run.routes || [null, null, null], route: (run.routes && run.routes[zoneOf(run.mode, run.round)]) || null, companion: run.companion || null, kurnik: run.kurnik || {},
     arenaGhost: arenaOn(run) ? { nick: run.arena.ghost.nick, avatar: run.arena.ghost.avatar | 0, char: run.arena.ghost.char, mirror: !!run.arena.ghost.mirror, floors: run.arena.ghost.floors, stats: ghostStats(run.arena.ghost, run.round) } : null,
-    endless: !!run.endless, cleared: run.cleared === undefined ? null : run.cleared, fell: !!run.fell, maxSkills: maxSkillsOf(run), cursePct: cursePct(run.curses), arenaNow: !!(run.arena && run.arena.round === run.round),
+    endless: !!run.endless, cleared: run.cleared === undefined ? null : run.cleared, fell: !!run.fell, maxSkills: maxSkillsOf(run), cursePct: cursePct(run.curses), arenaNow: !!(run.arena && run.arena.round === run.round), extraNow: extraOn(run) ? run.extra.id : null,
     rerollCost: run.phase === 'offer' ? rerollCost(run) : null, freeLeft: run.freeLeft, rested: run.rested, restCost: restCost(run), restPct: RULES.restPct + S.restBonus, badges: run.badges || [], affixes: !over && isElite(run) && !hideFoes(run) ? eliteAffixes(run) : null, buyDisc: S.buyDisc, stats: run.stats, flags: { bossHpBonus: run.flags.bossHpBonus, revived: run.flags.revived, bonusAtk: run.flags.bonusAtk },
     score: over ? run.score : liveScore(run), done: run.done, timeBonus: run.timeBonus, ended: run.ended, killer: over && run.killer ? { enemy: run.killer.enemy, nemesis: !!run.killer.nemesis } : null, form: formFor(run.mode, run.round).id, zone: zoneOf(run.mode, run.round),
     boss: bossAt(run), bossSlot: bossSlotOf(bossAt(run)), elite: !over && isElite(run), hero: S,

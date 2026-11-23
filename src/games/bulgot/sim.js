@@ -30,7 +30,7 @@ export class Fight {
     this.inSkill = false; this.planBUsed = false; this.igniteUntil = 0; this.igniteN = 1; this.dmgUntil = 0; this.dmgBonus = 0; this.hotUntil = 0; this.hotPct = 0; this.ffDone = false; this.medUsed = false; this.nextSurprise = this.S.surprise || 0;
     this.hasteUntil = 0; this.invulnUntil = 0; this.slowUntil = 0; this.critUntil = 0; this.kontraUntil = 0; this.blindUntil = 0; this.coinsWon = 0; this.bleedExtra = 0;
     this.nextEgg = this.S.egg || 0;
-    this.heroBlindUntil = 0; this.heroBlindPct = 0;
+    this.heroBlindUntil = 0; this.heroBlindPct = 0; this.heroStunUntil = 0;   // Pipsztal: ogłuszenie bohatera (bez ataków i umiejętności)
     const cmp = this.loadout.companion && COMPANIONS[this.loadout.companion.id];   // Towarzysz: czynność co L.every ticków
     this.comp = cmp ? { id: cmp.id, L: cmp.lv[Math.min(3, Math.max(1, this.loadout.companion.lvl | 0)) - 1] } : null;
     if (this.comp) this.comp.next = this.comp.L.every || 0;
@@ -64,6 +64,7 @@ export class Fight {
     if (has(o, 'block')) o.nextBlock = 1e9;
     if (has(o, 'night')) o.nextNight = o.night.every;
     if (has(o, 'blizzard')) o.nextBlizz = o.blizzard.every;
+    if (has(o, 'stunhero')) o.nextStunHero = o.stunHero.every;
     return o;
   }
 
@@ -218,13 +219,13 @@ export class Fight {
     if (t.poison > 0) { const nx = this.enemies.find(e => !e.dead && !e.immune); if (nx) this.applyStatus(nx, 'poison', Math.max(1, fl(t.poison * (STATUS.poison.spread + (this.S.spreadPct || 0)) / 100))); }
     if (this.tick < (t.feverUntil || 0)) for (const x of this.alive()) if (!x.immune) this.applyStatus(x, 'poison', REACTIONS.goraczka.spread);   // Gorączka przechodzi
     if (t.explode && this.hp > 0 && !this.over) { this.push({ k: 'boom', uid: t.uid }); this.enemyHit(t, t.explode); }
-    if (has(t, 'summon')) for (const m of this.enemies) if (m.minion && !m.dead) { m.dead = true; m.hp = 0; this.push({ k: 'kill', uid: m.uid }); }
+    if (has(t, 'summon') || has(t, 'pet')) for (const m of this.enemies) if (m.minion && !m.dead) { m.dead = true; m.hp = 0; this.push({ k: 'kill', uid: m.uid }); }
   }
 
   // ---------- umiejętności ----------
   useSkill(slot) {
     const s = this.skills[slot];
-    if (!s || this.over || this.tick < s.cd || this.tick < s.blockedUntil) return false;
+    if (!s || this.over || this.tick < s.cd || this.tick < s.blockedUntil || this.tick < this.heroStunUntil) return false;
     const def = SKILLS[s.id], pw = s.lvl >= 2 ? 130 : 100, m = s.lvl >= 3 ? (s.mut || 1) : 0;
     s.cd = this.tick + fl((s.lvl >= 2 ? fl(def.cd * 80 / 100) : def.cd) * (100 - Math.min(80, (this.S.cdPct || 0) + (slot === 0 ? this.S.alphaCd || 0 : 0))) / 100);   // Kogut Alfa skraca cooldown 1. slotu
     this.inSkill = true;   // Dziób Mistrza: trafienia umiejętności mogą być krytyczne
@@ -657,6 +658,11 @@ export class Fight {
       this.heroBlindUntil = this.tick + e.night.dur; this.heroBlindPct = e.night.pct;
       this.push({ k: 'night', dur: e.night.dur });
     }
+    if (has(e, 'stunhero') && this.tick >= e.nextStunHero) {   // Pipsztal: cios rękojeścią ogłusza bohatera na chwilę
+      e.nextStunHero = this.tick + e.stunHero.every;
+      this.heroStunUntil = this.tick + e.stunHero.dur;
+      this.push({ k: 'herostun', uid: e.uid, dur: e.stunHero.dur });
+    }
     if (has(e, 'blizzard') && this.tick >= e.nextBlizz) {   // Wielka Chłodnia i Prezes Zero: zamieć spowalnia ataki bohatera
       e.nextBlizz = this.tick + e.blizzard.every;
       this.slowUntil = Math.max(this.slowUntil, this.tick + e.blizzard.dur);
@@ -754,8 +760,8 @@ export class Fight {
     // Towarzysz
     if (this.comp && this.comp.L.every && t >= this.comp.next) { this.comp.next = t + this.comp.L.every; this.compAct(); }
     // atak bohatera
-    this.acc += this.heroAspd();
-    while (this.acc >= 1000) {
+    if (this.tick >= this.heroStunUntil) this.acc += this.heroAspd();
+    while (this.acc >= 1000 && this.tick >= this.heroStunUntil) {
       const tg = this.target();
       if (!tg) { this.acc = 1000; break; }
       this.acc -= 1000;

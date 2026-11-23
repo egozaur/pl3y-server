@@ -16,6 +16,9 @@ import worker from '../../../src/index.js';
 const BOSS_POOL_FULL = structuredClone(D.BOSS_POOL);
 for (const k of Object.keys(D.BOSS_POOL)) D.BOSS_POOL[k] = [k];   // w testach reguł bossowie to oryginały (warianty mają osobne testy)
 D.RULES.lootChance = 100;   // w testach łup z bossa wypada zawsze (osobny test sprawdza 15%)
+const EXTRA_FULL = { ...D.EXTRA_AT };
+for (const k of Object.keys(D.EXTRA_AT)) delete D.EXTRA_AT[k];   // dodatkowe rundy (Gruszka, Pipsztal) mają własne testy; w pozostałych wyłączone
+const withExtras = fn => () => { Object.assign(D.EXTRA_AT, EXTRA_FULL); try { return fn(); } finally { for (const k of Object.keys(D.EXTRA_AT)) delete D.EXTRA_AT[k]; } };
 export const bgTests = [];
 const test = (name, fn) => bgTests.push({ name: 'bulgot: ' + name, fn });
 function assert(c, msg) { if (!c) throw new Error('Asercja: ' + (msg || '')); }
@@ -731,7 +734,7 @@ test('historia gier: pełny dziennik rund i podsumowanie, ostatnie 30, trasa his
     const pi = Math.max(0, r.run.offer.findIndex(id => id && id !== 'automat-z-pasza'));
     if (ph === 'offer') r = (await post(o, 'pick', { pl: PL, i: pi, slot: 0, mut: 1 })).j;
     else if (ph === 'badge' || ph === 'door' || ph === 'loot' || ph === 'route') r = (await post(o, 'choose', { pl: PL, i: 0 })).j;
-    else if (ph === 'event') { const kd = r.run.pending.kind; r = (await post(o, kd === 'shop' ? 'shop' : kd === 'gamble' ? 'bet' : 'choose', { pl: PL, i: kd === 'shop' || kd === 'adopt' ? -1 : kd === 'arena' ? 1 : 2, amount: 0 })).j; }
+    else if (ph === 'event') { const kd = r.run.pending.kind; r = (await post(o, kd === 'shop' ? 'shop' : kd === 'gamble' ? 'bet' : 'choose', { pl: PL, i: kd === 'shop' || kd === 'adopt' ? -1 : (kd === 'arena' || kd === 'extra') ? 1 : 2, amount: 0 })).j; }
     else if (ph === 'bonus') r = (await post(o, 'bonus', { pl: PL, i: 0, slot: 0 })).j;
     else { await post(o, 'fightstart', { pl: PL }); r = (await post(o, 'fightfinish', { pl: PL, inputs: [] })).j; }
   }
@@ -898,7 +901,7 @@ test('BgPlayer: start, wybór, walka, koniec runu, odblokowania, ranking; błęd
     const pi = Math.max(0, r.j.run.offer.findIndex(id => id && id !== 'automat-z-pasza'));
     if (ph === 'offer') r = await post(o, 'pick', { pl: PL, i: pi, slot: 0, mut: 1 });
     else if (ph === 'badge' || ph === 'door' || ph === 'loot' || ph === 'route') r = await post(o, 'choose', { pl: PL, i: 0 });
-    else if (ph === 'event') { const kd = r.j.run.pending.kind; r = await post(o, kd === 'shop' ? 'shop' : kd === 'gamble' ? 'bet' : 'choose', { pl: PL, i: kd === 'shop' || kd === 'adopt' ? -1 : kd === 'arena' ? 1 : 2, amount: 0 }); }
+    else if (ph === 'event') { const kd = r.j.run.pending.kind; r = await post(o, kd === 'shop' ? 'shop' : kd === 'gamble' ? 'bet' : 'choose', { pl: PL, i: kd === 'shop' || kd === 'adopt' ? -1 : (kd === 'arena' || kd === 'extra') ? 1 : 2, amount: 0 }); }
     else if (ph === 'bonus') r = await post(o, 'bonus', { pl: PL, i: 0, slot: 0 });
     else { const fs = await post(o, 'fightstart', { pl: PL }); assert(fs.j.setup && fs.j.setup.seed, 'setup z ziarnem walki'); r = await post(o, 'fightfinish', { pl: PL, inputs: [] }); assert(r.j.result, 'wynik walki'); }
     assert(r.status === 200 || r.status === 409, 'status ' + r.status);
@@ -1019,7 +1022,7 @@ test('Worker: Bulgot wymaga sesji PL3Y i nicka gracza, cały przebieg przez /api
     const pi = Math.max(0, r.j.run.offer.findIndex(id => id && id !== 'automat-z-pasza'));
     if (ph === 'offer') r = await api(env, '/api/bg/pick', { pt, i: pi, slot: 0, mut: 1 }, o);
     else if (ph === 'badge' || ph === 'door' || ph === 'loot' || ph === 'route') r = await api(env, '/api/bg/choose', { pt, i: 0 }, o);
-    else if (ph === 'event') { const kd = r.j.run.pending.kind; r = await api(env, kd === 'shop' ? '/api/bg/shop' : kd === 'gamble' ? '/api/bg/bet' : '/api/bg/choose', { pt, i: kd === 'shop' || kd === 'adopt' ? -1 : kd === 'arena' ? 1 : 2, amount: 0 }, o); }
+    else if (ph === 'event') { const kd = r.j.run.pending.kind; r = await api(env, kd === 'shop' ? '/api/bg/shop' : kd === 'gamble' ? '/api/bg/bet' : '/api/bg/choose', { pt, i: kd === 'shop' || kd === 'adopt' ? -1 : (kd === 'arena' || kd === 'extra') ? 1 : 2, amount: 0 }, o); }
     else if (ph === 'bonus') r = await api(env, '/api/bg/bonus', { pt, i: 0, slot: 0 }, o);
     else { await api(env, '/api/bg/fightstart', { pt }, o); r = await api(env, '/api/bg/fightfinish', { pt, inputs: [] }, o); }
   }
@@ -1402,7 +1405,7 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
 });
 
 test('RUN_V = 7: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 15, 'wersja reguł');
+  eq(R.RUN_V, 16, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1865,7 +1868,7 @@ test('Nowości: kompletność danych (klątwy, trasy, bossowie, osiągnięcia), 
   for (const id of D.SUPER_BOSSES) assert(D.BOSSES[id].super, 'super-boss ' + id);
   for (const [id, b] of Object.entries(D.KURNIK)) { assert(b.name && b.text && b.cost.length === 3 && b.cost[0] < b.cost[2], 'budynek ' + id); }
   for (const a of ['a-klatwa', 'a-klatwy3', 'a-dogrywka', 'a-dogrywka15', 'a-duch', 'a-towarzysz', 'a-trasy', 'a-kurnik', 'a-kurnik-max']) assert(D.ACH_BY_ID[a], 'osiągnięcie ' + a);
-  eq(R.RUN_V, 15, 'RUN_V 15');
+  eq(R.RUN_V, 16, 'RUN_V 16');
 });
 
 test('Jajko Dinozaura: tylko jedno na run (po wykluciu nie wraca do ofert)', () => {
@@ -1945,7 +1948,7 @@ test('Dyżur dnia: ta sama konfiguracja dla wszystkich, jedna Klątwa, jedno pod
     const ph = r.run.phase;
     if (ph === 'offer') r = (await post(o1, 'pick', { pl: PL, i: Math.max(0, r.run.offer.findIndex(id => id && id !== 'automat-z-pasza')), slot: 0, mut: 1 })).j;
     else if (ph === 'badge' || ph === 'door' || ph === 'loot' || ph === 'route') r = (await post(o1, 'choose', { pl: PL, i: 0 })).j;
-    else if (ph === 'event') { const kd = r.run.pending.kind; r = (await post(o1, kd === 'shop' ? 'shop' : kd === 'gamble' ? 'bet' : 'choose', { pl: PL, i: kd === 'shop' || kd === 'adopt' ? -1 : kd === 'arena' ? 1 : 2, amount: 0 })).j; }
+    else if (ph === 'event') { const kd = r.run.pending.kind; r = (await post(o1, kd === 'shop' ? 'shop' : kd === 'gamble' ? 'bet' : 'choose', { pl: PL, i: kd === 'shop' || kd === 'adopt' ? -1 : (kd === 'arena' || kd === 'extra') ? 1 : 2, amount: 0 })).j; }
     else if (ph === 'bonus') r = (await post(o1, 'bonus', { pl: PL, i: 0, slot: 0 })).j;
     else if (ph === 'victory') r = (await post(o1, 'choose', { pl: PL, i: 1 })).j;
     else { await post(o1, 'fightstart', { pl: PL }); r = (await post(o1, 'fightfinish', { pl: PL, inputs: [] })).j; }
@@ -2102,8 +2105,8 @@ test('etap 4: wzmocnienia: Pobudka, Echo, Przyspieszony Obieg', () => {
   const o0 = ob(0); assert(o0[1] < o0[0], 'Obieg skraca cooldown pozostałych'); const o1 = ob(1); assert(o1[1] < o0[1], 'Turbo Obieg skraca mocniej');
   const o2 = new Fight(setup({ hp: 400, lo: { skills: [{ id: 'obieg', lvl: 3, mut: 2 }] }, enemies: [foe({ hp: 1e7, atk: 1, aspd: 10 })] })); o2.hp = 50; o2.skills[0].cd = 0; o2.step([0]); assert(o2.hp > 50, 'Obieg Zamknięty leczy');
 });
-test('etap 4: RUN_V 15, nowe umiejętności trafiają do ofert', () => {
-  eq(R.RUN_V, 15, 'RUN_V');
+test('etap 4: RUN_V 16, nowe umiejętności trafiają do ofert', () => {
+  eq(R.RUN_V, 16, 'RUN_V');
   const seen = new Set();
   for (let seed = 1; seed < 300; seed++) { const r = R.newRun({ mode: 'full', char: 'pyrtek', garnek: 0, pool: ALL, seed }); const run = r.run; for (const o of (run.cur && run.cur.offer) || []) { const t = D.TILE_BY_ID[o.id || o]; if (t && t.skill && NEW20.includes(t.skill)) seen.add(t.skill); } }
   assert(seen.size >= 5, 'nowe umiejętności pojawiają się w ofertach (widziano ' + seen.size + ')');
@@ -2172,3 +2175,45 @@ test('zwykłe drzwi: darmowy Odpoczynek na wejściu', () => {
   const e = fresh(); force(e, 'ziarno-mocy'); R.pickTile(e, 0); win(e); e.hp = Math.floor(R.statsOf(e).maxHp / 2); const hb = e.hp;
   assert(R.choose(e, 1).ok && e.hp === hb, 'ryzykowne drzwi nie leczą');
 });
+
+// ---------- Dodatkowe rundy: Gruszka (piętro 3) i Pipsztal (piętro 6) ----------
+const toExtra = (round, o = {}) => { const run = strong(fresh({ mode: 'quick', ...o })); run.round = round; run.phase = 'fight'; run.fight = {}; run.hp = 50; return run; };
+test('dodatkowe rundy: oferta po wygranej na piętrze 3 i 6, życie bez leczenia, odwrót daje leczenie i zwykły ciąg', withExtras(() => {
+  for (const [round, id] of [[3, 'gruszka'], [6, 'pipsztal']]) {
+    const run = toExtra(round); run.skills = []; run.tiles = [...Array(40).fill('ziarno-mocy'), ...Array(40).fill('twardy-grzebien')];
+    const out = R.fightFinish(run, []);
+    assert(out.ok && out.result.win && out.extraOffer === id && run.phase === 'event' && run.pending.kind === 'extra' && run.pending.boss === id, 'oferta ' + id);
+    assert(run.round === round && run.done === 1, 'piętro jeszcze się nie zmieniło, ale jest zaliczone');
+    const hp0 = run.hp, v = R.view(run); assert(v.pending && v.pending.kind === 'extra', 'widok');
+    const run2 = JSON.parse(JSON.stringify(run)); const r2 = R.choose(run2, 1);
+    assert(r2.ok && r2.chose === 1 && run2.round !== round && run2.hp >= hp0, 'odwrót: kolejne piętro, życie po leczeniu');
+    assert(R.choose(JSON.parse(JSON.stringify(run)), 5).err, 'zły wybór');
+  }
+}));
+test('dodatkowe rundy: setup (Gruszka sama, Pipsztal z psem), wygrana daje Ziarna i łup, a potem zwykły ciąg', withExtras(() => {
+  const run = toExtra(3); R.fightFinish(run, []); const c0 = run.coins;
+  assert(R.choose(run, 0).ok && run.phase === 'fight', 'walka');
+  const su = R.buildSetup(run); assert(su.extra === 'gruszka' && su.boss === null && su.enemies.length === 1 && su.enemies[0].boss === 'gruszka' && su.enemies[0].idle > 0, 'Gruszka sama');
+  const hpIn = su.hero.hp; assert(hpIn <= 50, 'zaczyna z życiem po walce, nie z pełnym');
+  R.fightSetup(run); run.hp = 99999; const out = R.fightFinish(run, []);
+  assert(out.ok && out.result.win && out.extra && out.extra.won && out.reward === D.RULES.extraCoins && out.loot && run.phase === 'loot', 'wygrana: Ziarna i łup');
+  assert(run.coins >= c0 + D.RULES.extraCoins && run.stats.extraWins === 1 && run.log.length === 1 && run.log[0].extra.won, 'bez dubla w dzienniku');
+  assert(R.choose(run, 0).ok && run.round === 4, 'po łupie następne piętro');
+  const run6 = toExtra(6); R.fightFinish(run6, []); R.choose(run6, 0);
+  const s6 = R.buildSetup(run6); assert(s6.extra === 'pipsztal' && s6.enemies.length === 2 && s6.enemies[0].minion && s6.enemies[0].slow && s6.enemies[1].boss === 'pipsztal' && s6.enemies[1].stunHero, 'Pipsztal z psem');
+}));
+test('dodatkowe rundy: przegrana kończy run, a w trybie szybkim i pełnym oferta jest tylko na piętrach 3 i 6 (nie w Dogrywce)', withExtras(() => {
+  const run = toExtra(3); R.fightFinish(run, []); R.choose(run, 0); R.fightSetup(run); run.hp = 1; run.skills = []; run.tiles = [];
+  const lo = R.fightFinish(run, []); assert(lo.ok && !lo.result.win && lo.ended === 'lose' && run.phase === 'over' && !run.killer, 'porażka');
+  for (const round of [2, 4, 5, 7]) { const r = toExtra(round, { mode: 'full' }); const o = R.fightFinish(r, []); assert(!o.extraOffer, 'brak oferty na piętrze ' + round); }
+  const e = toExtra(3, { mode: 'full' }); e.endless = true; assert(!R.fightFinish(e, []).extraOffer, 'brak w Dogrywce');
+}));
+test('dodatkowe rundy: Pipsztal ogłusza bohatera (bez ataków i umiejętności), pies spowalnia, boss pada razem z psem', withExtras(() => {
+  const run = toExtra(6); R.fightFinish(run, []); R.choose(run, 0);
+  const su = R.buildSetup(run); su.hero.hp = 99999; su.hero.loadout = { ...su.hero.loadout, tiles: Array(60).fill('twardy-grzebien'), skills: [sk('granat')] };
+  const f = new Fight(su); let stunned = 0, swings = 0, slowed = false; const win = [];
+  while (!f.over && f.tick < 400) { f.step(f.tick % 5 === 0 ? [0] : []); for (const e of f.ev) { if (e.k === 'herostun') { win.push([e.t, e.t + e.dur]); stunned++; } if (e.k === 'swing' && win.some(([a, b]) => e.t > a && e.t < b)) swings++; if (e.k === 'skill' && win.some(([a, b]) => e.t > a && e.t < b)) swings++; } if (f.tick < f.slowUntil) slowed = true; }
+  assert(stunned > 0 && swings === 0, 'w ogłuszeniu bohater nie atakuje: ogłuszeń ' + stunned + ', ciosów ' + swings + ', tick ' + f.tick); assert(slowed, 'pies spowalnia');
+  assert(f.ev.length >= 0 && f.enemies[1].mech.includes('stunhero'), 'mechanika');
+  const f2 = new Fight(su); f2.enemies[1].hp = 1; f2.heroHit(f2.enemies[1], 100, false, 'atk'); assert(f2.enemies[1].dead && f2.enemies[0].dead, 'boss pada razem z psem');
+}));

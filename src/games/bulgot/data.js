@@ -12,9 +12,9 @@ export const TYPES = { stat: 'Statystyka', skill: 'Umiejętność', item: 'Przed
 // grow: o ile rośnie życie i atak wrogów z każdą rundą (mnożnik). bosses: runda -> boss. bonusAfter: po tych bossach dodatkowa oferta.
 // elite: rundy z elitą (nagroda: Odznaka). zoneMul: dodatkowy mnożnik życia/ataku zwykłych wrogów w strefie (%, null = brak).
 export const MODES = {
-  quick: { name: 'Szybki', rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.090, atk: 1.060 }, bossPct: { hp: 80, atk: 90 },
+  quick: { name: 'Szybki', extraPct: { hp: 80, atk: 90 }, rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 135, atk: 80 }, grow: { hp: 1.090, atk: 1.060 }, bossPct: { hp: 80, atk: 90 },
     zones: [{ upTo: 5, zone: 0 }, { upTo: 10, zone: 1 }], elite: [4, 8], doors: [2, 6, 9] },
-  full: { name: 'Pełny', rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 135, atk: 80 }, grow: { hp: 1.091, atk: 1.056 }, bossPct: { hp: 100, atk: 100 },
+  full: { name: 'Pełny', extraPct: { hp: 90, atk: 92 }, rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 135, atk: 80 }, grow: { hp: 1.091, atk: 1.056 }, bossPct: { hp: 100, atk: 100 },
     zones: [{ upTo: 6, zone: 0 }, { upTo: 12, zone: 1 }, { upTo: 20, zone: 2 }], elite: [4, 10, 16], zoneMul: [null, null, { hp: 130, atk: 112 }], doors: [2, 5, 8, 11, 14, 17] },
 };
 // doors: piętra z Rozwidleniem Korytarza (wybór: zwykłe piętro albo wróg z cechą elity za nagrodę).
@@ -27,6 +27,7 @@ export const ZONES = [
 
 // Stałe zasad. prices = cena dokupienia kafelka wg rzadkości (zwykły, rzadki, epicki, legendarny); early = osłabienie ataku i wzmocnienie życia wrogów na pierwszych piętrach (dłuższe, spokojniejsze walki).
 export const RULES = {
+  extraCoins: 8, extraLoot: true,   // nagroda za dodatkową rundę (Gruszka, Pipsztal): Ziarna i wybór legendarnej statystyki
   coinsRound: 4, coinsBoss: 6, prices: [6, 12, 20, 30], restCost: 4, restPct: 20, healPct: 35, rerollBase: 2, offerSize: 4, bonusSize: 3,
   eliteCoinsPct: 50, scoreRound: 1000, scoreCoin: 50, scoreTimeMax: 2000, garnekScore: 25, maxSkills: 3, maxSkillLvl: 3,
   // Odsetki w Spiżarni: +1 Ziarno za każde `interestPer` niewydanych Ziaren po wygranej walce, najwyżej `interestMax` (Kaczor: CHARS.kaczor.interestMax).
@@ -603,6 +604,11 @@ export const BOSSES = {
     text: 'Każdy cios zabiera Ziarno (do 6), co 7 s Audyt: zdejmuje statusy i daje tarczę, a co 15 s blokuje ci jedną umiejętność.', quote: 'Nie ma budżetu na twoje zwycięstwo.' },
   'wampir-hr': { id: 'wampir-hr', slot: 'prezes', name: 'Wampir z Działu HR', title: 'Zarząd', hp: 112, atk: 12, aspd: 90, armor: 5, evade: 10, crit: 0, art: 'cat', tint: 'blood', mech: ['summon', 'rage'], vamp: 45, summon: { every: 180, n: 1, max: 3 }, rage: { at: 40, aspd: 145 },
     text: 'Leczy się 45% zadanych obrażeń, przyzywa stażystów na rozmowy kwalifikacyjne, a poniżej 40% życia wpada w szał.', quote: 'Zapraszamy na rozmowę. Nie wychodzi się z niej żywym.' },
+  // Dodatkowe (opcjonalne) rundy po wygranej na piętrze 3 i 6 (EXTRA_AT): extra: true, slot: null. Pies Pipsztala to osobny wróg (EXTRA_DOG).
+  gruszka: { id: 'gruszka', slot: null, extra: true, name: 'Gruszka', title: 'Pan Sadu', hp: 120, atk: 7, aspd: 95, armor: 5, evade: 0, crit: 10, art: 'gruszka', idle: 20, mech: ['rage'], rage: { at: 40, aspd: 135 },
+    text: 'Wielki kurczak z głową gruszki. Na starcie wyśmiewa twój build, a poniżej 40% życia wpada w szał.', quote: 'Najpierw cię wyśmieję, potem obiorę.' },
+  pipsztal: { id: 'pipsztal', slot: null, extra: true, name: 'Pipsztal', title: 'Dresiarz z Psem', hp: 145, atk: 10, aspd: 90, armor: 4, evade: 0, crit: 20, art: 'pipsztal', mech: ['stunhero', 'pet'], stunHero: { every: 70, dur: 12 },
+    text: 'Zawsze z psem: pies sika na ciebie i spowalnia twoje ataki. Pipsztal tnie nożem i co 7 s na chwilę cię ogłusza.', quote: 'Ej, kurczak! Masz pięć złotych? Pies lubi pieniądze.' },
   // Dogrywka (po Prezesie): co superEvery pięter jeden z poniższych, po kolei.
   'super-skubarka': { id: 'super-skubarka', slot: null, super: true, name: 'Skubarka 9000', title: 'Maszyna Zarządu', hp: 190, atk: 13, aspd: 85, armor: 8, evade: 0, crit: 0, shield: 25, art: 'plucker', tint: 'super', mech: ['plucker', 'crash'], spec: { every: 80, windup: 20, mult: 330 },
     text: 'Skubarka po modernizacji: tarcza, szarże z przegrzewaniem i Skubanie twoich kafelków.', quote: 'Nowa wersja. Te same pióra.' },
@@ -613,6 +619,9 @@ export const BOSSES = {
 };
 // Pule wariantów bossów na miejsce (slot z MODES.*.bosses). Wariant losuje się z ziarna runu (rules.js → bossFor).
 export const BOSS_POOL = { brojler: ['brojler', 'szef-nocnej', 'krol-szczurow'], skubarka: ['skubarka', 'wielka-chlodnia', 'wozek-prototyp'], prezes: ['prezes', 'dyrektor-finansowy', 'wampir-hr'] };
+// Dodatkowe rundy: piętro -> boss. Pies Pipsztala: wróg pomocniczy (minion), spowalnia atakami.
+export const EXTRA_AT = { 3: 'gruszka', 6: 'pipsztal' };
+export const EXTRA_DOG = { id: 'pies-pipsztala', name: 'Pies Pipsztala', hp: 42, atk: 3, aspd: 110, armor: 0, evade: 0, crit: 0, art: 'pipdog', minion: true, slow: { pct: 20, ticks: 30 }, text: 'Sika na ciebie i spowalnia twoje ataki.' };
 export const SUPER_BOSSES = ['super-skubarka', 'super-rada', 'super-prezes'];
 
 // ---------- Szablony zwykłych pięter ----------
