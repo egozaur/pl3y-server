@@ -856,7 +856,18 @@ test('profil: odblokowania postaci i kafelków, liczniki, najlepszy wynik, kolej
   assert(chk('stazysta', pp => { pp.counters.runs = 5; pp.counters.wins = 0; }) && !chk('stazysta', pp => { pp.counters.runs = 5; pp.counters.wins = 1; }), 'Stażysta: 5 przegranych runów');
   assert(chk('mutant', (pp, rr) => { rr.stats.muts = 3; }) && !chk('mutant', (pp, rr) => { rr.stats.muts = 2; }), 'Mutant: 3 mutacje');
   assert(chk('dinozaur', (pp, rr) => { rr.stats.dino = 1; }) && !chk('dinozaur', () => {}), 'Dinozaur: wyklucie');
-  nr.stats.fastWin = 5; nr.stats.v2 = 1; nr.stats.maxCoins = 200; nr.stats.muts = 3; nr.stats.lowWin = true; nr.stats.dino = 1; p.counters.runs = 99; p.counters.wins = 1; p.bosses.skubarka = 1; evaluate(p, nr);
+  // memiczne kurczaki: każdy ma swój warunek
+  assert(chk('gigachad', (pp, rr) => { rr.stats.maxHit = 100; }) && !chk('gigachad', (pp, rr) => { rr.stats.maxHit = 99; }), 'Gigachad: trafienie za 100');
+  assert(chk('jajeczko', pp => { pp.counters.runs = 10; }) && !chk('jajeczko', pp => { pp.counters.runs = 9; }), 'Pan Jajeczko: 10 runów');
+  assert(chk('krypto', (pp, rr) => { rr.stats.maxCoins = 150; }) && chk('baba', (pp, rr) => { rr.stats.maxCoins = 80; }) && !chk('baba', (pp, rr) => { rr.stats.maxCoins = 79; }), 'Krypto i Baba: Ziarna naraz');
+  assert(chk('alkoholik', pp => { pp.counters.runs = 10; pp.counters.wins = 0; }) && !chk('alkoholik', pp => { pp.counters.runs = 10; pp.counters.wins = 1; }), 'Alkoholik: 10 porażek');
+  assert(chk('wegan', pp => { pp.flags.winQuick = true; pp.flags.winFull = true; }) && !chk('wegan', pp => { pp.flags.winQuick = true; }), 'Wegan: oba tryby');
+  assert(chk('influencer', (pp, rr) => { rr.stats.badges = 5; }) && !chk('influencer', (pp, rr) => { rr.stats.badges = 4; }), 'Influencer: 5 Odznak');
+  assert(chk('skibidi', (pp, rr) => { rr.stats.skillUses = 100; }) && !chk('skibidi', (pp, rr) => { rr.stats.skillUses = 99; }), 'Skibidi: 100 użyć umiejętności');
+  assert(chk('emeryt', (pp, rr) => { rr.mode = 'full'; rr.stats.maxRound = 15; }) && !chk('emeryt', (pp, rr) => { rr.mode = 'full'; rr.stats.maxRound = 14; }), 'Emeryt: runda 15 w pełnym');
+  assert(chk('sigma', (pp, rr) => { rr.stats.bossKills = ['brojler', 'skubarka', 'prezes']; }) && !chk('sigma', (pp, rr) => { rr.stats.bossKills = ['brojler', 'skubarka']; }), 'Sigma: trzy bossy');
+  nr.stats.fastWin = 5; nr.stats.v2 = 1; nr.stats.maxCoins = 200; nr.stats.muts = 3; nr.stats.lowWin = true; nr.stats.dino = 1; p.counters.runs = 99; p.counters.wins = 1; p.bosses.skubarka = 1;
+  nr.stats.maxHit = 150; nr.stats.badges = 5; nr.stats.skillUses = 100; nr.mode = 'full'; nr.stats.maxRound = 15; nr.stats.bossKills = ['brojler', 'skubarka', 'prezes']; p.flags.winQuick = true; p.flags.winFull = true; evaluate(p, nr);
   assert(p.unlocked.length === D.UNLOCKS.length, 'wszystkie odblokowania sprawdzalne');
 });
 
@@ -1560,13 +1571,25 @@ test('Jajko Dinozaura: po 4 wygranych piętrach wykluwa się Dinozaur (+30% Atak
 
 // ---------- nowe postacie ----------
 test('nowe postacie: 14 postaci, każda ma blokadę i odblokowanie, tylko Zjarany ma hasło, Dinozaur jest sekretny', () => {
-  eq(Object.keys(D.CHARS).length, 14, '14 postaci');
-  for (const id of ['barista', 'ges', 'lodziarz', 'pielegniarka', 'rzeznik', 'wrozka', 'stazysta', 'mutant', 'dinozaur']) {
+  eq(Object.keys(D.CHARS).length, 24, '24 postacie');
+  for (const id of ['barista', 'ges', 'lodziarz', 'pielegniarka', 'rzeznik', 'wrozka', 'stazysta', 'mutant', 'dinozaur', 'gigachad', 'jajeczko', 'krypto', 'alkoholik', 'wegan', 'baba', 'influencer', 'skibidi', 'emeryt', 'sigma']) {
     const c = D.CHARS[id]; assert(c && c.lock && D.UNLOCK_BY_ID[c.lock] && D.UNLOCK_BY_ID[c.lock].kind === 'char' && D.UNLOCK_BY_ID[c.lock].target === id, 'blokada ' + id);
     assert(R.newRun({ mode: 'quick', char: id, garnek: 0, pool: ALL, seed: 11 }).ok, 'start runu ' + id);
   }
   assert(D.CHARS.dinozaur.secret && D.UNLOCK_BY_ID['u-dino'].secret && !D.CHARS.barista.secret, 'sekretny tylko Dinozaur (i Zjarany)');
   eq(Object.values(D.CHARS).filter(c => c.hasCode).map(c => c.id), ['zjarany'], 'hasło tylko do Zjaranego');
+});
+
+test('memiczne kurczaki: Gigachad ma 1 slot, Pan Jajeczko 1 życie, Skibidi 2 losowe umiejętności, Krypto zmienia kurs, Sigma bez zestawów', () => {
+  const start = (char, seed = 5) => R.newRun({ mode: 'quick', char, garnek: 0, pool: ALL, seed }).run;
+  eq(R.maxSkillsOf(start('gigachad')), 1, 'Gigachad: 1 slot'); eq(R.maxSkillsOf(start('pyrtek')), 3, 'inni: 3 sloty');
+  eq(R.statsOf(start('jajeczko')).maxHp, 1, 'Pan Jajeczko: 1 punkt życia');
+  const sk = start('skibidi'); eq(sk.skills.length, 2, 'Skibidi: 2 umiejętności'); assert(sk.skills[0].id !== sk.skills[1].id, 'bez powtórzeń');
+  eq(start('mutant').skills.length, 1, 'Mutant dalej ma 1');
+  const r = start('krypto'); const hp = f => { r.done = f; return R.statsOf(r).maxHp; };
+  const seen = new Set(); for (let f = 0; f < 12; f++) seen.add(hp(f)); assert(seen.size > 3, 'kurs się zmienia'); eq(hp(3), hp(3), 'deterministycznie');
+  const sg = start('sigma'); sg.tiles = ['mlocarnia', 'worek-kukurydzy', 'siewnik', 'mlocarnia']; eq(Object.keys(R.statsOf(sg).sets).length, 0, 'Sigma: brak zestawów');
+  assert(R.shopPrice(D.TILE_BY_ID['ziarno-mocy'], start('baba')) > R.shopPrice(D.TILE_BY_ID['ziarno-mocy'], start('pyrtek')), 'Baba płaci więcej');
 });
 
 test('postacie: Barista, Gęś, Lodziarz, Pielęgniarka, Rzeźnik, Wróżka — statystyki i start', () => {

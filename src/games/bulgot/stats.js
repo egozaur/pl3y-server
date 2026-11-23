@@ -1,6 +1,7 @@
 // Bulgot: liczenie statystyk bohatera z postaci i kafelków. Czysta funkcja, bez losowości.
 // loadout = { char, tiles: [id...], skills: [{id,lvl}], coins, bonusAtk, noRegen, grow: {id: n}, flawed: [{id, flaw, on}], decree, companion: {id,lvl}, kurnik: {budynek: poziom}, curses: [id] };
 // opt.off = indeks kafelka wyłączonego (Skubanie).
+import { mix, hash, makeRng } from './rng.js';
 import { CHARS, TILES, TILE_BY_ID, MILESTONES, MILESTONE_EVERY, BADGES, FLAWS, RULES, COMPANIONS, SET_LINKS } from './data.js';
 
 // Okólnik „Wyjazd Integracyjny”: każdy zaczęty zestaw liczy się o 1 sztukę więcej.
@@ -37,6 +38,9 @@ export function heroStats(loadout, opt = {}) {
   const add = (k, v) => { acc[k] = (acc[k] || 0) + v; };
   for (const f of ch.fx) add(f.k, f.v);
   if (ch.perFloor) add('allPct', Math.min(ch.perFloorMax || 60, ch.perFloor * (loadout.floors || 0)));   // Kurczak Stażysta: rośnie z każdym wygranym piętrem
+  if (ch.crypto && loadout.seed !== undefined) {   // Kurczak Kryptowalutowy: kurs zmienia się co piętro (deterministycznie z ziarna runu)
+    const [lo, hi] = ch.crypto; add('allPct', lo + makeRng(mix(loadout.seed, hash('crypto'), loadout.floors || 0)).int(hi - lo + 1));
+  }
   const ids = loadout.tiles.filter((_, i) => i !== opt.off);
   const has = id => ids.includes(id);
   for (const id of ids) { const t = TILE_BY_ID[id]; if (t && t.fx) for (const f of t.fx) add(f.k, f.v); }
@@ -61,7 +65,7 @@ export function heroStats(loadout, opt = {}) {
   if (has('pierze-weterana')) add('atkPct', TILE_BY_ID['pierze-weterana'].grow.per * gr('pierze-weterana'));
   if (has('trofeum-z-pior')) add('hpFlat', TILE_BY_ID['trofeum-z-pior'].grow.per * gr('trofeum-z-pior'));
   if (has('skarbonka-piskleca')) add('coinFlat', 1 + gr('skarbonka-piskleca'));
-  const sc = setCounts(ids, loadout.decree);
+  const sc = ch.noSets ? {} : setCounts(ids, loadout.decree);   // Sigma Solo: zestawy nie działają
   // progi statystyk (co 3 kopie)
   const cnt = {}; for (const id of ids) cnt[id] = (cnt[id] || 0) + 1;
   for (const [id, m] of Object.entries(MILESTONES)) { const n = Math.floor((cnt[id] || 0) / MILESTONE_EVERY); if (n) for (const f of m.fx) add(f.k, f.v * n); }
@@ -74,7 +78,7 @@ export function heroStats(loadout, opt = {}) {
   if (has('siewnik')) add('atkFlat', loadout.bonusAtk || 0);
   if (has('kura-nioska')) add('coinFlat', Math.min(4, sc.jajeczne || 0));   // Kura Nioska: +1 Ziarno za każdy przedmiot Jajeczny (maks. 4)
   // Powiązania zestawów i żywiołów (SET_LINKS): konflikty i synergie.
-  const lk = {}; for (const l of activeLinks(ids, loadout.skills, sc)) if (l.on) lk[l.id] = true;
+  const lk = {}; for (const l of activeLinks(ids, loadout.skills, sc)) if (l.on && !ch.noSets) lk[l.id] = true;
   let rs = sc.rosolowe || 0, chl = sc.chlodnicze || 0;
   const kp = sc.korpo || 0, rb = sc.rambo || 0, zb = sc.zbozowe || 0, je = sc.jajeczne || 0;
   if (lk['ogien-lod']) { rs = Math.min(rs, 3); chl = Math.min(chl, 3); add('szokMult', 100); }   // Ogień kontra Lód: bez progów 4 i 6

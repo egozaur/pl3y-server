@@ -12,7 +12,7 @@ const fail = (err, code) => ({ err, code });
 export const loadoutOf = run => ({
   char: run.char, tiles: run.tiles, skills: run.skills, coins: run.coins,
   bonusAtk: run.flags.bonusAtk, noRegen: garnekMods(run.garnek).noRegen, badges: run.badges || [],
-  grow: run.grow || {}, flawed: run.flawed || [], decree: decreeOf(run), floors: run.done || 0,
+  grow: run.grow || {}, flawed: run.flawed || [], decree: decreeOf(run), floors: run.done || 0, seed: run.seed,
   companion: run.companion || null, kurnik: run.kurnik || {}, curses: run.curses || [],
 });
 
@@ -30,7 +30,7 @@ export const statsOf = run => heroStats(loadoutOf(run));
 
 // ---------- Klątwy, Kurnik, bossowie z puli, trasy ----------
 const hasCurse = (run, id) => (run.curses || []).includes(id);
-export const maxSkillsOf = run => RULES.maxSkills - (hasCurse(run, 'ciasne-gniazdo') ? 1 : 0);
+export const maxSkillsOf = run => Math.min(RULES.maxSkills, (CHARS[run.char] || {}).skillSlots || RULES.maxSkills) - (hasCurse(run, 'ciasne-gniazdo') ? 1 : 0);   // Gigachad Bez Nóg ma 1 slot
 const kLv = (run, id) => (run.kurnik && run.kurnik[id]) | 0;
 // Boss tego piętra: wariant z puli miejsca (losowany z ziarna, oryginał ma wagę 2) albo super-boss Dogrywki (co RULES.superEvery pięter po limicie trybu).
 export function bossFor(mode, seed, round) {
@@ -78,7 +78,10 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null
   run.coins += kLv(run, 'spizarnia');   // Kurnik: Spiżarnia
   if (kLv(run, 'pisklecarnia') === 1) { const ks = Object.keys(COMPANIONS); run.companion = { id: makeRng(mix(run.seed, hash('startcomp'))).pick(ks), lvl: compLevel(run) }; }   // Kurnik: Pisklęcarnia
   if (ch.startTiles) run.tiles = ch.startTiles.slice();   // Dinozaur zaczyna z Jajkiem
-  if (ch.randomSkill) run.skills = [{ id: makeRng(mix(run.seed, hash('mutskill'))).pick(Object.keys(SKILLS)), lvl: 1 }];   // Kurczak Mutant: losowa umiejętność na start
+  if (ch.randomSkill) {   // Kurczak Mutant (1) i Skibidi (2): losowe umiejętności na start, bez powtórzeń
+    const rr = makeRng(mix(run.seed, hash('mutskill'))), keys = Object.keys(SKILLS); run.skills = [];
+    while (run.skills.length < Math.min(ch.randomSkill === true ? 1 : ch.randomSkill, maxSkillsOf(run), keys.length)) { const id = rr.pick(keys); if (!run.skills.some(s => s.id === id)) run.skills.push({ id, lvl: 1 }); }
+  }
   if (nemesis && ENEMIES[nemesis.enemy]) run.nemesis = { ...nemesis, round: nemesisRound(run, nemesis), beaten: false };
   if (will && TILE_BY_ID[will]) run.will = will;
   run.stats.maxCoins = Math.max(run.stats.maxCoins, run.coins);
