@@ -86,7 +86,7 @@ test('dane: kafelki, umiejętności z Mutacjami, odblokowania, spójne odwołani
   for (const id of Object.keys(D.MILESTONES)) assert(D.TILE_BY_ID[id] && D.TILE_BY_ID[id].type === 'stat' && D.TILE_BY_ID[id].repeat, 'próg ' + id);
   assert(new Set(ALL).size === D.TILES.length, 'unikalne id');
   const by = t => D.TILES.filter(x => x.type === t).length;
-  assert(by('skill') === Object.keys(D.SKILLS).length && by('skill') === 24, '24 umiejętności, każda ma kafelek');
+  assert(by('skill') === Object.keys(D.SKILLS).length && by('skill') === 44, '44 umiejętności, każda ma kafelek');
   for (const sk of Object.values(D.SKILLS)) assert(sk.muts && sk.muts.length === 2 && sk.muts.every(m => m.name && m.text), 'Mutacje ' + sk.id);
   for (const t of D.TILES) for (const tg of (t.tags || [])) assert(D.ELEMENTS[tg], 'żywioł ' + t.id);
   for (const t of D.TILES) {
@@ -1388,7 +1388,7 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
 });
 
 test('RUN_V = 7: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 13, 'wersja reguł');
+  eq(R.RUN_V, 14, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1496,7 +1496,7 @@ test('przedmioty etapu 2: Wywar Dnia, Tłusta Pokrywka, Szczypta Soli, Lodowa Sp
 
 // ---------- etap 3: ryzyko i legendarne przedmioty ----------
 test('etap 3: pula 134 kafelki, legendarne przedmioty (legend) dopiero od 60% runu, nigdy wyklęty Dinozaur w ofertach', () => {
-  eq(D.TILES.length, 136, 'pula kafelków');
+  eq(D.TILES.length, 156, 'pula kafelków (136 + 20 nowych umiejętności)');
   const leg = D.TILES.filter(t => t.legend); eq(leg.length, 6, '6 legendarnych przedmiotów'); assert(leg.every(t => t.rarity === 3 && t.type === 'item'), 'rzadkość 3, przedmioty');
   const risk = ['pozyczka-chwilowka', 'dopalacz-z-biedronki', 'nadgodziny-bez-doplaty', 'dieta-cud', 'uklad-z-zarzadem', 'los-na-loterii']; assert(risk.every(id => D.TILE_BY_ID[id] && D.TILE_BY_ID[id].type === 'risk'), '6 kafelków ryzyka');
   const early = new Set(), late = new Set(); let dino = 0;
@@ -1839,7 +1839,7 @@ test('Nowości: kompletność danych (klątwy, trasy, bossowie, osiągnięcia), 
   for (const id of D.SUPER_BOSSES) assert(D.BOSSES[id].super, 'super-boss ' + id);
   for (const [id, b] of Object.entries(D.KURNIK)) { assert(b.name && b.text && b.cost.length === 3 && b.cost[0] < b.cost[2], 'budynek ' + id); }
   for (const a of ['a-klatwa', 'a-klatwy3', 'a-dogrywka', 'a-dogrywka15', 'a-duch', 'a-towarzysz', 'a-trasy', 'a-kurnik', 'a-kurnik-max']) assert(D.ACH_BY_ID[a], 'osiągnięcie ' + a);
-  eq(R.RUN_V, 13, 'RUN_V 13');
+  eq(R.RUN_V, 14, 'RUN_V 14');
 });
 
 test('Jajko Dinozaura: tylko jedno na run (po wykluciu nie wraca do ofert)', () => {
@@ -1968,4 +1968,117 @@ test('Tryb kasynowy: przetasowania rozłożone na różne piętra nie odblokowuj
   const run2 = await st.get('run'); run2.cur.rerolls = 0; await st.put('run', run2);
   for (let k = 0; k < 4; k++) { const j = (await post(o, 'reroll', { pl: PL })).j; assert(j.ok && !j.casinoAsk, 'cztery na nowym piętrze to wciąż za mało'); }
   eq((await post(o, 'state', { pl: PL })).j.profile.casino, null, 'nic nie odblokowane');
+});
+
+// ---------- etap 4 (2026-11-23): 20 nowych umiejętności ----------
+const NEW20 = ['fala', 'lawina', 'zwarcie', 'dziobanie', 'niespodzianka', 'wypowiedzenie', 'audyt', 'bonus', 'ostateczny', 'zamrazarka', 'spotkanie', 'wicher', 'pulapka', 'tarcza', 'kawa', 'zemsta', 'zupa', 'pobudka', 'echo', 'obieg'];
+test('etap 4: 20 nowych umiejętności jest w danych (kafelek, 2 Mutacje, tekst) i 44 razem', () => {
+  eq(Object.keys(D.SKILLS).length, 44, '44 umiejętności');
+  for (const id of NEW20) {
+    const d = D.SKILLS[id]; assert(d && d.cd > 0 && d.muts.length === 2 && d.text && d.name, 'definicja ' + id);
+    const t = D.TILES.find(x => x.skill === id); assert(t && t.type === 'skill' && D.TILE_BY_ID[t.id], 'kafelek ' + id);
+  }
+});
+test('etap 4: każda nowa umiejętność działa na poziomach 1–3 z obiema Mutacjami, a powtórka = walka krok po kroku', () => {
+  const enemies = () => [foe({ hp: 400, atk: 3, aspd: 100, armor: 4 }), foe({ hp: 300, atk: 3, aspd: 120 }), foe({ hp: 200, atk: 2, aspd: 90 })];
+  for (const id of NEW20) for (const [lvl, mut] of [[1, 0], [2, 0], [3, 1], [3, 2]]) {
+    const s = setup({ hp: 400, lo: { coins: 17, skills: [{ id, lvl, mut }, sk('grad'), sk('chlust')] }, enemies: enemies() });
+    const inputs = []; for (let t = 5; t < 800; t += 30) inputs.push([t, 0], [t + 3, 1], [t + 6, 2]);
+    const a = play(s, inputs), b = runFight(s, inputs);
+    eq(a.res, b, `${id} L${lvl}M${mut}: powtórka = krok po kroku`);
+  }
+});
+const BIG = (o = {}) => foe({ hp: 100000, atk: 1, aspd: 10, ...o });
+const CAST1 = (id, lvl = 1, mut = 0, enemies = [BIG(), BIG(), BIG()], lo = {}) => { const f = new Fight(setup({ hp: 400, lo: { skills: [{ id, lvl, mut }], ...lo }, enemies })); f.skills[0].cd = 0; f.step([0]); return f; };
+const DMG = f => f.enemies.map(e => 100000 - e.hp);
+test('etap 4: obrażenia: Fala, Lawina, Zwarcie, Dziobanie', () => {
+  let f = CAST1('fala'); assert(DMG(f).every(d => d > 0), 'Fala bije wszystkich'); assert(f.enemies.every(e => e.burn === 0), 'bez Oparzenia, gdy wróg nie płonął');
+  const g = new Fight(setup({ lo: { skills: [sk('fala')] }, enemies: [BIG(), BIG()] })); g.enemies[0].burn = 1; g.enemies[0].burnT = 99; g.skills[0].cd = 0; g.step([0]);
+  eq([g.enemies[0].burn, g.enemies[1].burn], [3, 0], 'Fala: płonący dostaje +2 stosy, reszta nie');
+  f = CAST1('fala', 3, 2); assert(f.enemies.every(e => e.burn === 2), 'Gorąca Para: wszyscy po 2');
+  assert(DMG(CAST1('fala', 3, 1))[0] > DMG(CAST1('fala', 2))[0], 'Fala Przypływu mocniejsza');
+  f = CAST1('lawina'); assert(DMG(f)[0] > 0 && DMG(f)[1] === 0 && DMG(f)[2] === 0, 'Lawina bije jeden cel');
+  eq(evs(f.ev, 'hit').filter(e => e.kind === 'lawina').length, 3, '3 segregatory');
+  eq(evs(CAST1('lawina', 3, 1).ev, 'hit').filter(e => e.kind === 'lawina').length, 5, 'Pięć Teczek: 5');
+  const ls = CAST1('lawina', 3, 2, [BIG()]); assert(ls.enemies[0].stunUntil > ls.tick, 'Pod Lawiną ogłusza');
+  f = CAST1('zwarcie'); assert(DMG(f).every(d => d > 0), 'Zwarcie: główny + 2 kolejnych'); assert(f.enemies[1].stunUntil > 0 && f.enemies[2].stunUntil > 0 && f.enemies[0].stunUntil === 0, 'przeskok ogłusza kolejnych, nie główny');
+  f = CAST1('zwarcie', 1, 0, [BIG(), BIG(), BIG(), BIG()]); eq(f.enemies[3].hp, 100000, 'bez mutacji tylko 2 kolejnych');
+  f = CAST1('zwarcie', 3, 1, [BIG(), BIG(), BIG(), BIG()]); assert(f.enemies[3].hp < 100000, 'Piorun Kulisty: wszyscy');
+  eq(evs(CAST1('dziobanie', 1, 0, [BIG()]).ev, 'hit').filter(e => e.kind === 'dziobanie').length, 5, '5 ciosów');
+  eq(evs(CAST1('dziobanie', 3, 1, [BIG()]).ev, 'hit').filter(e => e.kind === 'dziobanie').length, 8, 'Maszynowe: 8');
+});
+test('etap 4: obrażenia: Audyt, Bonus Kwartalny, Rosół Ostateczny', () => {
+  let f = CAST1('audyt', 1, 0, [BIG({ armor: 20 })]); eq(f.enemies[0].armor, 10, 'Audyt: połowa Pancerza');
+  f = CAST1('audyt', 3, 1, [BIG({ armor: 20 })]); eq(f.enemies[0].armor, 0, 'Kontrola Skarbowa: cały');
+  for (let i = 0; i < 60; i++) f.step(); eq(f.enemies[0].armor, 20, 'Pancerz wraca po 5 s');
+  f = CAST1('audyt', 3, 2); eq(f.enemies[0].vulnPct, 30, 'Audyt Wsteczny: +30% obrażeń');
+  const poor = DMG(CAST1('bonus', 1, 0, [BIG()], { coins: 0 }))[0], rich = DMG(CAST1('bonus', 1, 0, [BIG()], { coins: 15 }))[0], capd = DMG(CAST1('bonus', 1, 0, [BIG()], { coins: 500 }))[0];
+  assert(rich > poor * 1.3, 'Bonus Kwartalny rośnie z Ziarnami'); assert(capd > rich && capd < poor * 2.2, 'i ma limit +90%');
+  eq(CAST1('bonus', 3, 2, [foe({ hp: 5 }), BIG()]).coinsWon, 1, 'Wypłata Zaliczki: +1 Ziarno');
+  f = CAST1('ostateczny', 1, 0, [BIG()]); eq(f.enemies[0].burn, 8, 'Rosół Ostateczny: 8 stosów'); assert(DMG(f)[0] > DMG(CAST1('granat', 1, 0, [BIG()]))[0], 'mocniejszy niż Granat');
+  eq(CAST1('ostateczny', 3, 1, [BIG()]).enemies[0].burn, 10, 'Wrzący Finał (limit stosów 10)');
+});
+test('etap 4: Jajo z Niespodzianką losuje skutek, Wypowiedzenie uderza po 4 s i daje Ziarna', () => {
+  const seen = new Set();
+  for (let seed = 1; seed < 80; seed++) { const s = setup({ lo: { skills: [sk('niespodzianka')] }, enemies: [BIG()] }); s.seed = seed; const f = new Fight(s); f.skills[0].cd = 0; f.step([0]); for (const e of evs(f.ev, 'surprise')) seen.add(e.r); }
+  eq([...seen].sort(), [0, 1, 2, 3], 'wszystkie 4 skutki');
+  eq(evs(CAST1('niespodzianka', 3, 1, [BIG()]).ev, 'surprise').length, 2, 'Jajo Dwużółtkowe: 2 rzuty');
+  const w = CAST1('wypowiedzenie', 1, 0, [BIG()]);
+  assert(w.enemies[0].mark && w.enemies[0].hp === 100000, 'oznaczony, jeszcze bez obrażeń');
+  for (let i = 0; i < 36; i++) { w.acc = -1e9; w.step(); } eq(w.enemies[0].hp, 100000, 'przed upływem 4 s nic');
+  for (let i = 0; i < 6; i++) { w.acc = -1e9; w.step(); } assert(w.enemies[0].hp < 100000 && !w.enemies[0].mark, 'po 4 s cios');
+  const k = CAST1('wypowiedzenie', 1, 0, [foe({ hp: 30, atk: 1, aspd: 10 })]); k.enemies[0].hp = 3;
+  for (let i = 0; i < 60 && !k.over; i++) { k.acc = -1e9; k.step(); } eq(k.coinsWon, 2, 'zabójstwo wypowiedzeniem: +2 Ziarna');
+  const fast = CAST1('wypowiedzenie', 3, 1, [BIG()]); eq(fast.enemies[0].mark.at - fast.tick + 1, 20, 'Natychmiastowe: 2 s');
+});
+test('etap 4: kontrola: Zamrażarka, Spotkanie, Wicher, Pułapka', () => {
+  let f = CAST1('zamrazarka', 1, 0, [BIG(), BIG()]); eq(f.enemies[0].frozenUntil - f.tick + 1, 20, 'zamrożony na 2 s'); eq(f.enemies[1].frozenUntil, 0, 'tylko cel');
+  f = CAST1('zamrazarka', 1, 0, [BIG({ boss: 'brojler', ...bossFx('brojler') })]); eq(f.enemies[0].frozenUntil - f.tick + 1, 10, 'boss na 1 s');
+  f = CAST1('zamrazarka', 3, 1, [BIG()]); eq(f.enemies[0].frozenUntil - f.tick + 1, 30, 'Głębokie Mrożenie: 3 s');
+  f = CAST1('zamrazarka', 3, 2, [BIG(), BIG()]); assert(f.enemies.every(e => e.frozenUntil > f.tick), 'Mroźna Chłodnia: wszyscy');
+  eq(CAST1('zamrazarka', 1, 0, [BIG({ resist: ['frost'] })]).enemies[0].frozenUntil, 0, 'odporny na Mróz się nie zamraża');
+  f = CAST1('spotkanie', 1, 0, [BIG({ hp: 100 }), BIG({ hp: 300 }), BIG({ hp: 200 })]); assert(f.enemies[1].stunUntil > f.tick && f.enemies[0].stunUntil === 0 && f.enemies[2].stunUntil === 0, 'ogłusza najsilniejszego'); eq(f.enemies[1].vulnPct, 30, '+30% obrażeń');
+  f = CAST1('spotkanie', 3, 1, [BIG(), BIG()]); assert(f.enemies.every(e => e.stunUntil > f.tick), 'Zebranie Zarządu: wszyscy');
+  const hitDmg = g => { const b0 = g.enemies[0].hp; g.skills.forEach(s => { s.cd = 1e9; }); g.acc = 1000; g.step(); return b0 - g.enemies[0].hp; };
+  const vuln = hitDmg(CAST1('spotkanie', 1, 0, [BIG({ hp: 1e6 })])), norm = hitDmg(new Fight(setup({ hp: 400, lo: { skills: [] }, enemies: [BIG({ hp: 1e6 })] })));
+  assert(vuln > norm, 'cios w ogłuszonego jest mocniejszy (' + vuln + ' > ' + norm + ')');
+  f = CAST1('wicher', 1, 0, [BIG(), BIG()]); assert(f.enemies.every(e => e.pauseUntil > f.tick && e.hp < 100000), 'Wicher: obrażenia i opóźnienie');
+  const att = cast => { const g = new Fight(setup({ hp: 4000, lo: { skills: [sk('wicher')] }, enemies: [foe({ hp: 100000, atk: 1, aspd: 100 })] })); if (cast) { g.skills[0].cd = 0; g.step([0]); } let n = 0; for (let i = 0; i < 40; i++) { g.acc = -1e9; g.skills[0].cd = 1e9; g.step(); n += evs(g.ev, 'hurt').filter(e => e.from).length; } return n; };
+  assert(att(true) < att(false), 'Wicher opóźnia ataki wroga');
+  const trapRun = mut => { const g = CAST1('pulapka', mut ? 3 : 1, mut, [foe({ hp: 100000, atk: 1, aspd: 100 }), foe({ hp: 100000, atk: 1, aspd: 100 })], {}); g.hp = g.S.maxHp = 4000; const ev = []; for (let i = 0; i < 40; i++) { g.acc = -1e9; g.skills[0].cd = 1e9; g.step(); ev.push(...g.ev); } return { g, ev }; };
+  const tr = trapRun(0); eq(evs(tr.ev, 'trap').length, 1, 'pułapka działa raz'); assert(tr.g.enemies.some(e => e.hp < 100000), 'ofiara dostała obrażenia');
+  const gil = trapRun(2); assert(100000 - gil.g.enemies.find(e => e.hp < 100000).hp > 100000 - tr.g.enemies.find(e => e.hp < 100000).hp, 'Gilotyna mocniejsza');
+});
+test('etap 4: obrona: Gniazdo Tarczy, Przerwa Kawowa, Kocioł Zemsty, Zupa Dnia', () => {
+  const hitter = (o = {}) => foe({ hp: 100000, atk: 3, aspd: 100, ...o });
+  const mk = (id, lvl = 1, mut = 0, en = [hitter()]) => { const f = new Fight(setup({ hp: 600, lo: { skills: [{ id, lvl, mut }, sk('grad')] }, enemies: en })); f.skills[0].cd = 0; f.step([0]); return f; };
+  const run = (f, n = 40) => { for (let i = 0; i < n; i++) { f.acc = -1e9; f.skills.forEach(s => { s.cd = 1e9; }); f.step(); } return f; };
+  const ref = new Fight(setup({ hp: 600, lo: { skills: [sk('grad')] }, enemies: [hitter()] })); ref.step(); run(ref);
+  const sh = mk('tarcza'); assert(sh.hshield > 0, 'tarcza założona'); run(sh); assert(sh.taken < ref.taken, 'Tarcza zmniejsza otrzymane obrażenia (' + sh.taken + ' < ' + ref.taken + ')');
+  const sh2 = mk('tarcza', 3, 2); run(sh2); assert(sh2.enemies[0].hp < 100000, 'Kolczasta Kopuła rani atakujących');
+  assert(mk('tarcza', 3, 1).hshield > mk('tarcza').hshield, 'Pancerne Gniazdo: większa tarcza');
+  const hurt = (id, lvl, mut) => { const f = new Fight(setup({ hp: 400, lo: { skills: [{ id, lvl, mut }] }, enemies: [foe({ hp: 100000, atk: 1, aspd: 10 })] })); f.hp = 50; f.skills[0].cd = 0; f.step([0]); return f; };
+  let f = hurt('kawa', 1, 0); const now = f.hp; assert(now > 50, 'Przerwa Kawowa leczy od razu'); for (let i = 0; i < 31; i++) { f.acc = -1e9; f.step(); } assert(f.hp > now + 5, 'i drugi raz po 3 s');
+  eq(hurt('kawa', 1, 0).coffeeEvade, 30, '30% uniku'); eq(hurt('kawa', 3, 2).coffeeEvade, 60, 'Przerwa na Lunch: 60%'); assert(hurt('kawa', 3, 1).hp > hurt('kawa', 1, 0).hp, 'Espresso leczy mocniej');
+  f = run(mk('zemsta'), 25); assert(f.enemies[0].burn >= 2, 'Kocioł Zemsty: atakujący płonie (' + f.enemies[0].burn + ')');
+  f = run(mk('zemsta', 3, 1), 25); assert(f.enemies[0].burn >= 4, 'Wrzący Kocioł');
+  f = hurt('zupa', 1, 0); assert(f.hp > 50 && f.soupUntil > f.tick, 'Zupa leczy i przyspiesza'); assert(f.heroAspd() > f.S.aspd, 'szybkość ataku wzrosła'); eq(hurt('zupa', 3, 2).soupPct, 40, 'Zupa Pikantna +40%');
+});
+test('etap 4: wzmocnienia: Pobudka, Echo, Przyspieszony Obieg', () => {
+  const dm = (id, lvl = 1, mut = 0) => { const f = new Fight(setup({ hp: 400, lo: { skills: [{ id, lvl, mut }] }, enemies: [foe({ hp: 1e7, atk: 1, aspd: 10 })] })); f.skills[0].cd = 0; f.step([0]); const b = f.enemies[0].hp; for (let i = 0; i < 60; i++) { f.skills[0].cd = 1e9; f.step(); } return b - f.enemies[0].hp; };
+  const plain = dm('grad'), buff = dm('pobudka'), buff2 = dm('pobudka', 3, 1); assert(buff > plain && buff2 > buff, 'Pobudka zwiększa obrażenia (' + plain + ' < ' + buff + ' < ' + buff2 + ')');
+  eq(CAST1('pobudka', 1, 0, [BIG()]).buffCrit, 15, '+15% krytyka'); const kk = CAST1('pobudka', 3, 2, [BIG()]); assert(kk.buffUntil - kk.tick > 70, 'Kukuryku trwa 8 s');
+  const ech = (mut, order) => { const f = new Fight(setup({ hp: 400, lo: { skills: [{ id: 'echo', lvl: mut ? 3 : 1, mut }, sk('chlust'), sk('grad')] }, enemies: [foe({ hp: 1e7, atk: 1, aspd: 10 })] })); f.skills.forEach(s => { s.cd = 0; }); f.step([0]); const r = []; for (const sl of order) { f.step([sl]); r.push(evs(f.ev, 'echo').length); } return r; };
+  eq(ech(0, [1, 2]), [1, 0], 'Echo: tylko następna'); eq(ech(1, [1, 2]), [1, 1], 'Echo w Wąwozie: dwie'); eq(ech(2, [1, 2]), [1, 1], 'Wieczne Echo: wszystkie w oknie');
+  const cm = echo => { const f = new Fight(setup({ hp: 400, lo: { skills: echo ? [sk('echo'), sk('chlust')] : [sk('chlust')] }, enemies: [foe({ hp: 1e7, atk: 1, aspd: 10 })] })); f.skills.forEach(s => { s.cd = 0; }); if (echo) f.step([0]); f.step([echo ? 1 : 0]); return f.enemies[0].burn; };
+  eq(cm(true), 6, 'Echo: Chlust nałożył 3 + 3 stosy'); eq(cm(false), 3, 'bez Echa 3');
+  const ob = mut => { const f = new Fight(setup({ hp: 400, lo: { skills: [{ id: 'obieg', lvl: mut ? 3 : 1, mut }, sk('chlust'), sk('grad')] }, enemies: [foe({ hp: 1e7, atk: 1, aspd: 10 })] })); f.skills.forEach(s => { s.cd = 0; }); f.step([1]); f.step([2]); const r1 = f.skills[1].cd - f.tick; f.step([0]); return [r1, f.skills[1].cd - f.tick]; };
+  const o0 = ob(0); assert(o0[1] < o0[0], 'Obieg skraca cooldown pozostałych'); const o1 = ob(1); assert(o1[1] < o0[1], 'Turbo Obieg skraca mocniej');
+  const o2 = new Fight(setup({ hp: 400, lo: { skills: [{ id: 'obieg', lvl: 3, mut: 2 }] }, enemies: [foe({ hp: 1e7, atk: 1, aspd: 10 })] })); o2.hp = 50; o2.skills[0].cd = 0; o2.step([0]); assert(o2.hp > 50, 'Obieg Zamknięty leczy');
+});
+test('etap 4: RUN_V 14, nowe umiejętności trafiają do ofert', () => {
+  eq(R.RUN_V, 14, 'RUN_V');
+  const seen = new Set();
+  for (let seed = 1; seed < 300; seed++) { const r = R.newRun({ mode: 'full', char: 'pyrtek', garnek: 0, pool: ALL, seed }); const run = r.run; for (const o of (run.cur && run.cur.offer) || []) { const t = D.TILE_BY_ID[o.id || o]; if (t && t.skill && NEW20.includes(t.skill)) seen.add(t.skill); } }
+  assert(seen.size >= 5, 'nowe umiejętności pojawiają się w ofertach (widziano ' + seen.size + ')');
 });

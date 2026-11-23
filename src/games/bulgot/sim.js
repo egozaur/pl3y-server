@@ -44,6 +44,15 @@ export class Fight {
     if (this.S.startBurn || this.S.startFrost) for (const e of this.enemies) { if (this.S.startBurn) this.applyStatus(e, 'burn', this.S.startBurn); if (this.S.startFrost) this.applyStatus(e, 'frost', this.S.startFrost); }
     this.stolen = 0; this.dealt = 0; this.taken = 0; this.maxHit = 0; this.kills = 0; this.used = 0; this.lowest = this.hp;
     this.critRolls = 0; this.critHits = 0;   // tylko do ciekawostek: ile razy losowano krytyk i ile razy wypadł
+    // Etap 4: 20 nowych umiejętności
+    this.coinsHave = this.loadout.coins | 0;                  // Bonus Kwartalny czyta Ziarna z kieszeni
+    this.echoLeft = 0; this.echoUntil = 0;                    // Kurze Echo
+    this.trapUntil = 0; this.trapPct = 0;                     // Pułapka na Szczura
+    this.hshield = 0; this.hshieldUntil = 0; this.hthorns = 0; // Gniazdo Tarczy
+    this.coffee = null; this.coffeeEvadeUntil = 0; this.coffeeEvade = 0;   // Przerwa Kawowa
+    this.thornFireUntil = 0; this.thornFireN = 2;             // Kocioł Zemsty
+    this.soupUntil = 0; this.soupPct = 20;                    // Zupa Dnia
+    this.buffUntil = 0; this.buffDmg = 0; this.buffCrit = 0;  // Kogucia Pobudka
   }
 
   mk(e) {
@@ -65,6 +74,7 @@ export class Fight {
   heroAspd() {
     let a = this.S.aspd;
     if (this.tick < this.hasteUntil) a = fl(a * 150 / 100);
+    if (this.tick < this.soupUntil) a = fl(a * (100 + this.soupPct) / 100);   // Zupa Dnia
     if (this.tick < this.slowUntil) a = fl(a * 80 / 100);
     return Math.max(10, a);
   }
@@ -84,13 +94,13 @@ export class Fight {
     if (t.evade && this.rng.int(100) < t.evade) { this.push({ k: 'miss', to: t.uid }); return 0; }
     if (kind === 'atk' && this.tick < this.heroBlindUntil && this.rng.int(100) < this.heroBlindPct) { this.push({ k: 'miss', to: t.uid }); return 0; }   // Szef Nocnej Zmiany: oślepienie
     let raw = fl(this.S.atk * pct / 100);
-    raw = fl(raw * (100 + this.S.dmg + this.skillBonus + (this.S.overtime && this.tick >= 200 ? this.S.overtime : 0) + (this.S.vsCold && (t.frost > 0 || this.tick < t.frozenUntil) ? this.S.vsCold : 0) + (this.S.vsBurn && t.burn > 0 ? this.S.vsBurn : 0) + (this.tick < this.dmgUntil ? this.dmgBonus : 0)) / 100);
+    raw = fl(raw * (100 + this.S.dmg + this.skillBonus + (this.S.overtime && this.tick >= 200 ? this.S.overtime : 0) + (this.S.vsCold && (t.frost > 0 || this.tick < t.frozenUntil) ? this.S.vsCold : 0) + (this.S.vsBurn && t.burn > 0 ? this.S.vsBurn : 0) + (this.tick < this.dmgUntil ? this.dmgBonus : 0) + (this.tick < this.buffUntil ? this.buffDmg : 0) + (this.tick < (t.vulnUntil || 0) ? t.vulnPct : 0)) / 100);
     let crit = false;
     if (t.brittle) { t.brittle = false; crit = true; raw = fl(raw * this.S.critMult / 100); }   // Kruchość: trafienie zawsze krytyczne
     else if (canCrit || (this.S.skillCrit && this.inSkill)) {
       const forced = this.tick < this.critUntil;   // jak wcześniej: wymuszony krytyk nie losuje (kolejność losowań bez zmian)
       if (!forced) this.critRolls++;
-      if (forced || this.rng.int(100) < this.S.crit) { crit = true; if (!forced) this.critHits++; raw = fl(raw * this.S.critMult / 100); }
+      if (forced || this.rng.int(100) < this.S.crit + (this.tick < this.buffUntil ? this.buffCrit : 0)) { crit = true; if (!forced) this.critHits++; raw = fl(raw * this.S.critMult / 100); }
     }
     let d = Math.max(1, fl(raw * 100 / (100 + Math.max(0, t.armor))));
     if (t.shieldHits > 0) { t.shieldHits--; this.push({ k: 'shield', to: t.uid }); return 0; }
@@ -225,7 +235,8 @@ export class Fight {
     this.chainT = tick;
     this.skillBonus = this.chain >= 2 ? RULES.chainPct[Math.min(1, this.chain - 2)] : 0;
     if (this.chain >= 2) this.push({ k: 'chain', n: this.chain });
-    switch (s.id) {
+    // Efekt umiejętności jest osobną funkcją, żeby Kurze Echo mogło go powtórzyć za darmo.
+    const run = (alive) => { switch (s.id) {
       case 'grad': {
         const n = m === 2 ? 9 : def.hits;
         for (let i = 0; i < n; i++) {
@@ -371,6 +382,134 @@ export class Fight {
         break;
       }
       case 'pogotowie': this.hotUntil = Math.max(this.hotUntil, tick + P(def.dur) * (m === 2 ? 2 : 1)); this.hotPct = P(m === 1 ? 14 : def.pct); break;
+      // ----- Etap 4 (2026-11-23): 20 nowych umiejętności -----
+      case 'fala':
+        for (const e of alive) {
+          this.heroHit(e, P(m === 1 ? 120 : def.pct), false, 'fala');
+          if (!e.dead && (m === 2 || e.burn > 0)) this.applyStatus(e, 'burn', def.n);
+        }
+        break;
+      case 'lawina': {
+        const n = m === 1 ? 5 : def.hits; let t = this.target();
+        for (let i = 0; i < n && t; i++) {
+          if (t.dead) t = this.target(); if (!t) break;
+          this.heroHit(t, P(def.pct + 20 * i), false, 'lawina');
+          if (m === 2 && i === n - 1 && !t.dead) this.stunOne(t, 15);
+        }
+        break;
+      }
+      case 'zwarcie': {
+        const t = this.target(); if (!t) break;
+        this.heroHit(t, P(m === 2 ? 130 : def.pct), false, 'zwarcie');
+        let prev = t;
+        for (const e of this.alive().filter(x => x !== t).slice(0, m === 1 ? 99 : 2)) {
+          this.push({ k: 'arc', from: prev.uid, to: e.uid }); prev = e;
+          this.heroHit(e, P(60), false, 'zwarcie');
+          if (!e.dead) this.stunOne(e, 5);
+        }
+        break;
+      }
+      case 'dziobanie': {
+        const n = m === 1 ? 8 : def.hits;
+        for (let i = 0; i < n; i++) {
+          const t = this.target(); if (!t) break;
+          this.heroHit(t, P(def.pct), false, 'dziobanie');
+          if (!t.dead && this.rng.int(100) < (m === 2 ? 40 : 15)) this.applyStatus(t, 'bleed', m === 2 ? 2 : 1);
+        }
+        break;
+      }
+      case 'niespodzianka':
+        for (let i = 0; i < (m === 1 ? 2 : 1); i++) {
+          const t = this.target(); if (!t) break;
+          const r = this.rng.int(4);
+          this.push({ k: 'surprise', r, to: t.uid });
+          if (r === 0) this.heroHit(t, P(def.pct), false, 'niespodzianka'); else this.applyStatus(t, ['', 'burn', 'frost', 'poison'][r], def.n);
+          if (m === 2 && !t.dead) this.heroHit(t, P(150), false, 'niespodzianka');
+        }
+        break;
+      case 'wypowiedzenie': {
+        const t = this.target(); if (!t) break;
+        t.mark = { at: tick + (m === 1 ? 20 : def.dur), pct: P(m === 2 ? 250 : def.pct), per: m === 2 ? 3 : 2 };
+        this.push({ k: 'mark', uid: t.uid, end: t.mark.at });
+        break;
+      }
+      case 'audyt': {
+        const t = this.target(); if (!t) break;
+        this.heroHit(t, P(def.pct), false, 'audyt');
+        if (!t.dead) {
+          const cut = m === 1 ? t.armor : fl(t.armor / 2);
+          t.armor -= cut; t.shredAmt = (t.shredAmt || 0) + cut; t.shredT = tick + def.dur;
+          if (m === 2) { t.vulnUntil = tick + def.dur; t.vulnPct = 30; }
+          this.push({ k: 'shred', uid: t.uid });
+        }
+        break;
+      }
+      case 'bonus': {
+        const t = this.target(); if (!t) break;
+        const bonus = Math.min(m === 1 ? 150 : 90, (m === 1 ? 25 : 15) * fl(this.coinsHave / 5));
+        this.heroHit(t, P(def.pct + bonus), false, 'bonus');
+        if (m === 2 && t.dead && this.coinsWon < 3) { this.coinsWon++; this.push({ k: 'coin', n: 1 }); }
+        break;
+      }
+      case 'ostateczny': {
+        const t = this.target(); if (!t) break;
+        this.heroHit(t, P(m === 2 ? 500 : def.pct), false, 'ostateczny');
+        if (!t.dead) this.applyStatus(t, 'burn', m === 1 ? 12 : def.n);
+        if (m === 2) this.heal(fl(this.S.maxHp * 10 / 100));
+        break;
+      }
+      case 'zamrazarka': {
+        const t = this.target(); if (!t) break;
+        this.heroHit(t, P(def.pct), false, 'zamrazarka');
+        if (m === 2) for (const e of this.alive()) this.freezeFor(e, 10);
+        else if (!t.dead) this.freezeFor(t, m === 1 ? 30 : def.dur);
+        break;
+      }
+      case 'spotkanie': {
+        const al = this.alive(); if (!al.length) break;
+        const tg = m === 1 ? al : [al.reduce((a, e) => e.hp > a.hp ? e : a, al[0])];
+        const d = m === 1 ? 20 : m === 2 ? 50 : def.dur;
+        for (const e of tg) {
+          if (e.immune) continue;
+          const dd = e.boss ? Math.ceil(d * 2 / 3) : d;
+          this.stunOne(e, dd); e.vulnUntil = tick + dd; e.vulnPct = 30; this.push({ k: 'meeting', uid: e.uid });
+        }
+        break;
+      }
+      case 'wicher':
+        for (const e of alive) {
+          this.heroHit(e, P(m === 2 ? 90 : def.pct), false, 'wicher');
+          if (!e.dead) { e.pauseUntil = Math.max(e.pauseUntil || 0, tick) + (m === 1 ? 20 : def.dur); this.push({ k: 'gust', uid: e.uid }); }
+        }
+        break;
+      case 'pulapka': this.trapUntil = tick + (m === 1 ? 120 : def.dur); this.trapPct = P(m === 2 ? 320 : def.pct); this.push({ k: 'trapset', until: this.trapUntil }); break;
+      case 'tarcza':
+        this.hshield = fl(this.S.maxHp * P(m === 1 ? 35 : def.pct) / 100); this.hshieldUntil = tick + def.dur; this.hthorns = m === 2 ? P(60) : 0;
+        this.push({ k: 'hshield', n: this.hshield, until: this.hshieldUntil });
+        break;
+      case 'kawa': {
+        const n = fl(this.S.maxHp * P(m === 1 ? 20 : def.pct) / 100);
+        this.heal(n); this.coffee = { at: tick + def.dur, n }; this.coffeeEvadeUntil = tick + def.dur; this.coffeeEvade = m === 2 ? 60 : 30;
+        this.push({ k: 'coffee' });
+        break;
+      }
+      case 'zemsta': this.thornFireUntil = tick + (m === 2 ? 80 : def.dur); this.thornFireN = m === 1 ? 4 : def.n; this.push({ k: 'cauldron', until: this.thornFireUntil }); break;
+      case 'zupa': this.heal(fl(this.S.maxHp * P(m === 1 ? 25 : def.pct) / 100)); this.soupUntil = tick + def.dur; this.soupPct = m === 2 ? 40 : 20; break;
+      case 'pobudka': this.buffUntil = tick + (m === 2 ? 80 : def.dur); this.buffDmg = P(m === 1 ? 40 : def.pct); this.buffCrit = P(15); break;
+      case 'echo': if (m === 2) this.echoUntil = tick + def.dur; else this.echoLeft = m === 1 ? 2 : 1; this.push({ k: 'echoset' }); break;
+      case 'obieg': {
+        const f = Math.min(80, P(m === 1 ? 50 : def.pct));
+        for (const o of this.skills) { if (o === s) continue; const rem = o.cd - tick; if (rem > 0) o.cd = tick + fl(rem * (100 - f) / 100); }
+        if (m === 2) this.heal(fl(this.S.maxHp * 10 / 100));
+        this.push({ k: 'overdrive' });
+        break;
+      }
+    } };
+    run(alive);
+    if (s.id !== 'echo' && !this.over && (this.echoLeft > 0 || this.tick < this.echoUntil)) {   // Kurze Echo: drugi raz za darmo
+      if (!(this.tick < this.echoUntil)) this.echoLeft--;
+      this.push({ k: 'echo', id: s.id });
+      run(this.alive());
     }
     this.skillBonus = 0;
     if (this.S.skillReset && this.rng.int(100) < this.S.skillReset) s.cd = this.tick + 1;   // Open Space
@@ -381,6 +520,22 @@ export class Fight {
     this.inSkill = false;
     return true;
   }
+  // Ogłuszenie jednego wroga (przerywa szarżę).
+  stunOne(e, d) {
+    if (!e || e.dead) return;
+    e.stunUntil = Math.max(e.stunUntil, this.tick + d);
+    if (e.windup) { e.windup = null; e.nextSpec = e.stunUntil + (e.spec ? e.spec.every : 0); this.push({ k: 'break', uid: e.uid }); }
+    this.push({ k: 'stun', uid: e.uid });
+  }
+  // Natychmiastowe zamrożenie na d ticków (Zamrażarka Ręczna); bossy o połowę krócej, odporni na Mróz nie zamarzają.
+  freezeFor(e, d) {
+    if (!e || e.dead || e.immune || (e.resist && e.resist.includes('frost'))) return;
+    if (e.boss) d = fl(d / 2);
+    e.frost = 0; e.frozenUntil = Math.max(e.frozenUntil, this.tick + d); e.stunUntil = Math.max(e.stunUntil, e.frozenUntil);
+    if (e.windup) { e.windup = null; e.nextSpec = e.frozenUntil + (e.spec ? e.spec.every : 0); this.push({ k: 'break', uid: e.uid }); }
+    this.push({ k: 'freeze', uid: e.uid }); this.freezes++;
+    this.react(e, 'frost');
+  }
   stunAll(d) {
     const tick = this.tick;
     for (const e of this.alive()) { e.stunUntil = Math.max(e.stunUntil, tick + d); if (e.windup) { e.windup = null; e.nextSpec = e.stunUntil + (e.spec ? e.spec.every : 0); this.push({ k: 'break', uid: e.uid }); } this.push({ k: 'stun', uid: e.uid }); }
@@ -389,10 +544,17 @@ export class Fight {
   // ---------- ataki wrogów ----------
   enemyHit(e, mult) {
     if (this.hp <= 0 || this.over) return;
+    if (this.tick < this.trapUntil && this.trapPct && !e.dead) {   // Pułapka na Szczura: pierwszy atakujący wpada
+      const pct = this.trapPct; this.trapUntil = 0; this.trapPct = 0;
+      this.push({ k: 'trap', uid: e.uid }); this.heroHit(e, pct, false, 'pulapka');
+      if (e.dead) return;
+      this.stunOne(e, 10); return;   // pułapka łapie pierwszego atakującego: jego cios przepada
+    }
     if (this.tick < this.invulnUntil) { this.push({ k: 'block', from: e.uid }); if (this.unikKontra) this.heroHit(e, 100, false, 'kontra'); return; }
     if (this.parasol > 0) { this.parasol--; this.push({ k: 'block', from: e.uid }); return; }
     if (this.tick < this.blindUntil && this.rng.int(100) < this.blindPct) { this.push({ k: 'dodge', from: e.uid }); return; }
     if (this.S.evade && this.rng.int(100) < this.S.evade) { this.push({ k: 'dodge', from: e.uid }); return; }
+    if (this.tick < this.coffeeEvadeUntil && this.rng.int(100) < this.coffeeEvade) { this.push({ k: 'dodge', from: e.uid }); return; }   // Przerwa Kawowa
     let pct = 100 + this.furyExtra();
     if (has(e, 'tyrant') && e.p3) pct += 2 * fl((this.tick - e.p3At) / 10);
     let raw = fl(e.atk * mult / 100);
@@ -404,9 +566,18 @@ export class Fight {
     if (this.S.frostWeak && (e.frost > 0 || this.tick < e.frozenUntil)) d = Math.max(1, fl(d * (100 - this.S.frostWeak) / 100));   // Lodowa Spódnica
     const kontra = this.tick < this.kontraUntil;
     if (kontra) d = Math.max(1, fl(d * (100 - this.kontraRed) / 100));
+    if (this.hshield > 0) {   // Gniazdo Tarczy
+      if (this.tick >= this.hshieldUntil) this.hshield = 0;
+      else {
+        const a = Math.min(this.hshield, d); this.hshield -= a; d -= a; this.push({ k: 'hshit', d: a });
+        if (this.hthorns && !e.dead) this.heroHit(e, this.hthorns, false, 'thorns');
+        if (d <= 0) return;
+      }
+    }
     this.hp -= d; this.taken += d; if (this.hp < this.lowest) this.lowest = Math.max(0, this.hp);
     this.push({ k: 'hurt', from: e.uid, d, crit });
     if (this.S.frostThorns && !e.dead) this.applyStatus(e, 'frost', this.S.frostThorns);
+    if (this.tick < this.thornFireUntil && !e.dead) this.applyStatus(e, 'burn', this.thornFireN);   // Kocioł Zemsty
     if (e.steal && !this.S.noSteal && this.stolenBy(e) < e.steal.max) { this.stolen += e.steal.n; e.stole = (e.stole || 0) + e.steal.n; this.push({ k: 'steal', from: e.uid }); }
     if (e.slow) { this.slowUntil = this.tick + e.slow.ticks; }
     if (kontra && this.hp > 0) this.heroHit(e, this.kontraPct, false, 'kontra');
@@ -492,6 +663,7 @@ export class Fight {
   }
 
   enemyAct(e) {
+    if (this.tick < (e.pauseUntil || 0)) return;   // Wicher Skrzydeł: wróg chwilowo nie atakuje
     if (this.tick < e.idleUntil) return;           // wróg jeszcze „wchodzi do walki” (Zebranie Zarządu: pierwsze 3 s Prezesa)
     if (this.tick < e.stunUntil) return;
     if (e.boss) this.bossAct(e);
@@ -520,6 +692,16 @@ export class Fight {
     const t = this.tick;
     for (const s of inputs) this.useSkill(s);
     if (this.off >= 0 && t >= this.offUntil) { this.off = -1; this.S = heroStats(this.loadout); this.push({ k: 'skubanie-end' }); if (this.S.egg && !this.nextEgg) this.nextEgg = t + this.S.egg; }
+    for (const e of this.enemies) {   // Etap 4: koniec osłabienia pancerza (Audyt), Wypowiedzenie
+      if (e.dead) continue;
+      if (e.shredAmt && t >= e.shredT) { e.armor += e.shredAmt; e.shredAmt = 0; }
+      if (e.mark && t >= e.mark.at) {
+        const mk = e.mark; e.mark = null; this.push({ k: 'markhit', uid: e.uid });
+        this.inSkill = true; this.heroHit(e, mk.pct, false, 'wypowiedzenie'); this.inSkill = false;
+        if (e.dead && this.coinsWon < 6) { const n = Math.min(mk.per, 6 - this.coinsWon); this.coinsWon += n; this.push({ k: 'coin', n }); }
+      }
+    }
+    if (this.coffee && t >= this.coffee.at) { this.heal(this.coffee.n); this.coffee = null; this.push({ k: 'coffee2' }); }
     for (const e of this.enemies) if (has(e, 'guarded')) e.immune = this.enemies.some(g => g.guard && !g.dead);
     if (t === this.furyFrom) {
       this.push({ k: 'fury' });
