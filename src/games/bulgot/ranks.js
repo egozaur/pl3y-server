@@ -47,7 +47,7 @@ export class BgRanks {
   duelView(rec, n, now) {
     const me = rec.players.find(p => p.n === n), rv = rec.players.find(p => p.n !== n), open = rec.state === 'play' || rec.state === 'done';
     const rp = rv && rec.prog[rv.n], r = rec.result;
-    return { code: rec.code, state: rec.state, now, voteDl: rec.voteDl || 0, startAt: rec.startAt || 0, cfg: rec.cfg || null, rounds: DUEL.rounds,
+    return { code: rec.code, state: rec.state, now, voteDl: rec.voteDl || 0, startAt: rec.startAt || 0, cfg: rec.cfg ? { ...rec.cfg, pool: rec.cfg.charForced ? DUEL.weak : null } : null, rounds: DUEL.rounds,
       me: { nick: me.nick, vote: me.vote, started: !!rec.prog[n] },
       rival: rv ? { nick: rv.nick, avatar: rv.avatar | 0, voted: !!rv.vote, vote: open ? rv.vote : null, prog: rp ? { round: rp.round | 0, done: rp.done | 0, over: !!rp.over, ended: rp.ended || null, hp: rp.hp | 0, dealt: rec.state === 'done' ? rp.dealt | 0 : null } : null } : null,
       result: r ? (r.stats ? { draw: !!r.draw, winner: r.draw ? null : r.winner === n ? 'me' : 'rival', reason: r.reason, you: r.stats[n], rival: rv ? r.stats[rv.n] : null } : { expired: !!r.expired, left: !!r.left }) : null };

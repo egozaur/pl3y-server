@@ -184,7 +184,7 @@ export class BgPlayer {
       if (run.phase === 'victory') endRun(run, 'win');
       duelSetDl(run, this.now());
     }
-    if (run && path !== 'state' && !run.duel) {   // pojedynek nie wpływa na profil, odblokowania, ranking ani historię
+    if (run && path !== 'state' && path !== 'duel' && !run.duel) {   // pojedynek nie wpływa na profil, odblokowania, ranking ani historię
       if (r.boss) onBossKill(profile, r.boss);
       if (r.bossVar && r.bossVar !== r.boss) onBossKill(profile, r.bossVar);   // wariant bossa liczy się też osobno (Księga)
       if (r.arena && r.arena.n && !r.arena.mirror) this.ghostResult(run, r.arena);

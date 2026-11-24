@@ -2496,3 +2496,12 @@ test('Pojedynek: obaj ukończyli 10 pięter (Prezes kończy run wygraną, bez Do
   eq([b.duel.state, b.duel.result.winner, b.duel.result.reason], ['done', 'rival', 'dealt'], 'rywal zadał więcej obrażeń');
   const a2 = (await dpost(env, DA, 'duel', { op: 'state' })).j.duel; eq([a2.result.winner, a2.result.you.dealt, a2.result.rival.dealt, a2.result.you.ended], ['me', 500, 400, 'win'], 'widok zwycięzcy');
 });
+
+test('Pojedynek: akcja duel zachowuje się jak state i nie połyka ogłoszeń odblokowań zwykłego runu', async () => {
+  const clock = { t: 30_000_000 }, env = duelEnv(clock);
+  const s = await dpost(env, DA, 'start', { mode: 'quick', char: 'pyrtek', garnek: 0 }); assert(s.j.ok, 'zwykły run');
+  const st = env.BG_PLAYERS.objs.get('ala').ctx.storage, run = await st.get('run'); run.stats.earned = 424; await st.put({ run });   // warunek odblokowania Zjaranego (420 Ziaren w runie)
+  const d = await dpost(env, DA, 'duel', { op: 'state' }); assert(d.j.ok && d.j.duel === null && !d.j.unlocks && !d.j.profile.chars.includes('zjarany'), 'odczyt stanu meczu niczego nie odblokowuje ani nie ogłasza');
+  const p = await dpost(env, DA, 'pick', { i: Math.max(0, s.j.run.offer.findIndex(id => id && id !== 'automat-z-pasza')), slot: 0, mut: 1 });
+  assert(p.j.ok && (p.j.unlocks || []).some(u => u.target === 'zjarany'), 'odblokowanie ogłasza następna zwykła akcja');
+});
