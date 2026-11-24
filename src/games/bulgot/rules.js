@@ -18,14 +18,14 @@ export const loadoutOf = run => ({
 });
 
 // ---------- Okólniki Zarządu ----------
-// Każda strefa runu ma inny okólnik, losowany z ziarna runu. Gracz widzi tylko okólnik bieżącej strefy.
+// Okólnik jest JEDEN na cały run: losowany z ziarna na starcie (klient pokazuje losowanie) i nie zmienia się do końca.
+// `decrees` zostaje tablicą (zapis runu, testy), ale liczy się tylko element [0].
 export function decreesOf(seed) {
-  const rr = makeRng(mix(seed, hash('decree'))), keys = Object.keys(DECREES), out = [];
-  while (out.length < 3) { const d = rr.pick(keys); if (!out.includes(d)) out.push(d); }
-  return out;
+  const rr = makeRng(mix(seed, hash('decree')));
+  return [rr.pick(Object.keys(DECREES))];
 }
-// run.decrees zapisuje się przy starcie runu (starsze runy liczą je z ziarna); null w strefie = brak okólnika.
-export const decreeOf = run => (run.decrees || (run.seed === undefined ? [] : decreesOf(run.seed)))[zoneOf(run.mode, run.round)] || null;
+// run.decrees zapisuje się przy starcie runu (starsze runy liczą je z ziarna); null = brak okólnika.
+export const decreeOf = run => (run.decrees || (run.seed === undefined ? [] : decreesOf(run.seed)))[0] || null;
 const decreeIs = (run, id) => decreeOf(run) === id;
 export const statsOf = run => heroStats(loadoutOf(run));
 
@@ -58,7 +58,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 20;
+export const RUN_V = 21;
 
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null, curses = [], kurnik = {} }) {
   const M = MODES[mode], ch = CHARS[char];
