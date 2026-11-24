@@ -2299,7 +2299,7 @@ test('Pozostałe kontry: Piec, Odtrutka, Apteczka, Kask, Wiertło, Nożyce, Cisz
 
 test('Postacie-wyzwania: 12 aktywnych, każda ma obietnicę i karę (efekty w statystykach i silniku)', () => {
   const ST = (c, lo = {}) => heroStats(loadout({ char: c, ...lo }));
-  const j = ST('gigachad'); eq(j.skillPow, 125, 'Jednonoga: skill ×2,25'); eq(R.maxSkillsOf({ char: 'gigachad', curses: [] }), 1, 'jeden slot');
+  const j = ST('gigachad'); eq(j.skillPow, 150, 'Jednonoga: skill ×2,5'); eq(R.maxSkillsOf({ char: 'gigachad', curses: [] }), 1, 'jeden slot');
   const fx = play(setup({ lo: { char: 'gigachad', skills: [sk('granat')] } }), [[15, 0]]); const hit = evs(fx.ev, 'hit').find(e => e.kind === 'granat');
   const base = play(setup({ lo: { char: 'pyrtek', skills: [sk('granat')] } }), [[15, 0]]);
   assert(hit && hit.d > evs(base.ev, 'hit').find(e => e.kind === 'granat').d * 1.8, 'granat Jednonogiego mocniej niż zwykły');

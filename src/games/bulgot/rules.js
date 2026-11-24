@@ -4,7 +4,7 @@
 import { mix, hash, makeRng } from './rng.js';
 import { SKILLS, TILES, RECIPES, BADGES, BADGE_OFFER, BADGE_POOL, AFFIXES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, FLOOR_TPL, garnekRamp, RARITY_WEIGHTS, TYPE_WEIGHTS, DECREES, FLAWS, NEMESIS_TITLES, NEMESIS_NAMES, garnekMods, formFor, BOSS_POOL, SUPER_BOSSES, EXTRA_AT, EXTRA_DOG, ROUTES, CURSES, CURSE_MAX, cursePct, COMPANIONS, COMPANION_OFFER, KURNIK, KURNIK_MAX } from './data.js';
 import { heroStats, setCounts, elemCounts } from './stats.js';
-import { COUNTERS, COUNTER_OF, COUNTER_K, ARCHETYPES } from './data.js';
+import { COUNTERS, COUNTER_OF, COUNTER_K, COUNTER_SLOT_K, ARCHETYPES } from './data.js';
 import { runFight } from './sim.js';
 
 const fl = Math.floor;
@@ -735,13 +735,15 @@ export function buildProfile(run) {
   return { main, score: best, all };
 }
 // Plan kontr dla bossa / elity / dodatkowego bossa. kind: 'boss' | 'extra' | 'elite'. Liczba i siła rosną z palnikiem (COUNTER_K).
-export function counterPlan(run, kind) {
+export function counterPlan(run, kind, def = null) {
   if (kind === 'elite' && run.round <= MODES[run.mode].early.rounds) return [];   // wczesne piętra zostają spokojne
   const prof = buildProfile(run), p = Math.min(5, run.garnek | 0);
-  const k = COUNTER_K[p] / 100 * (kind === 'elite' ? 0.4 : kind === 'extra' ? 0.3 : 1);
+  const slotK = def && def.slot ? (COUNTER_SLOT_K[def.slot] || 1) : 1;   // pierwszy boss (Brojler) najlżejszy: tam build jest jeszcze niedojrzały
+  const k = COUNTER_K[p] / 100 * slotK * (kind === 'elite' ? 0.4 : kind === 'extra' ? 0.3 : 1);
   const ids = [];
   if (prof.main) ids.push(COUNTER_OF[prof.main]);
-  if (kind === 'boss' && (p >= 3 || !ids.length)) ids.push('swiat');
+  const summoner = !!(def && (def.mech || []).includes('summon'));   // bossowie z własnymi pomocnikami nie dostają Świty
+  if (kind === 'boss' && !summoner && (p >= 3 || !ids.length)) ids.push('swiat');
   else if (!ids.length && kind === 'elite') ids.push('swiat');   // dodatkowi bossowie bez wyraźnego stylu gracza nie dostają kontry (są opcjonalni)
   const ats = kind === 'boss' ? [[50, 50, 50, 55, 60, 65][p], 30] : [50, 30];
   return ids.map((id, i) => {
@@ -802,7 +804,7 @@ export function buildSetup(run) {
     if (run.flags.bossHpBonus) be.hp = fl(be.hp * (100 + run.flags.bossHpBonus) / 100);
     if (gm.bossHp) be.hp = fl(be.hp * (100 + gm.bossHp) / 100);   // wyższe palniki: mocniejsi bossowie
     if (def.auditEvery) be.audit = def.auditEvery;
-    be.counters = counterPlan(run, 'boss');
+    be.counters = counterPlan(run, 'boss', def);
     enemies = [be];
     if (def.guards) {
       const g = ENEMIES['kot-ochroniarz'];

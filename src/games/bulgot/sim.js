@@ -681,7 +681,7 @@ export class Fight {
     let n = this.enemies.filter(x => x.minion && !x.dead).length;
     for (let i = 0; i < (c.n || 0) && n < 8 && m; i++, n++) {
       const pw = c.pw || 100, o = this.mk({ ...m, minion: true, name: c.add || m.name, idle: 15, hp: Math.max(1, fl(m.hp * pw / 100)), atk: Math.max(1, fl(m.atk * pw / 100)) });
-      this.enemies.unshift(o);
+      if (c.id === 'swiat') this.enemies.push(o); else this.enemies.unshift(o);   // Świta stoi za bossem (nie zasłania go), Strażacy przed nim
       this.enterFx(o); this.enterStatus(o);
       this.push({ k: 'summon', uid: o.uid });
     }

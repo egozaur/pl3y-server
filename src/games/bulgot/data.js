@@ -105,8 +105,8 @@ export const CHARS = {
   dinozaur: { id: 'dinozaur', retired: true, name: 'Dinozaur', style: 'Ukryty', text: 'Zaczyna z Jajkiem Dinozaura, które po 4 wygranych piętrach wykluwa się w Dinozaura (+30% Ataku i Życia). Do tego czasu nie ma żadnych kar.', base: BASE,
     fx: [], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-dino', secret: true, startTiles: ['jajko-dinozaura'] },
   // Memiczne kurczaki „na hardkorze”: każdy ma jedną wielką wadę, która rządzi całym runem. Wygrana nimi to wyczyn.
-  gigachad: { id: 'gigachad', name: 'Kurczak na Jednej Nodze', style: 'Jedna umiejętność', text: 'Stoi na jednej nodze i ma tylko 1 slot umiejętności, ale ta jedna uderza z mocą 225% i ładuje się szybciej. Jedna doskonała sztuczka zamiast zestawu. Cena: -10% szybkości ataku i -10% maks. Życia, a każdy kafelek umiejętności poza jedną jest martwy.', base: BASE,
-    fx: [{ k: 'skillPow', v: 125 }, { k: 'cdPct', v: 25 }, { k: 'atkPct', v: 25 }, { k: 'aspdPct', v: -10 }, { k: 'hpPct', v: -10 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-gigachad', skillSlots: 1 },
+  gigachad: { id: 'gigachad', name: 'Kurczak na Jednej Nodze', style: 'Jedna umiejętność', text: 'Stoi na jednej nodze i ma tylko 1 slot umiejętności, ale ta jedna uderza z mocą 250% i ładuje się szybciej. Jedna doskonała sztuczka zamiast zestawu. Cena: -10% szybkości ataku i -10% maks. Życia, a każdy kafelek umiejętności poza jedną jest martwy.', base: BASE,
+    fx: [{ k: 'skillPow', v: 150 }, { k: 'cdPct', v: 30 }, { k: 'atkPct', v: 35 }, { k: 'aspdPct', v: -10 }, { k: 'hpPct', v: -10 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-gigachad', skillSlots: 1 },
   jajeczko: { id: 'jajeczko', name: 'Pan Jajeczko', style: 'Szklana kula', text: 'Ma 3 punkty życia (!) i zapasowe gniazdo na start, ale 75% uniku, +150% Ataku i +30% szybkości ataku. Każdy unik daje +5% Ataku do końca walki (maks. +50%). Pierwszy trafiony cios to koniec.', base: BASE,
     fx: [{ k: 'hpPct', v: -95 }, { k: 'evade', v: 75 }, { k: 'atkPct', v: 150 }, { k: 'aspdPct', v: 30 }, { k: 'dodgeAtk', v: 5 }], startSkills: [], startTiles: ['gniazdo-zapasowe'], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-jajeczko' },
   krypto: { id: 'krypto', retired: true, name: 'Kurczak Kryptowalutowy', style: 'Rynek', text: 'Co piętro jego wszystkie statystyki zmieniają się losowo od -30% do +55% („rynek”). Raz jest księciem, raz bankrutem, a kurs poznasz dopiero w walce.', base: BASE,
@@ -663,7 +663,8 @@ export const COUNTERS = {
   swiat: { vs: null, name: 'Świta Zarządu', icon: '👥', heal: 8, dur: 0, n: 3, add: 'Praktykant', text: 'Zarząd wzywa świtę: do walki wchodzi kilku pomocników naraz.' },
 };
 export const COUNTER_OF = Object.fromEntries(Object.entries(COUNTERS).filter(([, c]) => c.vs).map(([id, c]) => [c.vs, id]));
-export const COUNTER_K = [45, 52, 60, 68, 78, 90];   // % bazowej siły i długości kontr wg palnika 0..5
+export const COUNTER_K = [45, 52, 58, 64, 70, 75];   // % bazowej siły i długości kontr wg palnika 0..5
+export const COUNTER_SLOT_K = { brojler: 0.5, skubarka: 0.8, prezes: 1 };   // mnożnik wg miejsca bossa: pierwszy najlżejszy, Prezes pełna siła   // % bazowej siły i długości kontr wg palnika 0..5
 
 // ---------- Szablony zwykłych pięter ----------
 // Losowane z ziarna runu (rules.js → floorTemplate). Nie dotyczą wczesnych pięter, bossów, elit, Nemezis ani ryzykownych drzwi.
