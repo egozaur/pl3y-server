@@ -150,8 +150,8 @@ export class BgRanks {
         if (!MODES[b.mode]) return json({ err: 'Nieznany tryb.' }, 400);
         const round = b.round | 0, all = await st.list({ prefix: 'g:' + b.mode + ':' });
         let c = [...all.values()].filter(g => g.n !== b.n);
-        const near = c.filter(g => g.curve.length >= Math.min(round, 4));   // Duch z krótkiego runu nie nadaje się na późne piętra
-        if (near.length) c = near;
+        const need = Math.max(3, Math.ceil(round * 0.7)), near = c.filter(g => g.curve.length >= need);   // Duch z krótkiego runu nie nadaje się na późne piętra: wymagamy ≥ 70% bieżącego piętra
+        if (round > 3) c = near;   // brak odpowiedniego ducha = null, a gra pokazuje Twoje Odbicie (bieżące statystyki gracza)
         if (!c.length) return json({ ghost: null });
         c.sort((a, d) => a.n < d.n ? -1 : 1);
         return json({ ghost: c[makeRng(b.salt >>> 0).int(c.length)] });

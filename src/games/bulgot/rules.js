@@ -58,7 +58,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 19;
+export const RUN_V = 20;
 
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null, curses = [], kurnik = {} }) {
   const M = MODES[mode], ch = CHARS[char];
@@ -108,7 +108,11 @@ function tileAvailable(run, t) {
   if (t.dino && run.tiles.includes('dinozaur')) return false;   // Jajko Dinozaura tylko raz na run: po wyklutym Dinozaurze nie wraca do ofert
   if (t.repeat) return true;
   if (RECIPES.some(r => r.of.includes(t.id) && run.tiles.includes(r.out))) return false;   // składnik już wyklutego przedmiotu
-  if (t.type === 'skill') { const s = run.skills.find(x => x.id === t.skill); return !s || s.lvl < RULES.maxSkillLvl; }
+  if (t.type === 'skill') {
+    const s = run.skills.find(x => x.id === t.skill);
+    if (!s && maxSkillsOf(run) === 1 && run.skills.length >= 1) return false;   // postać z 1 slotem nie dostaje cudzych umiejętności (byłyby martwe), tylko kopie własnej
+    return !s || s.lvl < RULES.maxSkillLvl;
+  }
   return !run.tiles.includes(t.id);
 }
 
@@ -134,6 +138,11 @@ export function makeOffer(run, salt, opt = {}) {
     const ti = rr.weighted(types.map(ty => TYPE_WEIGHTS[ty] * (ty === 'risk' ? ch.riskWeight : 1)));
     const pick = rr.pick(ofR.filter(t => t.type === types[ti]));
     out.push(pick.id); tc[pick.type] = (tc[pick.type] || 0) + 1;
+  }
+  // Postać z 1 slotem: kopia jej jedynej umiejętności (poziom 2, Mutacja) wpada w RULES.soloCopyPct% ofert w miejsce ostatniego kafelka niebędącego umiejętnością.
+  if (maxSkillsOf(run) === 1 && run.skills.length === 1 && run.skills[0].lvl < RULES.maxSkillLvl && rr.int(100) < RULES.soloCopyPct) {
+    const own = cands.find(t => t.type === 'skill' && t.skill === run.skills[0].id);
+    if (own && !out.includes(own.id)) { const at = out.map(id => TILE_BY_ID[id].type !== 'skill' ? 1 : 0).lastIndexOf(1); if (at >= 0) out[at] = own.id; }
   }
   // Pierwsza oferta (i jej rerolle) zawsze zawiera umiejętność, żeby od razu było co klikać w walce.
   if (run.round === 1 && (salt === 0 || (salt >= 100 && salt < 200)) && !out.some(id => TILE_BY_ID[id].type === 'skill')) {
@@ -663,6 +672,7 @@ const arenaOn = run => !!(run.arena && run.arena.round === run.round);
 function scale(mode, round) {
   const M = MODES[mode], g = M.grow; let h = 1, a = 1;
   for (let i = 1; i < round; i++) { h *= g.hp; a *= g.atk; }
+  if (round > M.rounds) { h *= RULES.endlessJump[0] / 100; a *= RULES.endlessJump[1] / 100; }   // skok na progu Dogrywki: pierwsze piętra po Prezesie nie mogą być łatwiejsze od ostatnich przed nim
   for (let i = M.rounds; i < round; i++) { h *= 1 + RULES.endlessHp / 100; a *= 1 + RULES.endlessAtk / 100; }   // Dogrywka: wrogowie rosną szybciej (procent składany na każde piętro ponad limit)
   return { h, a };
 }
@@ -877,7 +887,10 @@ export function fightFinish(run, inputs) {
   const entry = () => ({ r: run.round, zone: setup.zone, boss: setup.boss, elite: setup.elite, tpl: setup.tpl || null, enemies: setup.enemies.map(e => ({ n: e.name, hp: e.hp, atk: e.atk })),
     offer: c.offer, picked: c.picked, bought: c.bought, upgrades: c.upgrades || [], rerolls: c.rerolls, rested: c.rested || 0, event: c.event, bet: c.bet || null,
     hero: { maxHp: S.maxHp, atk: S.atk, aspd: S.aspd, armor: S.armor, crit: S.crit, evade: S.evade, regen: S.regen }, tiles: run.tiles.length, skills: run.skills.map(s => s.id + (s.lvl > 1 ? '*' : '')),
-    coinsBefore, coinsAfter: run.coins, hpBefore, hpAfter: res.hp, win: res.win, foeLeft: res.foeLeft, inputs: (Array.isArray(inputs) ? inputs : []).slice(0, 120).map(x => Array.isArray(x) ? [x[0] | 0, x[1] | 0] : [0, 0]), ticks: res.ticks, dealt: res.dealt, taken: res.taken, maxHit: res.maxHit, skillsUsed: res.skillsUsed, stolen: res.stolen, revived: res.usedRevive, timeout: res.timeout });
+    coinsBefore, coinsAfter: run.coins, hpBefore, hpAfter: res.hp, win: res.win, foeLeft: res.foeLeft, inputs: (Array.isArray(inputs) ? inputs : []).slice(0, 120).map(x => Array.isArray(x) ? [x[0] | 0, x[1] | 0] : [0, 0]), ticks: res.ticks, dealt: res.dealt, taken: res.taken, maxHit: res.maxHit, skillsUsed: res.skillsUsed, stolen: res.stolen, revived: res.usedRevive, timeout: res.timeout,
+    // Decyzje poza ofertą (do analizy partii): drzwi, trasa, adopcja, arena, kontrakt, kapliczka, lombard.
+    ...Object.fromEntries(['door', 'doorHeal', 'route', 'adopt', 'arena', 'contract', 'shrine', 'pawn', 'redeem'].filter(k => c[k] !== undefined).map(k => [k, c[k]])),
+    companion: run.companion ? run.companion.id + ':' + run.companion.lvl : null, endless: !!run.endless });
   setCoins(run, run.coins - Math.min(run.coins, res.stolen) + (res.coinsWon || 0));
   if (res.usedRevive) run.flags.revived = true;
   // Wadliwa Partia: wady kafelków wziętych przed tą walką ujawniają się i od teraz działają.
@@ -907,7 +920,7 @@ export function fightFinish(run, inputs) {
     else if (!setup.boss) { const k = setup.enemies.filter(e => !e.minion && !e.guard && ENEMIES[e.id]).sort((a, b) => b.atk - a.atk)[0]; if (k) run.killer = { enemy: k.id, nemesis: false, next: makeNemesis(run, k.id) }; }
     run.arena = null; run.extra = null;
     if (setup.extra && run.log.length) run.log[run.log.length - 1].extra = { id: setup.extra, won: false, ticks: res.ticks };   // dodatkowa runda nie dubluje wpisu piętra
-    else run.log.push(entry());
+    else run.log.push({ ...entry(), reward: 0, hpAfterHeal: res.hp });
     endRun(run, 'lose'); out.ended = run.ended; return out;
   }
 
@@ -927,7 +940,8 @@ export function fightFinish(run, inputs) {
   const rt = routeOf(run);
   const exId = !run.endless && !setup.arena && run.round < MODES[run.mode].rounds && EXTRA_AT[run.round] || null;   // po wygranej na piętrze 3 i 6: opcjonalna dodatkowa runda
   let extraHeal = 0;
-  let coins = (setup.boss ? RULES.coinsBoss + S.bossCoins + kLv(run, 'skarbiec') : RULES.coinsRound) + S.coinFlat - (gm.coinMinus || 0) - (hasCurse(run, 'podatek') ? 2 : 0) + ((rt && rt.coins) || 0) + (setup.arena ? RULES.arenaCoins : 0);
+  const late = (run.round - 1) / MODES[run.mode].rounds >= 0.6 ? RULES.coinsLate : 0;   // późna gra (od 60% runu i Dogrywka): wyższa podstawa, żeby Ziarna miały jeszcze sens
+  let coins = (setup.boss ? RULES.coinsBoss + S.bossCoins + kLv(run, 'skarbiec') : RULES.coinsRound) + late + S.coinFlat - (gm.coinMinus || 0) - (hasCurse(run, 'podatek') ? 2 : 0) + ((rt && rt.coins) || 0) + (setup.arena ? RULES.arenaCoins : 0);
   coins = fl(coins * (100 + S.coinPct + (setup.elite ? RULES.eliteCoinsPct : 0)) / 100);
   if (S.interest) coins += Math.min(5 + (S.interestPlus || 0), fl(run.coins * S.interest / 100));
   if (S.bigInterest) coins += Math.min(12, fl(run.coins * S.bigInterest / 100));   // Akcje Zarządu
@@ -936,6 +950,7 @@ export function fightFinish(run, inputs) {
   const interest = Math.min(CHARS[run.char].interestMax || RULES.interestMax, fl(run.coins / RULES.interestPer));
   coins += interest; out.interest = interest;
   if (setup.door && run.door.reward === 'coins') { coins += RULES.doorCoins; out.doorCoins = RULES.doorCoins; }   // stare runy (sprzed zmiany drzwi) mogą mieć nagrodę Ziarnami
+  const upkeep = coins < 0 ? -coins : 0;   // ujemny dochód (umowy, odsetki, Klątwa Podatku) zjada oszczędności zamiast przepadać
   coins = Math.max(0, coins);
   // Kafelki rosnące.
   const gw = (id, n, why) => { if (n > 0 && run.tiles.includes(id)) { const t = TILE_BY_ID[id]; const v = Math.min(t.grow.max, (run.grow[id] || 0) + n); if (v !== (run.grow[id] || 0)) { run.grow[id] = v; (out.grew = out.grew || []).push(id); } } };
@@ -961,6 +976,7 @@ export function fightFinish(run, inputs) {
   run.stats.maxBurn = Math.max(run.stats.maxBurn || 0, res.burnDealt || 0);
   run.stats.freezes = (run.stats.freezes || 0) + (res.freezes || 0);
   setCoins(run, run.coins + coins); out.reward = coins;
+  if (upkeep) { const pay = Math.min(run.coins, upkeep); setCoins(run, run.coins - pay); out.upkeep = pay; }
   if (!setup.door) {
     const heal = fl(S.maxHp * Math.max(0, gm.healPct + S.healBonus + ((rt && rt.heal) || 0) - (decreeIs(run, 'homeoffice') ? 10 : 0)) / 100);
     if (exId) extraHeal = heal;   // dodatkowa runda zaczyna się z życiem po walce; leczenie dopiero po niej (albo po odwrocie)
@@ -980,7 +996,7 @@ export function fightFinish(run, inputs) {
   }
   if (setup.arena) { run.stats.arenaWins = (run.stats.arenaWins || 0) + 1; run.arena = null; }
   if (run.endless) run.stats.endlessFloors = (run.stats.endlessFloors || 0) + 1;
-  run.log.push({ ...entry(), reward: coins, hpHealed: run.hp, coinsAfter: run.coins });
+  run.log.push({ ...entry(), reward: coins, hpAfterHeal: run.hp, coinsAfter: run.coins });
 
   if (run.round >= MODES[run.mode].rounds && !run.endless) {   // Prezes pokonany: wygrana jest już zaliczona, gracz wybiera: kończy albo gra dalej (Dogrywka)
     run.cleared = run.done; run.fight = null; run.offer = [];

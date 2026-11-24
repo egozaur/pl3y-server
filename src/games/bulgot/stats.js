@@ -44,7 +44,13 @@ export function heroStats(loadout, opt = {}) {
   if (ch.coinAtk) add('atkPct', Math.min(25, Math.floor((loadout.coins || 0) / 5)));   // Gęś Księgowa: Ziarna w kieszeni zamieniają się w moc
   const ids = loadout.tiles.filter((_, i) => i !== opt.off);
   const has = id => ids.includes(id);
-  for (const id of ids) { const t = TILE_BY_ID[id]; if (t && t.fx) for (const f of t.fx) add(f.k, f.v); }
+  // Kolejne kopie tego samego kafelka słabną (RULES.copyDecay: mnożnik % dla 1., 2., ... kopii; ostatni dotyczy wszystkich dalszych), tylko dodatnie efekty.
+  const seen = {};
+  for (const id of ids) {
+    const t = TILE_BY_ID[id]; if (!t || !t.fx) continue;
+    const n = seen[id] = (seen[id] || 0) + 1, dec = RULES.copyDecay, m = dec[Math.min(n, dec.length) - 1];
+    for (const f of t.fx) add(f.k, f.v > 0 && m < 100 ? Math.max(1, Math.floor(f.v * m / 100)) : f.v);
+  }
   for (const b of (loadout.badges || [])) { const d = BADGES[b]; if (d) for (const f of d.fx) add(f.k, f.v); }
   // Towarzysz (stałe premie poziomu), Kurnik (trwałe ulepszenia) i Klątwa „Kruche Kości”.
   const co = loadout.companion && COMPANIONS[loadout.companion.id];

@@ -246,7 +246,6 @@ export class Fight {
     if (t.poison > 0) { const nx = this.enemies.find(e => !e.dead && !e.immune); if (nx) this.applyStatus(nx, 'poison', Math.max(1, fl(t.poison * (STATUS.poison.spread + (this.S.spreadPct || 0)) / 100))); }
     if (this.tick < (t.feverUntil || 0)) for (const x of this.alive()) if (!x.immune) this.applyStatus(x, 'poison', REACTIONS.goraczka.spread);   // Gorączka przechodzi
     if (t.explode && this.hp > 0 && !this.over) { this.push({ k: 'boom', uid: t.uid }); this.enemyHit(t, t.explode); }
-    if (has(t, 'summon') || has(t, 'pet')) for (const m of this.enemies) if (m.minion && !m.dead) { m.dead = true; m.hp = 0; this.push({ k: 'kill', uid: m.uid }); }
   }
 
   // ---------- umiejętności ----------
@@ -845,7 +844,7 @@ export class Fight {
       }
     }
     this.phases();
-    if (!this.pending.length && !this.enemies.some(e => !e.dead && !e.minion)) { this.over = true; this.win = true; this.push({ k: 'victory' }); this.tick++; return; }
+    if (!this.pending.length && !this.enemies.some(e => !e.dead)) { this.over = true;   this.win = true; this.push({ k: 'victory' }); this.tick++; return; } // koniec dopiero, gdy padną wszyscy (także pomocnicy bossa)
     for (const e of this.enemies.slice()) { if (!e.dead && !this.over) this.enemyAct(e); }
     this.tick++;
     if (!this.over && this.tick >= MAX_TICKS) { this.over = true; this.win = false; this.timeout = true; this.push({ k: 'timeout' }); }
@@ -864,7 +863,7 @@ export class Fight {
     // Ile życia wrogów zostało (w %, bez pomagierów): do ciekawostek na ekranie porażki.
     const foes = this.enemies.filter(e => !e.minion), wait = this.pending.filter(e => !e.minion), tot = foes.reduce((a, e) => a + e.maxHp, 0) + wait.reduce((a, e) => a + e.hp, 0), left = foes.reduce((a, e) => a + (e.dead ? 0 : Math.max(0, e.hp)), 0) + wait.reduce((a, e) => a + e.hp, 0);
     return {
-      foeLeft: tot ? Math.ceil(left * 100 / tot) : 0, foes: foes.concat(wait).map(e => e.name).filter(Boolean),
+      foeLeft: tot ? Math.max(this.win ? 0 : 1, Math.ceil(left * 100 / tot)) : (this.win ? 0 : 1), foes: foes.concat(wait).map(e => e.name).filter(Boolean),
       win: this.win, ticks: this.tick, hp: Math.max(0, this.hp), maxHp: this.S.maxHp, timeout: this.timeout,
       usedRevive: this.revived, stolen: this.stolen, dealt: this.dealt, taken: this.taken, maxHit: this.maxHit,
       kills: this.kills, skillsUsed: this.used, critRolls: this.critRolls, critHits: this.critHits, critPct: this.S.crit, chains: this.chains, reactions: this.reacts, reactSeen: this.reactSeen, coinsWon: this.coinsWon, counters: this.counters, burnDealt: this.burnDealt, freezes: this.freezes, lowest: this.lowest, boss: this.win && boss ? boss.boss : null,

@@ -159,14 +159,14 @@ test('walka: Furia po 45 s rośnie, limit 90 s kończy remisem jako porażkę', 
 test('walka: pancerz, unik, krytyk i obrażenia bohatera liczą się wg wzoru', () => {
   // brak krytyków (0%), pancerz 100 = połowa obrażeń
   const lo = { tiles: ['ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy'] };
-  const base = D.CHARS.pyrtek.base; D.CHARS.pyrtek.base = { ...base, crit: 0 };
+  const base = D.CHARS.pyrtek.base, dec = D.RULES.copyDecay; D.CHARS.pyrtek.base = { ...base, crit: 0 }; D.RULES.copyDecay = [100];
   try {
     const a = play(setup({ lo, enemies: [foe({ hp: 200, atk: 1, armor: 100 })] }));
     const hit = evs(a.ev, 'hit').find(e => e.kind === 'atk');
     eq(hit.d, Math.floor(22 * 100 / 200), 'Atak 22 (+30% z dwóch progów Kolby Mocy) przy pancerzu 100 = połowa');
     const b = play(setup({ enemies: [foe({ hp: 40, atk: 1, evade: 100 })] }));
     assert(evs(b.ev, 'miss').length > 0 && evs(b.ev, 'hit').length === 0, 'wróg z 100% uniku nie dostaje ciosów');
-  } finally { D.CHARS.pyrtek.base = base; }
+  } finally { D.CHARS.pyrtek.base = base; D.RULES.copyDecay = dec; }
 });
 test('walka: umiejętności (Grad, Granat, Pianie, Dziobnięcie, Unik, Zagrzebanie) i cooldowny', () => {
   const none = { ...D.CHARS.pyrtek.base, crit: 0 }, keep = D.CHARS.pyrtek.base; D.CHARS.pyrtek.base = none;
@@ -416,11 +416,22 @@ test('Wylęgarnia: dwa składniki wykluwają legendarny przedmiot, który znika 
 });
 
 test('progi statystyk: co 3 kopie premia (Kolba Mocy, Koguci Hełm), dwa progi przy 6 kopiach', () => {
-  const S = tiles => heroStats(loadout({ tiles }));
+  const S = tiles => heroStats(loadout({ tiles })), dec = D.RULES.copyDecay; D.RULES.copyDecay = [100];   // progi liczymy bez malejących kopii (osobny test niżej)
   const a2 = S(['ziarno-mocy', 'ziarno-mocy']).atk, a3 = S(['ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy']).atk;
   eq([a2, a3], [12, 15], 'Kolba Mocy +15% Ataku');
   eq(S(Array(6).fill('ziarno-mocy')).atk, Math.round(8 * 274 / 100), 'dwa progi');
   const h = S(['twardy-grzebien', 'twardy-grzebien', 'twardy-grzebien']); eq([h.maxHp, h.armor], [Math.floor(118 * 110 / 100), 4], 'Koguci Hełm');
+  D.RULES.copyDecay = dec;
+});
+test('malejące kopie: 5. kopia tego samego kafelka daje 80% efektu, 7. i dalsze 50%, ujemne efekty bez zmian', () => {
+  const lo = n => heroStats(loadout({ tiles: Array(n).fill('ziarno-mocy') })), ex = D.RULES.copyDecay;
+  eq(ex, [100, 100, 100, 100, 80, 65, 50], 'tabela');
+  const d4 = lo(4).atk, d5 = lo(5).atk, d6 = lo(6).atk;
+  D.RULES.copyDecay = [100];
+  try { const f5 = lo(5).atk, f8 = lo(8).atk; assert(d5 < f5 && d5 > d4, 'piąta kopia dodaje mniej niż pełna, ale więcej niż zero'); assert(lo(8).atk === f8 && f8 > d6, 'bez malejących kopii więcej'); } finally { D.RULES.copyDecay = ex; }
+  assert(lo(7).atk - lo(6).atk < lo(4).atk - lo(3).atk, 'siódma kopia dodaje mniej niż czwarta');
+  const risk = heroStats(loadout({ tiles: ['umowa-etat', 'umowa-etat', 'umowa-etat', 'umowa-etat', 'umowa-etat', 'umowa-etat'] }));
+  eq(risk.coinFlat, -12, 'ujemne efekty się nie osłabiają');
 });
 
 test('nowi wrogowie: Kaczka podpala bohatera, Kurczak z Zamrażarki wstaje (chyba że płonie), Sęp Audytor czyści efekty', () => {
@@ -1413,7 +1424,7 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
 });
 
 test('RUN_V = 7: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 19, 'wersja reguł');
+  eq(R.RUN_V, 20, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1876,7 +1887,7 @@ test('Nowości: kompletność danych (klątwy, trasy, bossowie, osiągnięcia), 
   for (const id of D.SUPER_BOSSES) assert(D.BOSSES[id].super, 'super-boss ' + id);
   for (const [id, b] of Object.entries(D.KURNIK)) { assert(b.name && b.text && b.cost.length === 3 && b.cost[0] < b.cost[2], 'budynek ' + id); }
   for (const a of ['a-klatwa', 'a-klatwy3', 'a-dogrywka', 'a-dogrywka15', 'a-duch', 'a-towarzysz', 'a-trasy', 'a-kurnik', 'a-kurnik-max']) assert(D.ACH_BY_ID[a], 'osiągnięcie ' + a);
-  eq(R.RUN_V, 19, 'RUN_V 19');
+  eq(R.RUN_V, 20, 'RUN_V 20');
 });
 
 test('Jajko Dinozaura: tylko jedno na run (po wykluciu nie wraca do ofert)', () => {
@@ -2113,8 +2124,8 @@ test('etap 4: wzmocnienia: Pobudka, Echo, Przyspieszony Obieg', () => {
   const o0 = ob(0); assert(o0[1] < o0[0], 'Obieg skraca cooldown pozostałych'); const o1 = ob(1); assert(o1[1] < o0[1], 'Turbo Obieg skraca mocniej');
   const o2 = new Fight(setup({ hp: 400, lo: { skills: [{ id: 'obieg', lvl: 3, mut: 2 }] }, enemies: [foe({ hp: 1e7, atk: 1, aspd: 10 })] })); o2.hp = 50; o2.skills[0].cd = 0; o2.step([0]); assert(o2.hp > 50, 'Obieg Zamknięty leczy');
 });
-test('etap 4: RUN_V 19, nowe umiejętności trafiają do ofert', () => {
-  eq(R.RUN_V, 19, 'RUN_V');
+test('etap 4: RUN_V 20, nowe umiejętności trafiają do ofert', () => {
+  eq(R.RUN_V, 20, 'RUN_V');
   const seen = new Set();
   for (let seed = 1; seed < 300; seed++) { const r = R.newRun({ mode: 'full', char: 'pyrtek', garnek: 0, pool: ALL, seed }); const run = r.run; for (const o of (run.cur && run.cur.offer) || []) { const t = D.TILE_BY_ID[o.id || o]; if (t && t.skill && NEW20.includes(t.skill)) seen.add(t.skill); } }
   assert(seen.size >= 5, 'nowe umiejętności pojawiają się w ofertach (widziano ' + seen.size + ')');
@@ -2216,14 +2227,15 @@ test('dodatkowe rundy: przegrana kończy run, a w trybie szybkim i pełnym ofert
   for (const round of [2, 4, 5, 7]) { const r = toExtra(round, { mode: 'full' }); const o = R.fightFinish(r, []); assert(!o.extraOffer, 'brak oferty na piętrze ' + round); }
   const e = toExtra(3, { mode: 'full' }); e.endless = true; assert(!R.fightFinish(e, []).extraOffer, 'brak w Dogrywce');
 }));
-test('dodatkowe rundy: Pipsztal ogłusza bohatera (bez ataków i umiejętności), pies spowalnia, boss pada razem z psem', withExtras(() => {
+test('dodatkowe rundy: Pipsztal ogłusza bohatera (bez ataków i umiejętności), pies spowalnia, walka kończy się dopiero po śmierci psa', withExtras(() => {
   const run = toExtra(6); R.fightFinish(run, []); R.choose(run, 0);
   const su = R.buildSetup(run); su.hero.hp = 99999; su.hero.loadout = { ...su.hero.loadout, tiles: Array(60).fill('twardy-grzebien'), skills: [sk('granat')] };
   const f = new Fight(su); let stunned = 0, swings = 0, slowed = false; const win = [];
   while (!f.over && f.tick < 400) { f.step(f.tick % 5 === 0 ? [0] : []); for (const e of f.ev) { if (e.k === 'herostun') { win.push([e.t, e.t + e.dur]); stunned++; } if (e.k === 'swing' && win.some(([a, b]) => e.t > a && e.t < b)) swings++; if (e.k === 'skill' && win.some(([a, b]) => e.t > a && e.t < b)) swings++; } if (f.tick < f.slowUntil) slowed = true; }
   assert(stunned > 0 && swings === 0, 'w ogłuszeniu bohater nie atakuje: ogłuszeń ' + stunned + ', ciosów ' + swings + ', tick ' + f.tick); assert(slowed, 'pies spowalnia');
   assert(f.ev.length >= 0 && f.enemies[1].mech.includes('stunhero'), 'mechanika');
-  const f2 = new Fight(su); f2.enemies[1].hp = 1; f2.heroHit(f2.enemies[1], 100, false, 'atk'); assert(f2.enemies[1].dead && f2.enemies[0].dead, 'boss pada razem z psem');
+  const f2 = new Fight(su); f2.enemies[1].hp = 1; f2.heroHit(f2.enemies[1], 100, false, 'atk'); assert(f2.enemies[1].dead && !f2.enemies[0].dead, 'po śmierci bossa pies żyje'); f2.step([]); assert(!f2.over, 'walka trwa, dopóki pies żyje');
+  f2.enemies[0].hp = 1; f2.heroHit(f2.enemies[0], 100, false, 'atk'); f2.step([]); assert(f2.over && f2.win, 'po śmierci psa wygrana');
 }));
 
 test('audyt balansu (2026-11-23): Pyrtek +7%, Ostrogi i Kolczatka 1/s, Siewnik co drugą rundę, Zakazana Pasza 9%, Hazard 60%, Sklepik 60% ceny, Młocarnia +8% Ataku', () => {
@@ -2312,4 +2324,55 @@ test('Postacie-wyzwania: 12 aktywnych, każda ma obietnicę i karę (efekty w st
   const zw = new Fight(setup({ lo: { char: 'zwiazkowiec' }, enemies: [foe({ hp: 100, atk: 5 })] })); assert(zw.enemies[0].stunUntil >= 18, 'Strajk Włoski: wróg startuje ogłuszony');
   assert(ST('sanepid').sanepid === 25 && ST('sanepid').poisonHit === 25, 'Sanepid'); eq(ST('jajeczko').dodgeAtk, 5, 'Jajeczko: adrenalina'); eq(ST('rzeznik').bleedKillHeal, 5, 'Rzeźnik leczy z zabójstw');
   for (const id of D.CHAR_IDS) assert(R.newRun({ mode: 'quick', char: id, garnek: 0, pool: ALL, seed: 4 }).ok, 'start ' + id);
+});
+
+// ---------- aktualizacja 2026-11-24 (RUN_V 20) ----------
+test('pomocnicy bossa: wygrana dopiero, gdy padną wszyscy (boss nie zabija ich przy śmierci)', () => {
+  const boss = foe({ id: 'brojler', boss: 'brojler', name: 'Brojler', hp: 30, atk: 1, aspd: 40, ...bossFx('brojler') });
+  const pomoc = foe({ id: 'pisklak-stazysta', name: 'Pisklak', hp: 500, atk: 1, aspd: 40, minion: true });
+  const f = new Fight(setup({ hp: 100000, lo: { tiles: ['ziarno-mocy', 'ziarno-mocy', 'ziarno-mocy'] }, enemies: [boss, pomoc] }));
+  while (!f.over && !f.enemies.find(e => e.boss).dead && f.tick < 400) f.step([]);
+  assert(f.enemies.find(e => e.boss).dead, 'boss padł'); assert(f.enemies.some(e => e.minion && !e.dead) && !f.over, 'pomocnik żyje, walka trwa');
+  const t0 = f.tick; while (!f.over && f.tick < 1500) f.step([]);
+  assert(f.over && f.win && f.tick > t0 + 5, 'wygrana dopiero po zabiciu pomocnika (tick ' + t0 + ' → ' + f.tick + ')');
+});
+test('pomocnicy bossa: przegrana z samym pomocnikiem zgłasza choć 1% życia wroga', () => {
+  const boss = foe({ id: 'brojler', boss: 'brojler', name: 'Brojler', hp: 5, atk: 1, aspd: 40, ...bossFx('brojler') });
+  const pomoc = foe({ id: 'pisklak-stazysta', name: 'Pisklak', hp: 99999, atk: 3000, aspd: 10, minion: true });
+  const a = play(setup({ hp: 60, lo: { tiles: ['ziarno-mocy'] }, enemies: [pomoc, boss] }));
+  assert(!a.res.win && a.res.foeLeft >= 1, 'foeLeft ≥ 1 mimo martwego bossa: ' + a.res.foeLeft);
+});
+test('ujemny dochód (umowy) zjada oszczędności, a nie przepada; późna gra daje więcej Ziaren', () => {
+  const r = fresh({ mode: 'quick' }); r.round = 2; r.tiles = ['umowa-etat', 'umowa-etat', 'umowa-etat', 'umowa-etat']; r.coins = 20; r.hp = 99999;
+  const o = win(r); assert(o.ok && o.result.win, 'wygrana'); eq(o.reward, 0, 'wypłata zero'); assert(o.upkeep > 0, 'koszty umów: ' + o.upkeep); eq(r.coins, 20 - o.upkeep - 0 + 0, 'Ziarna pomniejszone o koszty');
+  const late = fresh({ mode: 'full' }); late.round = 15; late.tiles = [...Array(40).fill('ziarno-mocy'), ...Array(40).fill('twardy-grzebien')]; late.skills = [{ id: 'granat', lvl: 2 }]; late.hp = R.statsOf(late).maxHp; const c0 = late.coins; const ol = win(late);
+  eq(ol.reward, D.RULES.coinsRound + D.RULES.coinsLate, 'od 60% runu dochód +' + D.RULES.coinsLate); assert(late.coins >= c0 + ol.reward, 'Ziarna wpłynęły');
+  const early = fresh({ mode: 'full' }); early.round = 3; early.hp = 99999; eq(win(early).reward, D.RULES.coinsRound, 'wcześnie bez dodatku');
+});
+test('postać z 1 slotem: oferty bez cudzych umiejętności, kopie własnej wpadają częściej', () => {
+  const r = fresh({ char: 'gigachad', mode: 'full' }); r.skills = [{ id: 'grad', lvl: 1 }]; r.round = 5;
+  let foreign = 0, own = 0; const gradTile = D.TILES.find(t => t.type === 'skill' && t.skill === 'grad').id;
+  for (let s = 0; s < 80; s++) { r.round = 3 + (s % 10); const o = R.makeOffer(r, 100 + s); for (const id of o) { const t = D.TILE_BY_ID[id]; if (t.type === 'skill') { if (t.skill === 'grad') own++; else foreign++; } } }
+  eq(foreign, 0, 'żadnych cudzych umiejętności'); assert(own >= 80 * D.RULES.soloCopyPct / 100 * 0.5, 'kopie własnej umiejętności w ofertach: ' + own);
+  assert(D.TILE_BY_ID[gradTile], 'kafelek Gradu istnieje');
+  const w = fresh({ char: 'pyrtek' }); w.skills = [{ id: 'grad', lvl: 1 }, { id: 'granat', lvl: 1 }, { id: 'pianie', lvl: 1 }]; let other = 0;
+  for (let s = 0; s < 40; s++) for (const id of R.makeOffer(w, 100 + s)) { const t = D.TILE_BY_ID[id]; if (t.type === 'skill' && !w.skills.some(x => x.id === t.skill)) other++; }
+  assert(other > 0, 'postać z 3 slotami nadal widzi nowe umiejętności');
+});
+test('Arena Duchów: duch z krótkiego runu nie trafia na późne piętra (wtedy Odbicie)', async () => {
+  const env = mkEnv(), R_ = env.BG_RANKS.get('ranks'), rq = (p, b) => R_.fetch(new Request('https://bg/' + p, { method: 'POST', body: JSON.stringify(b) })).then(r => r.json());
+  const g = { char: 'pyrtek', mode: 'full', garnek: 0, floors: 4, win: false, score: 1000, curve: [[17, 39, 100, 0, 5, 0], [17, 39, 100, 0, 5, 0], [17, 39, 100, 0, 5, 0], [17, 39, 100, 0, 5, 0]], tiles: [] };
+  await rq('ghost-put', { n: 'bob', nick: 'Bob', avatar: 1, ghost: g, at: 5 });
+  assert((await rq('ghost-pick', { n: 'ala', mode: 'full', round: 4, salt: 1 })).ghost, 'na piętro 4 duch z 4 pięter pasuje');
+  assert((await rq('ghost-pick', { n: 'ala', mode: 'full', round: 26, salt: 1 })).ghost === null, 'na piętro 26 duch z 4 pięter odpada');
+  const g2 = { ...g, curve: Array(20).fill([100, 30, 100, 0, 5, 0]) }; await rq('ghost-put', { n: 'cyc', nick: 'Cyc', avatar: 1, ghost: g2, at: 6 });
+  assert((await rq('ghost-pick', { n: 'ala', mode: 'full', round: 26, salt: 1 })).ghost.n === 'cyc', 'na piętro 26 pasuje duch z 20 pięter');
+});
+test('Dogrywka: skok trudności na progu i dziennik rund z decyzjami (drzwi, trasa) oraz hpAfterHeal', () => {
+  const s20 = R.buildSetup(Object.assign(fresh({ mode: 'quick' }), { round: 10, endless: true })), s11 = R.buildSetup(Object.assign(fresh({ mode: 'quick' }), { round: 11, endless: true }));
+  assert(s11.enemies[0].hp > s20.enemies[0].hp * 1.2 || s11.enemies.length !== s20.enemies.length, 'pierwsze piętro Dogrywki wyraźnie trudniejsze');
+  const r = fresh({ mode: 'quick' }); r.hp = 99999; r.cur = { offer: [], picked: 'x', rerolls: 0, bought: [], event: null, door: 0, route: 'chlodnia' }; r.phase = 'fight'; r.fight = {}; R.fightFinish(r, []);
+  const e = r.log[0]; eq([e.door, e.route], [0, 'chlodnia'], 'decyzje w dzienniku'); assert('hpAfterHeal' in e && !('hpHealed' in e), 'hpAfterHeal zamiast hpHealed');
+  const l = fresh({ mode: 'quick' }); l.hp = 1; l.round = 3; l.phase = 'fight'; l.fight = {}; R.fightFinish(l, []);
+  assert(l.log.length && l.log[l.log.length - 1].reward === 0 && l.log[l.log.length - 1].hpAfterHeal !== undefined, 'porażka też ma reward i hpAfterHeal');
 });

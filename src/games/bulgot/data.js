@@ -29,7 +29,7 @@ export const ZONES = [
 export const RULES = {
   shopPct: 60, betPct: 60,   // Sklepik Babci Kwoki sprzedaje za 60% ceny, a rzut w Hazardzie wygrywa się w 60% (audyt: wydarzenia, które graczom nie opłacały się wcale)
   extraCoins: 8, extraLoot: true,   // nagroda za dodatkową rundę (Gruszka, Pipsztal): Ziarna i wybór legendarnej statystyki
-  coinsRound: 4, coinsBoss: 6, prices: [6, 12, 20, 30], restCost: 4, restPct: 20, healPct: 35, rerollBase: 2, offerSize: 4, bonusSize: 3,
+  coinsRound: 4, coinsBoss: 6, coinsLate: 2, prices: [6, 12, 20, 30], restCost: 4, restPct: 20, healPct: 35, rerollBase: 2, offerSize: 4, bonusSize: 3,
   eliteCoinsPct: 50, scoreRound: 1000, scoreCoin: 50, scoreTimeMax: 2000, garnekScore: 25, maxSkills: 3, maxSkillLvl: 3,
   // Odsetki w Spiżarni: +1 Ziarno za każde `interestPer` niewydanych Ziaren po wygranej walce, najwyżej `interestMax` (Kaczor: CHARS.kaczor.interestMax).
   interestPer: 10, interestMax: 3,
@@ -50,7 +50,9 @@ export const RULES = {
   // Arena Duchów: Duch ma tyle % statystyk gracza z tego samego piętra jego runu; nagroda: Ziarna i wybór rzadkiego kafelka.
   ghostPct: 95, ghostAtk: 120, arenaCoins: 6,
   // Dogrywka: po Prezesie wrogowie rosną dodatkowo o tyle % Życia i Ataku na każde piętro ponad limit trybu; super-boss co 5 pięter.
-  endlessHp: 8, endlessAtk: 6, superEvery: 5,
+  endlessHp: 8, endlessAtk: 6, endlessJump: [145, 115], superEvery: 5,
+  soloCopyPct: 22,   // postać z 1 slotem: szansa, że oferta zawiera kopię jej umiejętności
+  copyDecay: [100, 100, 100, 100, 80, 65, 50],   // kolejne kopie tego samego kafelka: 5. daje 80% efektu, 6. 65%, 7. i dalsze 50%
   // Kurnik: Pióra za run = ukończone piętra + premia za wygraną (+ palnik) + 2 za każde piętro Dogrywki.
   featherWin: 8, featherGarnek: 2, featherEndless: 2,
   // Hordy i Armie (szablony pięter z wieloma wrogami): górny limit wrogów w jednej walce = foeCap + foePerPet za każdego towarzysza gracza.
@@ -105,8 +107,8 @@ export const CHARS = {
   dinozaur: { id: 'dinozaur', retired: true, name: 'Dinozaur', style: 'Ukryty', text: 'Zaczyna z Jajkiem Dinozaura, które po 4 wygranych piętrach wykluwa się w Dinozaura (+30% Ataku i Życia). Do tego czasu nie ma żadnych kar.', base: BASE,
     fx: [], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-dino', secret: true, startTiles: ['jajko-dinozaura'] },
   // Memiczne kurczaki „na hardkorze”: każdy ma jedną wielką wadę, która rządzi całym runem. Wygrana nimi to wyczyn.
-  gigachad: { id: 'gigachad', name: 'Kurczak na Jednej Nodze', style: 'Jedna umiejętność', text: 'Stoi na jednej nodze i ma tylko 1 slot umiejętności, ale ta jedna uderza z mocą 250% i ładuje się szybciej. Jedna doskonała sztuczka zamiast zestawu. Cena: -10% szybkości ataku i -10% maks. Życia, a każdy kafelek umiejętności poza jedną jest martwy.', base: BASE,
-    fx: [{ k: 'skillPow', v: 150 }, { k: 'cdPct', v: 30 }, { k: 'atkPct', v: 35 }, { k: 'aspdPct', v: -10 }, { k: 'hpPct', v: -10 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-gigachad', skillSlots: 1 },
+  gigachad: { id: 'gigachad', name: 'Kurczak Monocykl', style: 'Jedna umiejętność', text: 'Jedzie na monocyklu i ma tylko 1 slot umiejętności, ale ta jedna uderza z mocą 250% i ładuje się szybciej. Jedna doskonała sztuczka zamiast zestawu. Cena: -10% szybkości ataku i -10% maks. Życia, a każdy kafelek umiejętności poza jedną jest martwy.', base: BASE,
+    fx: [{ k: 'skillPow', v: 150 }, { k: 'cdPct', v: 30 }, { k: 'atkPct', v: 15 }, { k: 'aspdPct', v: -10 }, { k: 'hpPct', v: -10 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-gigachad', skillSlots: 1 },
   jajeczko: { id: 'jajeczko', name: 'Pan Jajeczko', style: 'Szklana kula', text: 'Ma 3 punkty życia (!) i zapasowe gniazdo na start, ale 75% uniku, +150% Ataku i +30% szybkości ataku. Każdy unik daje +5% Ataku do końca walki (maks. +50%). Pierwszy trafiony cios to koniec.', base: BASE,
     fx: [{ k: 'hpPct', v: -95 }, { k: 'evade', v: 75 }, { k: 'atkPct', v: 150 }, { k: 'aspdPct', v: 30 }, { k: 'dodgeAtk', v: 5 }], startSkills: [], startTiles: ['gniazdo-zapasowe'], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-jajeczko' },
   krypto: { id: 'krypto', retired: true, name: 'Kurczak Kryptowalutowy', style: 'Rynek', text: 'Co piętro jego wszystkie statystyki zmieniają się losowo od -30% do +55% („rynek”). Raz jest księciem, raz bankrutem, a kurs poznasz dopiero w walce.', base: BASE,

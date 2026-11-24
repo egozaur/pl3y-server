@@ -194,7 +194,7 @@ export class BgPlayer {
     const o = this.out(profile, run);
     const body = { ok: true, ...o, ...extra };
     if (r.setup) body.setup = r.setup;
-    for (const k of ['reward', 'healed', 'result', 'reward', 'boss', 'bonus', 'event', 'crate', 'bought', 'price', 'bet', 'won', 'tile', 'cost', 'left', 'badge', 'automat', 'chose', 'interest', 'doorCoins', 'grew', 'revealed', 'nemesis', 'pawned', 'redeemed', 'upgraded', 'loot', 'looted', 'dino', 'will', 'door', 'victory', 'compUp', 'arena', 'extra', 'extraOffer', 'bossVar', 'route', 'companion']) if (r[k] !== undefined) body[k] = r[k];
+    for (const k of ['reward', 'healed', 'result', 'reward', 'boss', 'bonus', 'event', 'crate', 'bought', 'price', 'bet', 'won', 'tile', 'cost', 'left', 'badge', 'automat', 'chose', 'interest', 'doorCoins', 'grew', 'revealed', 'nemesis', 'pawned', 'redeemed', 'upgraded', 'loot', 'looted', 'dino', 'will', 'door', 'victory', 'compUp', 'arena', 'extra', 'extraOffer', 'bossVar', 'route', 'companion', 'upkeep']) if (r[k] !== undefined) body[k] = r[k];
     return json(body);
   }
 
@@ -204,7 +204,10 @@ export class BgPlayer {
       const hist = (await st.get('history')) || [];
       hist.push({ id: run.id, nick: pl.nick, started: run.started, ended: this.now(), mode: run.mode, char: run.char, garnek: run.garnek, outcome: run.ended, abandoned,
         v: run.v, floorsDone: run.done, endedOnRound: run.round, score: run.score, timeBonus: run.timeBonus, coinsLeft: run.coins, buys: run.stats.buys || 0, rerolls: run.stats.rerolls,
-        tiles: run.tiles, skills: run.skills, finalStats: statsOf(run), log: run.log });
+        tiles: run.tiles, skills: run.skills, finalStats: statsOf(run), log: run.log,
+        // Pełny kontekst runu do analizy: Klątwy, Kurnik, trasy, towarzysz, Nemezis, Okólniki, wady, Odznaki, kafelki rosnące, statystyki runu.
+        curses: run.curses || [], kurnik: run.kurnik || {}, routes: run.routes || [], companion: run.companion || null, nemesis: run.nemesis || null, killer: run.killer || null,
+        decrees: run.decrees || [], flawed: run.flawed || [], badges: run.badges || [], grow: run.grow || {}, endless: !!run.endless, cleared: run.cleared === undefined ? null : run.cleared, runStats: run.stats || {} });
       while (hist.length > 30) hist.shift();
       await st.put('history', hist);
       // Automatyczna kopia do kolekcji analiz (bez klikania „Wyślij do analizy”); porzucone runy bez żadnego piętra pomijamy. Błąd nie psuje gry.
