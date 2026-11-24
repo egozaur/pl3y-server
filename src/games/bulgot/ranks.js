@@ -10,8 +10,11 @@
 // Dyżur dnia: POST /daily-submit { date, entry: { n, nick, avatar, score, rounds, win, at, ttl } } → { rank } (jedno podejście na gracza i dzień, klucz „dy:<data>”), GET /daily-list?date=YYYY-MM-DD → { date, total, list }.
 // Arena Duchów: POST /ghost-put { n, nick, avatar, ghost, at } (jeden duch na gracza i tryb, klucz „g:<tryb>:<n>”), /ghost-pick { n, mode, round, salt } → { ghost },
 // /ghost-result { n, mode, ghostWon }, /ghost-get { n } → { ghosts: { quick, full } } (licznik zwycięstw i porażek ducha).
+// Pojedynek dla 2 osób (tylko od BgPlayer, bez publicznej trasy): POST /duel-op { op: create|join|vote|state|leave|start|report, pl: { n, nick, avatar }, ... } → { duel } albo { err, code };
+//  stan meczu w kluczach „du:<kod>” i „dp:<gracz>” (patrz duel.js: konfiguracja z głosowania, zwycięzca, terminy).
 import { MODES, CHARS } from './data.js';
 import { makeRng } from './rng.js';
+import { DUEL, duelCode, validCode, cleanVote, resolveCfg, duelSeed, duelWinner, cmpProg } from './duel.js';
 
 const KEEP = 100, SHOW = 100, AN_KEEP = 1000, GHOST_KEEP = 300;
 const betterDeep = (a, c) => (c.deep | 0) - (a.deep | 0) || c.score - a.score || a.at - c.at;
@@ -20,7 +23,105 @@ const better = (a, c) => c.score - a.score || a.at - c.at;
 const pub = ({ n, ...x }) => x;
 
 export class BgRanks {
-  constructor(ctx, env) { this.ctx = ctx; this.env = env; }
+  constructor(ctx, env, now = () => Date.now()) { this.ctx = ctx; this.env = env; this.now = now; }
+
+  // ---------- Pojedynek ----------
+  // Przejścia stanu zależne od czasu i raportów. Zwraca true, gdy rekord się zmienił (do zapisu).
+  duelAdvance(rec, now) {
+    let ch = false;
+    if (rec.state === 'lobby' && now - rec.created > DUEL.lobbyMs) { rec.state = 'done'; rec.result = { expired: true }; ch = true; }
+    if (rec.state === 'vote' && (rec.players.every(p => p.vote) || now > rec.voteDl)) { rec.cfg = resolveCfg(rec); rec.state = 'play'; rec.startAt = now + DUEL.countdownMs; ch = true; }
+    if (rec.state === 'play') {
+      for (const p of rec.players) if (!rec.prog[p.n] && now > rec.startAt + DUEL.noShowMs) { rec.prog[p.n] = { done: 0, dealt: 0, over: true, ended: 'noshow', round: 1, hp: 0 }; ch = true; }
+      const w = duelWinner(rec.prog[rec.players[0].n], rec.prog[rec.players[1].n]);
+      if (w) {
+        const [a, b] = rec.players, pa = rec.prog[a.n], pb = rec.prog[b.n], c = cmpProg(pa, pb);
+        rec.state = 'done'; ch = true;
+        rec.result = { winner: w === 'draw' ? null : w === 'a' ? a.n : b.n, draw: w === 'draw', reason: pa.done === pb.done ? 'dealt' : 'floors', at: now,
+          stats: { [a.n]: { nick: a.nick, done: pa.done, dealt: pa.dealt, ended: pa.ended }, [b.n]: { nick: b.nick, done: pb.done, dealt: pb.dealt, ended: pb.ended } } };
+      }
+    }
+    return ch;
+  }
+  // Widok meczu dla jednego gracza: bez soli ziarna, bez cudzego głosu przed końcem głosowania.
+  duelView(rec, n, now) {
+    const me = rec.players.find(p => p.n === n), rv = rec.players.find(p => p.n !== n), open = rec.state === 'play' || rec.state === 'done';
+    const rp = rv && rec.prog[rv.n], r = rec.result;
+    return { code: rec.code, state: rec.state, now, voteDl: rec.voteDl || 0, startAt: rec.startAt || 0, cfg: rec.cfg || null, rounds: DUEL.rounds,
+      me: { nick: me.nick, vote: me.vote, started: !!rec.prog[n] },
+      rival: rv ? { nick: rv.nick, avatar: rv.avatar | 0, voted: !!rv.vote, vote: open ? rv.vote : null, prog: rp ? { round: rp.round | 0, done: rp.done | 0, over: !!rp.over, ended: rp.ended || null, hp: rp.hp | 0, dealt: rec.state === 'done' ? rp.dealt | 0 : null } : null } : null,
+      result: r ? (r.stats ? { draw: !!r.draw, winner: r.draw ? null : r.winner === n ? 'me' : 'rival', reason: r.reason, you: r.stats[n], rival: rv ? r.stats[rv.n] : null } : { expired: !!r.expired, left: !!r.left }) : null };
+  }
+  async duel(b) {
+    const st = this.ctx.storage, now = this.now(), err = (e, code, extra) => ({ err: e, code, ...(extra || {}) });
+    if (!b || !b.pl || typeof b.pl.n !== 'string') return err('Nieprawidłowe dane.', 'data');
+    const pl = { n: b.pl.n, nick: String(b.pl.nick || '').slice(0, 16), avatar: b.pl.avatar | 0, vote: null };
+    const load = async code => (await st.get('du:' + code)) || null;
+    const mine = async () => { const code = await st.get('dp:' + pl.n); return code ? load(code) : null; };
+    const save = async rec => { await st.put('du:' + rec.code, rec); };
+    const give = async rec => { if (this.duelAdvance(rec, now)) await save(rec); return { duel: this.duelView(rec, pl.n, now) }; };
+    const op = String(b.op || '');
+    if (op === 'state') { const rec = await mine(); return rec ? give(rec) : { duel: null }; }
+    if (op === 'create' || op === 'join') {
+      const cur = await mine(); if (cur) this.duelAdvance(cur, now);
+      if (cur && cur.state !== 'done' && !(op === 'join' && cur.code === b.code)) {
+        if (op === 'create') return give(cur);
+        return err('Masz już trwający pojedynek.', 'active', { duel: this.duelView(cur, pl.n, now) });
+      }
+      if (op === 'create') {
+        for (const [k, v] of await st.list({ prefix: 'du:' })) if (now - v.created > DUEL.keepMs) await st.delete(k);   // stare rekordy znikają (wskaźnik dp: bez rekordu jest nieszkodliwy)
+        let code = '';
+        for (let t = 0; t < 30; t++) { code = duelCode(crypto.getRandomValues(new Uint8Array(5))); if (!(await load(code))) break; code = ''; }
+        if (!code) return err('Nie udało się utworzyć pojedynku. Spróbuj jeszcze raz.', 'code');
+        const rec = { code, created: now, salt: crypto.getRandomValues(new Uint32Array(1))[0], state: 'lobby', players: [pl], voteDl: 0, startAt: 0, cfg: null, prog: {}, result: null };
+        await save(rec); await st.put('dp:' + pl.n, code);
+        return { duel: this.duelView(rec, pl.n, now), created: true };
+      }
+      const code = String(b.code || '').trim().toUpperCase();
+      if (!validCode(code)) return err('To nie wygląda na kod pojedynku.', 'nocode');
+      const rec = await load(code); if (!rec) return err('Nie ma takiego pojedynku.', 'nocode');
+      this.duelAdvance(rec, now);
+      if (rec.players.some(p => p.n === pl.n)) { await st.put('dp:' + pl.n, code); return give(rec); }
+      if (rec.state !== 'lobby' || rec.players.length >= 2) return err('Ten pojedynek jest już zajęty albo się skończył.', 'full');
+      rec.players.push(pl); rec.state = 'vote'; rec.voteDl = now + DUEL.voteMs;
+      await save(rec); await st.put('dp:' + pl.n, code);
+      return { duel: this.duelView(rec, pl.n, now) };
+    }
+    const rec = await mine();
+    if (!rec) return err('Nie masz pojedynku.', 'none');
+    this.duelAdvance(rec, now);
+    const me = rec.players.find(p => p.n === pl.n);
+    me.nick = pl.nick; me.avatar = pl.avatar;
+    if (op === 'leave') {
+      if (rec.state === 'lobby' || rec.state === 'vote') { rec.state = 'done'; rec.result = { left: true }; await save(rec); }
+      await st.delete('dp:' + pl.n);
+      return { duel: null };
+    }
+    if (op === 'vote') {
+      if (rec.state !== 'vote') return err('Teraz nie głosujesz.', 'phase', { duel: this.duelView(rec, pl.n, now) });
+      const v = cleanVote(b.vote); if (!v) return err('Nieprawidłowy wybór.', 'vote');
+      me.vote = v; this.duelAdvance(rec, now); await save(rec);
+      return { duel: this.duelView(rec, pl.n, now) };
+    }
+    if (op === 'start') {
+      if (rec.state !== 'play' || now < rec.startAt) return err('Pojedynek jeszcze się nie zaczął.', 'early', { duel: this.duelView(rec, pl.n, now) });
+      if (rec.prog[pl.n]) return err('Już wziąłeś udział w tym pojedynku.', 'started', { duel: this.duelView(rec, pl.n, now) });
+      rec.prog[pl.n] = { done: 0, dealt: 0, over: false, ended: null, round: 1, hp: 100 }; await save(rec);
+      return { ok: true, seed: duelSeed(rec), cfg: rec.cfg, code: rec.code };
+    }
+    if (op === 'report') {
+      const p = rec.prog[pl.n], x = b.prog || {};
+      if (!p || rec.state === 'done') return { duel: this.duelView(rec, pl.n, now) };
+      if (!p.over) {   // wyniki tylko rosną; po zakończeniu runu już się nie zmieniają
+        p.done = Math.max(p.done | 0, Math.min(DUEL.rounds, x.done | 0)); p.dealt = Math.max(p.dealt | 0, Math.min(1e9, x.dealt | 0));
+        p.round = Math.max(1, Math.min(DUEL.rounds, x.round | 0)); p.hp = Math.max(0, Math.min(100, x.hp | 0));
+        if (x.over) { p.over = true; p.ended = x.ended === 'win' ? 'win' : 'lose'; }
+      }
+      this.duelAdvance(rec, now); await save(rec);
+      return { duel: this.duelView(rec, pl.n, now) };
+    }
+    return err('Nieznana operacja.', 'op');
+  }
 
   // Jednorazowa migracja: dotychczasowe wpisy ogólne (z postacią i Garnkiem) zasilają listy kombinacji.
   async migrate() {
@@ -168,6 +269,10 @@ export class BgRanks {
         return json({ ghosts: out });
       }
       return json({ err: 'Nie znaleziono.' }, 404);
+    }
+    if (url.pathname === '/duel-op' && req.method === 'POST') {
+      let b; try { b = await req.json(); } catch { return json({ err: 'Nieprawidłowe dane.', code: 'data' }); }
+      return json(await this.duel(b));
     }
     if (url.pathname === '/analysis-put' && req.method === 'POST') {
       let b; try { b = await req.json(); } catch { return json({ err: 'Nieprawidłowe dane.' }, 400); }

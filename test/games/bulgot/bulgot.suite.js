@@ -5,6 +5,7 @@ import * as D from '../../../src/games/bulgot/data.js';
 import { heroStats, activeLinks, elemCounts, setCounts } from '../../../src/games/bulgot/stats.js';
 import { Fight, runFight, MAX_TICKS, FURY_FROM } from '../../../src/games/bulgot/sim.js';
 import * as R from '../../../src/games/bulgot/rules.js';
+import * as DU from '../../../src/games/bulgot/duel.js';
 import { BgPlayer } from '../../../src/games/bulgot/player.js';
 import { BgRanks } from '../../../src/games/bulgot/ranks.js';
 import { newProfile, evaluate, onRunEnd, poolFor, onBossKill } from '../../../src/games/bulgot/profile.js';
@@ -2375,4 +2376,123 @@ test('Dogrywka: skok trudności na progu i dziennik rund z decyzjami (drzwi, tra
   const e = r.log[0]; eq([e.door, e.route], [0, 'chlodnia'], 'decyzje w dzienniku'); assert('hpAfterHeal' in e && !('hpHealed' in e), 'hpAfterHeal zamiast hpHealed');
   const l = fresh({ mode: 'quick' }); l.hp = 1; l.round = 3; l.phase = 'fight'; l.fight = {}; R.fightFinish(l, []);
   assert(l.log.length && l.log[l.log.length - 1].reward === 0 && l.log[l.log.length - 1].hpAfterHeal !== undefined, 'porażka też ma reward i hpAfterHeal');
+});
+
+// ---------- Pojedynek dla 2 osób ----------
+const DA = { n: 'ala', nick: 'Ala', avatar: 2 }, DB = { n: 'bob', nick: 'Bob', avatar: 3 };
+function duelEnv(clock, alarms = {}) {   // ranking i gracze z wstrzykniętym zegarem; budziki Durable Object zbieramy do alarms[id]
+  const env = mkEnv();
+  env.BG_RANKS = mkNs(() => new BgRanks({ storage: mkStorage() }, env, () => clock.t));
+  let k = 0;
+  env.BG_PLAYERS = mkNs(() => { const s = mkStorage(), id = 'p' + k++; s.setAlarm = async t => { alarms[id] = t; }; return new BgPlayer({ storage: s }, env, () => clock.t); });
+  return env;
+}
+const dpost = (env, pl, path, body = {}) => post(env.BG_PLAYERS.get(pl.n), path, { pl, ...body });
+async function duelStart(env, clock, vA, vB) {
+  const c = await dpost(env, DA, 'duel', { op: 'create' }), code = c.j.duel.code;
+  await dpost(env, DB, 'duel', { op: 'join', code });
+  await dpost(env, DA, 'duel', { op: 'vote', vote: vA }); await dpost(env, DB, 'duel', { op: 'vote', vote: vB });
+  clock.t += DU.DUEL.countdownMs + 100;
+  return { code, sA: await dpost(env, DA, 'start', { duel: true }), sB: await dpost(env, DB, 'start', { duel: true }) };
+}
+
+test('Pojedynek: zwycięzca (piętra, potem obrażenia), konfiguracja z głosów, kody i głosy', () => {
+  const P = (done, dealt, over = true) => ({ done, dealt, over });
+  eq(DU.duelWinner(P(10, 500), P(10, 400)), 'a', 'obaj ukończyli: więcej obrażeń'); eq(DU.duelWinner(P(10, 300), P(10, 400)), 'b', 'obaj ukończyli: więcej obrażeń (b)');
+  eq(DU.duelWinner(P(10, 400), P(10, 400)), 'draw', 'remis'); eq(DU.duelWinner(P(4, 100), P(7, 50)), 'b', 'dalej zaszedł');
+  eq(DU.duelWinner(P(4, 100), P(4, 90)), 'a', 'te same piętra: obrażenia'); eq(DU.duelWinner(P(4, 100), P(5, 10, false)), 'b', 'rywal gra dalej, ale ma już więcej pięter');
+  eq(DU.duelWinner(P(4, 100), P(3, 10, false)), null, 'rywal jeszcze może dogonić'); eq(DU.duelWinner(P(10, 100), P(9, 900, false)), null, 'jeden ukończył, drugi dalej gra');
+  eq(DU.duelWinner(null, P(1, 1)), null, 'brak wyniku jednego gracza');
+  const rec = (a, b, code = 'ABCDE') => ({ code, players: [{ vote: a }, { vote: b }] });
+  eq(DU.resolveCfg(rec({ char: 'pyrtek', garnek: 2 }, { char: 'pyrtek', garnek: 2 })), { char: 'pyrtek', garnek: 2, charForced: false, garnekForced: false }, 'zgoda');
+  const c2 = DU.resolveCfg(rec({ char: 'pyrtek', garnek: 1 }, { char: 'ges', garnek: 3 }));
+  assert(c2.garnek === 5 && DU.DUEL.weak.includes(c2.char) && c2.charForced && c2.garnekForced, 'niezgoda: palnik 5 i jedna z najsłabszych');
+  eq(DU.resolveCfg(rec({ char: 'pyrtek', garnek: 1 }, { char: 'ges', garnek: 3 })), c2, 'losowanie zależy tylko od kodu');
+  const c3 = DU.resolveCfg(rec({ char: 'ges', garnek: 1 }, { char: 'ges', garnek: 4 })); eq([c3.char, c3.garnek, c3.charForced, c3.garnekForced], ['ges', 5, false, true], 'zgoda w postaci, niezgoda w palniku');
+  const c4 = DU.resolveCfg(rec({ char: 'ges', garnek: 1 }, null)); assert(c4.garnek === 5 && DU.DUEL.weak.includes(c4.char), 'brak głosu to niezgoda');
+  const seen = new Set(); for (let i = 0; i < 60; i++) seen.add(DU.resolveCfg(rec(null, null, 'K' + i)).char);
+  assert(seen.size === DU.DUEL.weak.length && [...seen].every(c => DU.DUEL.weak.includes(c)), 'losowanie dosięga wszystkich trzech');
+  assert(DU.DUEL.weak.every(c => D.CHARS[c] && !D.CHARS[c].retired), 'najsłabsze to aktywne postacie');
+  eq(DU.cleanVote({ char: 'kwoka', garnek: 0 }), null, 'wycofana postać'); eq(DU.cleanVote({ char: 'ges', garnek: 6 }), null, 'za wysoki palnik'); eq(DU.cleanVote({ char: 'ges', garnek: 5 }), { char: 'ges', garnek: 5 }, 'poprawny głos');
+  assert(DU.validCode(DU.duelCode([0, 1, 2, 3, 4])) && !DU.validCode('ABCD0') && !DU.validCode('abcde'), 'format kodu bez mylących znaków');
+});
+
+test('Pojedynek: kod, głosowanie, wspólne ziarno, bez wycieków ziarna i bez wpływu na profil', async () => {
+  const clock = { t: 1_000_000 }, env = duelEnv(clock), DC = { n: 'cyc', nick: 'Cyc', avatar: 1 };
+  eq((await dpost(env, DA, 'duel', { op: 'join', code: 'ZZZZZ' })).j.code, 'nocode', 'nieistniejący kod'); eq((await dpost(env, DA, 'duel', { op: 'join', code: 'abc' })).j.code, 'nocode', 'zły format kodu');
+  const c = await dpost(env, DA, 'duel', { op: 'create' }); assert(c.j.ok && c.j.created && c.j.duel.state === 'lobby' && DU.validCode(c.j.duel.code), 'utworzony mecz czeka na rywala');
+  const code = c.j.duel.code; assert(!JSON.stringify(c.j).includes('salt'), 'sól ziarna nie wychodzi');
+  eq((await dpost(env, DA, 'duel', { op: 'create' })).j.duel.code, code, 'ponowne utworzenie wznawia ten sam mecz'); eq((await dpost(env, DA, 'duel', { op: 'vote', vote: { char: 'ges', garnek: 1 } })).j.code, 'phase', 'głosowanie dopiero po dołączeniu rywala');
+  const j = await dpost(env, DB, 'duel', { op: 'join', code: code.toLowerCase() }); eq([j.j.duel.state, j.j.duel.rival.nick, j.j.duel.voteDl - clock.t], ['vote', 'Ala', DU.DUEL.voteMs], 'dołączenie (kod bez względu na wielkość liter) otwiera głosowanie');
+  eq((await dpost(env, DC, 'duel', { op: 'join', code })).j.code, 'full', 'trzeci gracz nie dołączy');
+  eq((await dpost(env, DA, 'duel', { op: 'vote', vote: { char: 'kwoka', garnek: 0 } })).j.code, 'vote', 'zła postać');
+  let v = await dpost(env, DA, 'duel', { op: 'vote', vote: { char: 'ges', garnek: 2 } }); assert(v.j.duel.me.vote.char === 'ges' && v.j.duel.rival.voted === false, 'mój głos zapisany');
+  const bv = await dpost(env, DB, 'duel', { op: 'state' }); assert(bv.j.duel.rival.voted === true && bv.j.duel.rival.vote === null, 'cudzy głos ukryty do końca głosowania');
+  v = await dpost(env, DB, 'duel', { op: 'vote', vote: { char: 'ges', garnek: 2 } });
+  eq([v.j.duel.state, v.j.duel.cfg.char, v.j.duel.cfg.garnek, v.j.duel.rival.vote.char], ['play', 'ges', 2, 'ges'], 'oba głosy zgodne: konfiguracja z głosów, głosy jawne');
+  eq((await dpost(env, DA, 'start', { duel: true })).j.code, 'early', 'start przed odliczaniem'); clock.t += DU.DUEL.countdownMs + 100;
+  const sA = await dpost(env, DA, 'start', { duel: true }), sB = await dpost(env, DB, 'start', { duel: true });
+  assert(sA.j.ok && sB.j.ok, 'obaj startują'); eq(sA.j.run.offer, sB.j.run.offer, 'ta sama pierwsza oferta'); eq([sA.j.run.mode, sA.j.run.char, sA.j.run.garnek], ['quick', 'ges', 2], 'tryb Szybki i wybrana postać');
+  assert(!('seed' in sA.j.run) && !JSON.stringify(sA.j).includes('salt'), 'widok runu nie zdradza ziarna'); assert(sA.j.duelRun.code === code && sA.j.duelRun.dl > clock.t, 'termin runu dla klienta');
+  eq((await dpost(env, DA, 'start', { duel: true })).j.code, 'active', 'drugi start tego samego meczu'); assert(sA.j.profile.counters.runs === 0, 'profil bez zmian');
+  const st = await dpost(env, DA, 'duel', { op: 'state' }); assert(st.j.duel.rival.prog && st.j.duel.rival.prog.round === 1 && !st.j.duel.rival.prog.over && st.j.duel.rival.prog.dealt === null, 'postęp rywala bez jego obrażeń');
+  const DD = { n: 'dan', nick: 'Dan', avatar: 1 };
+  assert((await dpost(env, DD, 'start', { mode: 'quick', char: 'pyrtek', garnek: 0 })).j.ok, 'zwykły run');
+  eq((await dpost(env, DD, 'duel', { op: 'create' })).j.code, 'active', 'z aktywnym zwykłym runem nie zaczniesz pojedynku');
+});
+
+test('Pojedynek: po terminie serwer sam decyduje i walczy (czas wirtualny, budzik), remis przy identycznej grze, brak wpływu na ranking', async () => {
+  const clock = { t: 5_000_000 }, alarms = {}, env = duelEnv(clock, alarms);
+  const { sA } = await duelStart(env, clock, { char: 'ges', garnek: 1 }, { char: 'ges', garnek: 1 });
+  assert(sA.j.ok, 'start'); assert(Object.values(alarms).some(t => t > clock.t), 'ustawiony budzik na termin');
+  clock.t += DU.DUEL.decideMs + DU.DUEL.graceMs + 10;
+  const a1 = await dpost(env, DA, 'state'); eq([a1.j.run.phase, a1.j.run.round], ['fight', 1], 'po 60 s serwer sam wybrał kafelek i czeka na start walki'); eq(a1.j.duelRun.dealt, 0, 'jeszcze bez obrażeń');
+  clock.t += DU.DUEL.startMs + DU.DUEL.graceMs + 10;
+  const a2 = await dpost(env, DA, 'state'); assert(a2.j.run.round >= 2 || a2.j.run.phase === 'over', 'bez startu walki serwer rozstrzyga ją sam'); assert(a2.j.duelRun.dealt > 0, 'zadane obrażenia policzone');
+  clock.t += 3_600_000;
+  await env.BG_PLAYERS.objs.get('bob').alarm();   // budzik DO rozlicza gracza, który nic nie robi
+  const aEnd = await dpost(env, DA, 'duel', { op: 'state' }), bEnd = await dpost(env, DB, 'duel', { op: 'state' });
+  assert(aEnd.j.run.phase === 'over' && bEnd.j.run.phase === 'over', 'obaj skończyli');
+  eq([aEnd.j.duel.state, bEnd.j.duel.state, aEnd.j.duel.result.draw, bEnd.j.duel.result.draw], ['done', 'done', true, true], 'identyczna gra z tego samego ziarna to remis');
+  eq([aEnd.j.duel.result.you.done, aEnd.j.duel.result.you.dealt], [aEnd.j.duel.result.rival.done, aEnd.j.duel.result.rival.dealt], 'te same piętra i obrażenia'); assert(aEnd.j.duel.rival.prog.dealt !== null, 'po końcu obrażenia rywala widać');
+  const prof = (await dpost(env, DA, 'history')).j; eq([prof.profile.counters.runs, prof.history.length], [0, 0], 'bez wpisu w statystykach i historii');
+  eq((await (await env.BG_RANKS.get('ranks').fetch('https://bg/list?mode=quick')).json()).total, 0, 'bez wpisu w rankingu');
+  assert((await dpost(env, DA, 'start', { mode: 'quick', char: 'pyrtek', garnek: 0 })).j.ok, 'po pojedynku można zacząć zwykły run');
+  eq((await dpost(env, DA, 'duel', { op: 'leave' })).j.duel, null, 'wyjście z zakończonego meczu');
+});
+
+test('Pojedynek: poddanie i brak stawienia się, losowanie bez głosów; mecz bez rywala wygasa', async () => {
+  const clock = { t: 9_000_000 }, env = duelEnv(clock);
+  const { sA } = await duelStart(env, clock, { char: 'ges', garnek: 0 }, { char: 'pyrtek', garnek: 1 });
+  assert(sA.j.ok && sA.j.run.garnek === 5 && DU.DUEL.weak.includes(sA.j.run.char), 'niezgoda: palnik 5 i najsłabsza postać');
+  await dpost(env, DA, 'abandon'); clock.t += 1000;
+  const b1 = await dpost(env, DB, 'duel', { op: 'state' }); assert(b1.j.duel.state === 'play' && b1.j.duel.rival.prog.over, 'rywal się poddał, mecz trwa, bo ja jeszcze gram');
+  await dpost(env, DB, 'abandon');
+  const a2 = await dpost(env, DA, 'duel', { op: 'state' }); eq(a2.j.duel.state, 'done', 'oboje skończyli'); eq([a2.j.duel.result.you.done, a2.j.duel.result.rival.done], [0, 0], 'oboje poddali przy 0 pięter');
+  // walkower: gracz, który nigdy nie wszedł do runu
+  const env2 = duelEnv(clock), c = await dpost(env2, DA, 'duel', { op: 'create' });
+  await dpost(env2, DB, 'duel', { op: 'join', code: c.j.duel.code });
+  clock.t += DU.DUEL.voteMs + 10;   // nikt nie zagłosował: losowanie
+  const s = await dpost(env2, DA, 'duel', { op: 'state' }); eq(s.j.duel.state, 'play', 'czas głosowania minął'); assert(s.j.duel.cfg.garnekForced && s.j.duel.cfg.charForced, 'brak głosów: wszystko losowane');
+  clock.t += DU.DUEL.countdownMs + 100; const sa = await dpost(env2, DA, 'start', { duel: true }); assert(sa.j.ok, 'A wchodzi');
+  clock.t += DU.DUEL.noShowMs + 10;
+  const w = await dpost(env2, DA, 'duel', { op: 'state' }); eq(w.j.duel.rival.prog.ended, 'noshow', 'B nie stawił się: walkower');
+  // wygasanie
+  const env3 = duelEnv(clock), c3 = await dpost(env3, DA, 'duel', { op: 'create' }); clock.t += DU.DUEL.lobbyMs + 10;
+  const e = await dpost(env3, DA, 'duel', { op: 'state' }); eq([e.j.duel.state, e.j.duel.result.expired], ['done', true], 'mecz bez rywala wygasa');
+  eq((await dpost(env3, DB, 'duel', { op: 'join', code: c3.j.duel.code })).j.code, 'full', 'na wygasły mecz nie wejdziesz');
+});
+
+test('Pojedynek: obaj ukończyli 10 pięter (Prezes kończy run wygraną, bez Dogrywki), wygrywa ten, kto zadał więcej obrażeń', async () => {
+  const clock = { t: 20_000_000 }, env = duelEnv(clock);
+  await duelStart(env, clock, { char: 'ges', garnek: 0 }, { char: 'ges', garnek: 0 });
+  const finish = async (pl, dealt) => {   // wstrzykujemy stan „Prezes pokonany”: run w fazie victory po 10 piętrach
+    const st = env.BG_PLAYERS.objs.get(pl.n).ctx.storage, run = await st.get('run');
+    Object.assign(run, { round: 10, done: 10, phase: 'victory', pending: { kind: 'victory' }, fight: null, offer: [], cleared: 10 }); run.duel.dealt = dealt; await st.put({ run });
+    return (await dpost(env, pl, 'state')).j;
+  };
+  const a = await finish(DA, 500); eq([a.run.phase, a.run.ended], ['over', 'win'], 'po Prezesie run kończy się wygraną, bez wyboru Dogrywki'); eq(a.duel.state, 'play', 'rywal jeszcze gra');
+  const b = await finish(DB, 400);
+  eq([b.duel.state, b.duel.result.winner, b.duel.result.reason], ['done', 'rival', 'dealt'], 'rywal zadał więcej obrażeń');
+  const a2 = (await dpost(env, DA, 'duel', { op: 'state' })).j.duel; eq([a2.result.winner, a2.result.you.dealt, a2.result.rival.dealt, a2.result.you.ended], ['me', 500, 400, 'win'], 'widok zwycięzcy');
 });

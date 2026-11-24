@@ -2,10 +2,11 @@
 // i aktywny run. Całą logikę gry liczy serwer: oferty, rerolle, zakupy, walki (powtórka z wejść gracza).
 //
 // Gracz przychodzi już sprawdzony przez Worker (index.js → playerFromToken): body.pl = { n, nick, avatar }.
-// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /upgrade /will /fightstart /fightfinish /abandon /history /analysis /skillorder /code /kurnik /levelchoice /shopbuy /wear (Staż i Sklepik) /casino (tryb kasynowy), start z { daily: true } = Dyżur dnia.
+// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /upgrade /will /fightstart /fightfinish /abandon /history /analysis /skillorder /code /kurnik /levelchoice /shopbuy /wear (Staż i Sklepik) /casino (tryb kasynowy), /duel (pojedynek: op create|join|vote|state|leave), start z { daily: true } = Dyżur dnia, start z { duel: true } = bieg pojedynku.
 // Odpowiedź: { ok, profile, run, ...wynik akcji } albo { err, code } z kodem 400/409.
 import { mix, hash } from './rng.js';
-import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, swapSkills, view, statsOf, pawn, redeem, upgrade, willOptions, ghostOf, RUN_V } from './rules.js';
+import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, endRun, swapSkills, view, statsOf, pawn, redeem, upgrade, willOptions, ghostOf, RUN_V } from './rules.js';
+import { DUEL, duelSetDl, autoStep } from './duel.js';
 import { newProfile, poolFor, evaluate, evaluateAchievements, onBossKill, onRunEnd, onNemesisBeaten, markSeen, publicProfile, kurnikBuy, levelChoose, shopBuyItem, wearItem, takeBuffs, dailyKey, dailyOf, dailyView } from './profile.js';
 import { MODES, CHARS, UNLOCKS, TILE_BY_ID, UNLOCK_BY_ID, STARTER_TILES, CASINO_REROLLS } from './data.js';
 
@@ -36,11 +37,23 @@ export class BgPlayer {
     if (run && run.v !== RUN_V) { run = null; await st.delete('run'); extra.voided = true; }
     let r = { ok: true };
     const wasOver = !run || run.phase === 'over';
+    // Pojedynek: po terminie serwer sam decyduje za gracza i rozlicza walkę (zapis od razu, żeby odpowiedź błędu też widziała nowy stan).
+    if (run && run.duel && run.phase !== 'over' && this.duelTick(run)) { await st.put({ run }); await this.duelPublish(run, extra); }
 
     switch (path) {
       case 'state': extra.myGhost = await this.myGhost(pl); break;
       case 'start': {
         if (run && run.phase !== 'over') return json({ err: 'Masz już aktywny run.', code: 'active', ...this.out(profile, run) }, 409);
+        if (b.duel) {   // Pojedynek dla 2 osób: konfiguracja i ziarno z BgRanks, ten sam run dla obu graczy, bez wpływu na profil
+          const R = this.ranks(); if (!R) return json({ err: 'Pojedynek wymaga serwera.', code: 'duel' }, 409);
+          const dp = { n: pl.n, nick: pl.nick, avatar: pl.avatar || 0 };
+          const g = await (await R.fetch('https://bg/duel-op', { method: 'POST', body: JSON.stringify({ op: 'start', pl: dp }) })).json();
+          if (g.err) return json({ err: g.err, code: g.code || 'duel', ...(g.duel ? { duel: g.duel } : {}), ...this.out(profile, run) }, 409);
+          r = newRun({ mode: DUEL.mode, char: g.cfg.char, garnek: g.cfg.garnek, pool: STARTER_TILES.slice(), seed: g.seed, now: this.now() });
+          if (r.ok) { run = r.run; run.duel = { code: g.code, dl: 0, sk: '', dealt: 0, pl: dp }; duelSetDl(run, this.now()); }
+          else await R.fetch('https://bg/duel-op', { method: 'POST', body: JSON.stringify({ op: 'report', pl: dp, prog: { over: true, ended: 'lose' } }) });
+          break;
+        }
         if (b.daily) {   // Dyżur dnia: ten sam run dla wszystkich, jedno podejście na dzień, bez premii i Kurnika
           const date = dailyKey(this.now()), d = dailyOf(date);
           if (profile.daily && profile.daily.date === date) return json({ err: 'Dzisiejszy dyżur już odbyty. Wróć jutro.', code: 'daily', ...this.out(profile, run) }, 409);
@@ -78,7 +91,7 @@ export class BgPlayer {
       case 'pick': {
         // Arena Duchów: duch (build innego gracza) pochodzi z BgRanks; bez niego pojawia się Odbicie gracza.
         const t = run && run.phase === 'offer' ? TILE_BY_ID[run.offer[Number(b.i)]] : null;
-        const ctx = t && t.event === 'arena' && !run.daily ? { ghost: await this.fetchGhost(pl, run) } : {};
+        const ctx = t && t.event === 'arena' && !run.daily && !run.duel ?{ ghost: await this.fetchGhost(pl, run) } : {};
         r = need(run) || pickTile(run, Number(b.i), b.slot === undefined ? undefined : Number(b.slot), b.mut === undefined ? undefined : Number(b.mut), ctx);
         break;
       }
@@ -137,6 +150,15 @@ export class BgPlayer {
         extra.granted = { chars: profile.chars.length, garnek: profile.garnek };
         break;
       }
+      case 'duel': {   // Pojedynek: stan meczu trzyma BgRanks (utwórz, dołącz, głosuj, odczyt stanu, wyjdź)
+        const op = String(b.op || '');
+        if ((op === 'create' || op === 'join') && run && run.phase !== 'over' && !run.duel) return json({ err: 'Masz aktywny run. Dokończ go albo porzuć, zanim zaczniesz pojedynek.', code: 'active', ...this.out(profile, run) }, 409);
+        const R = this.ranks(); if (!R) return json({ err: 'Pojedynek wymaga serwera.', code: 'duel', ...this.out(profile, run) }, 409);
+        const res = await (await R.fetch('https://bg/duel-op', { method: 'POST', body: JSON.stringify({ op, code: b.code, vote: b.vote, pl: { n: pl.n, nick: pl.nick, avatar: pl.avatar || 0 } }) })).json();
+        if (res.err) return json({ err: res.err, code: res.code, ...(res.duel ? { duel: res.duel } : {}), ...this.out(profile, run) }, 409);
+        extra.duel = res.duel; if (res.created) extra.created = true;
+        break;
+      }
       case 'history': break;
       case 'analysis': {   // „Wyślij do analizy”: kopia zakończonego runu (z dziennika historii) trafia do kolekcji w BgRanks
         const hist = (await st.get('history')) || [], h = hist.find(x => x.id === String(b.id || ''));
@@ -157,7 +179,12 @@ export class BgPlayer {
     if (r.err) return json({ err: r.err, code: r.code, ...this.out(profile, run) }, 409);
 
     // Skutki uboczne: odblokowania, boss, koniec runu, ranking.
-    if (run && path !== 'state') {
+    if (run && run.duel) {   // Pojedynek: suma zadanych obrażeń, Prezes kończy run wygraną (bez Dogrywki), nowe okno czasu
+      if (r.result) run.duel.dealt += r.result.dealt | 0;
+      if (run.phase === 'victory') endRun(run, 'win');
+      duelSetDl(run, this.now());
+    }
+    if (run && path !== 'state' && !run.duel) {   // pojedynek nie wpływa na profil, odblokowania, ranking ani historię
       if (r.boss) onBossKill(profile, r.boss);
       if (r.bossVar && r.bossVar !== r.boss) onBossKill(profile, r.bossVar);   // wariant bossa liczy się też osobno (Księga)
       if (r.arena && r.arena.n && !r.arena.mirror) this.ghostResult(run, r.arena);
@@ -191,6 +218,7 @@ export class BgPlayer {
     if (path === 'history') extra.history = (await st.get('history')) || [];
     if (run && run.hatchedNow) { extra.hatched = run.hatchedNow; delete run.hatchedNow; }
     await st.put({ profile, ...(run ? { run } : {}) });
+    if (run && run.duel && path !== 'duel') await this.duelPublish(run, extra);
     const o = this.out(profile, run);
     const body = { ok: true, ...o, ...extra };
     if (r.setup) body.setup = r.setup;
@@ -241,7 +269,41 @@ export class BgPlayer {
     try { const res = await R.fetch('https://bg/ghost-get', { method: 'POST', body: JSON.stringify({ n: pl.n }) }); return (await res.json()).ghosts || null; } catch { return null; }
   }
 
-  out(profile, run) { return { profile: publicProfile(profile), run: view(run), daily: dailyView(profile, this.now()) }; }
+  // ---------- Pojedynek: terminy i raportowanie ----------
+  // Gdy termin minął, serwer wykonuje za gracza bezpieczne decyzje i rozlicza walkę bez wejść. Czas „wirtualny”: kolejne okna liczą się od poprzedniego terminu.
+  duelTick(run) {
+    const d = run.duel, now = this.now(); let ch = false, n = 0;
+    while (d && run.phase !== 'over' && now > d.dl + DUEL.graceMs) {
+      if (n++ > 300) { endRun(run, 'lose'); ch = true; break; }
+      const virt = d.dl, out = autoStep(run);
+      if (!out) { endRun(run, 'lose'); ch = true; break; }
+      if (out.result) d.dealt += out.result.dealt | 0;
+      if (run.phase === 'victory') endRun(run, 'win');
+      duelSetDl(run, virt); ch = true;
+    }
+    return ch;
+  }
+  // Raport postępu do BgRanks (piętra, obrażenia, koniec) i budzik na najbliższy termin. Widok meczu trafia do odpowiedzi (extra.duel).
+  async duelPublish(run, extra) {
+    const d = run.duel, R = this.ranks(); if (!d || !R) return;
+    const S = statsOf(run);
+    const prog = { done: run.done | 0, dealt: d.dealt | 0, round: run.round | 0, hp: Math.round(100 * run.hp / Math.max(1, S.maxHp)), over: run.phase === 'over', ended: run.ended };
+    try { const res = await (await R.fetch('https://bg/duel-op', { method: 'POST', body: JSON.stringify({ op: 'report', pl: d.pl, prog }) })).json(); if (extra && res.duel) extra.duel = res.duel; } catch {}
+    if (run.phase !== 'over' && this.ctx.storage.setAlarm) { try { await this.ctx.storage.setAlarm(d.dl + DUEL.graceMs + 500); } catch {} }
+  }
+  // Budzik Durable Object: termin pojedynku minął, a gracz nic nie robi.
+  alarm() {
+    const p = this.chain.then(async () => {
+      const st = this.ctx.storage, run = await st.get('run');
+      if (!run || !run.duel || run.phase === 'over') return;
+      if (this.duelTick(run)) await st.put({ run });
+      await this.duelPublish(run);
+    });
+    this.chain = p.catch(() => {});
+    return p;
+  }
+
+  out(profile, run) { return { profile: publicProfile(profile), run: view(run), daily: dailyView(profile, this.now()), duelRun: run && run.duel ? { code: run.duel.code, dl: run.duel.dl, dealt: run.duel.dealt, now: this.now() } : null }; }
 }
 
 function need(run) { return run ? null : { err: 'Nie masz aktywnego runu.', code: 'norun' }; }
