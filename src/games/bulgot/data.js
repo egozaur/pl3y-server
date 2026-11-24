@@ -14,7 +14,7 @@ export const TYPES = { stat: 'Statystyka', skill: 'Umiejętność', item: 'Przed
 export const MODES = {
   quick: { name: 'Szybki', extraPct: { hp: 80, atk: 90 }, rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 120, atk: 80 }, grow: { hp: 1.090, atk: 1.060 }, bossPct: { hp: 80, atk: 90 },
     zones: [{ upTo: 5, zone: 0 }, { upTo: 10, zone: 1 }], elite: [4, 8], doors: [2, 6, 9] },
-  full: { name: 'Pełny', extraPct: { hp: 90, atk: 92 }, rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 120, atk: 80 }, grow: { hp: 1.091, atk: 1.056 }, bossPct: { hp: 100, atk: 100 },
+  full: { name: 'Pełny', extraPct: { hp: 80, atk: 90 }, rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 120, atk: 80 }, grow: { hp: 1.091, atk: 1.056 }, bossPct: { hp: 100, atk: 100 },
     zones: [{ upTo: 6, zone: 0 }, { upTo: 12, zone: 1 }, { upTo: 20, zone: 2 }], elite: [4, 10, 16], zoneMul: [null, null, { hp: 130, atk: 112 }], doors: [2, 5, 8, 11, 14, 17] },
 };
 // doors: piętra z Rozwidleniem Korytarza (wybór: zwykłe piętro albo wróg z cechą elity za nagrodę).
@@ -77,13 +77,13 @@ export const CHARS = {
     fx: [{ k: 'hpPct', v: 12 }, { k: 'aspdPct', v: -25 }], startSkills: [['zagrzebanie', 1]], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-kwoka' },
   kaczor: { id: 'kaczor', name: 'Kaczor Hazardzista', style: 'Ryzyko', text: '+10 Ziaren, 1 darmowy reroll na rundę, więcej kafelków ryzyka w ofertach, Odsetki do 5 Ziaren.', base: BASE,
     fx: [], startSkills: [], coins: 10, freeRerolls: 1, riskWeight: 2, lock: 'u-kaczor', interestMax: 5 },
-  indor: { id: 'indor', name: 'Indor Bogdan', style: 'Ciężkie ciosy', text: '+55% Ataku, -30% szybkości ataku, 15% szansy na trafienie krytyczne.', base: BASE,
+  indor: { id: 'indor', name: 'Indor Bogdan', style: 'Ciężkie ciosy', text: '+55% Ataku, -30% szybkości ataku, 15% szansy na dziobnięcie.', base: BASE,
     fx: [{ k: 'atkPct', v: 55 }, { k: 'aspdPct', v: -30 }, { k: 'crit', v: 10 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-indor' },
   zjarany: { id: 'zjarany', name: 'Zjarany Kurczak', style: 'Oparzenie i luz', secret: true,
     text: 'Podpala wrogów (30% Oparzenia, limit +4, leczy się od płonących), ale jest najarany od rana: -45% szybkości ataku i -10% Ataku. Co 4 s Chmura Dymu: Oparzenie i spowolnienie wrogów.', base: BASE,
     fx: [{ k: 'burnHit', v: 30 }, { k: 'burnMax', v: 4 }, { k: 'regen', v: 14 }, { k: 'burnHeal', v: 3 }, { k: 'aspdPct', v: -45 }, { k: 'atkPct', v: -10 }, { k: 'smoke', v: 40 }],
     startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-420', hasCode: true },
-  barista: { id: 'barista', name: 'Kurczak Barista', style: 'Szybkie ciosy', text: '+35% szybkości ataku, -25% maks. Życia, -5% Ataku. Zaczyna z Dziobnięciem Szału. Bez espresso nie ruszy, w walce nie zatrzymuje się wcale.', base: BASE,
+  barista: { id: 'barista', name: 'Kurczak Barista', style: 'Szybkie ciosy', text: '+35% szybkości ataku, -25% maks. Życia, -5% Ataku. Zaczyna ze Szałem Dziobów. Bez espresso nie ruszy, w walce nie zatrzymuje się wcale.', base: BASE,
     fx: [{ k: 'aspdPct', v: 35 }, { k: 'hpPct', v: -25 }, { k: 'atkPct', v: -5 }], startSkills: [['dziobniecie', 1]], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-barista' },
   ges: { id: 'ges', name: 'Gęś Księgowa', style: 'Ekonomia', text: '+15 Ziaren na start, +1 Ziarno po każdej wygranej, Odsetki do 6 Ziaren, -15% Ataku. Wygrywa portfelem, bije rzadko, ale celnie.', base: BASE,
     fx: [{ k: 'coinFlat', v: 1 }, { k: 'atkPct', v: -15 }], startSkills: [], coins: 15, freeRerolls: 0, riskWeight: 1, lock: 'u-ges', interestMax: 6 },
@@ -108,13 +108,13 @@ export const CHARS = {
     fx: [{ k: 'hpPct', v: -95 }, { k: 'evade', v: 75 }, { k: 'atkPct', v: 150 }, { k: 'aspdPct', v: 30 }], startSkills: [], startTiles: ['gniazdo-zapasowe'], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-jajeczko' },
   krypto: { id: 'krypto', name: 'Kurczak Kryptowalutowy', style: 'Rynek', text: 'Co piętro jego wszystkie statystyki zmieniają się losowo od -30% do +55% („rynek”). Raz jest księciem, raz bankrutem, a kurs poznasz dopiero w walce.', base: BASE,
     fx: [], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-krypto', crypto: [-30, 55] },
-  alkoholik: { id: 'alkoholik', name: 'Kogut Alkoholik', style: 'Wieczny Poniedziałek', text: '+30% szansy na krytyk i +120% siły krytyka, ale -25% szybkości ataku i -15% maks. Życia. Trafia rzadko, za to z impetem.', base: BASE,
+  alkoholik: { id: 'alkoholik', name: 'Kogut Alkoholik', style: 'Wieczny Poniedziałek', text: '+30% szansy na dziobnięcie i +120% Mocy Dziobnięcia, ale -25% szybkości ataku i -15% maks. Życia. Trafia rzadko, za to z impetem.', base: BASE,
     fx: [{ k: 'crit', v: 30 }, { k: 'critMult', v: 120 }, { k: 'aspdPct', v: -25 }, { k: 'hpPct', v: -15 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-alkoholik' },
   wegan: { id: 'wegan', name: 'Kurczak Wegan', style: 'Bez mięsa', text: 'Odpoczynek leczy o połowę mniej, -10% maks. Życia. Za to wrogowie patrzą na niego z oburzeniem. Bez skutku.', base: BASE,
     fx: [{ k: 'restHalf', v: 1 }, { k: 'hpPct', v: -10 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-wegan' },
   baba: { id: 'baba', name: 'Baba z Targu', style: 'Drogo', text: '+25 Ziaren na start, ale wszystko kupuje o 30% drożej, -12% Ataku i -12% maks. Życia. Bez dokupowania jest bezbronna, a dokupowanie ją rujnuje.', base: BASE,
     fx: [{ k: 'buyDisc', v: -30 }, { k: 'atkPct', v: -12 }, { k: 'hpPct', v: -12 }], startSkills: [], coins: 25, freeRerolls: 0, riskWeight: 1, lock: 'u-baba' },
-  influencer: { id: 'influencer', name: 'Kurczak Influencer', style: 'Zasięgi', text: '+35% szansy na krytyk i +100% siły krytyka, ale -25% maks. Życia i -15% Ataku. Bez krytyka spada engagement, a z nim cała reszta.', base: BASE,
+  influencer: { id: 'influencer', name: 'Kurczak Influencer', style: 'Zasięgi', text: '+35% szansy na dziobnięcie i +100% Mocy Dziobnięcia, ale -25% maks. Życia i -15% Ataku. Bez dziobnięcia spada engagement, a z nim cała reszta.', base: BASE,
     fx: [{ k: 'crit', v: 35 }, { k: 'critMult', v: 100 }, { k: 'hpPct', v: -25 }, { k: 'atkPct', v: -15 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-influencer' },
   skibidi: { id: 'skibidi', name: 'Kurczak Skibidi', style: 'Chaos', text: 'Zaczyna z dwiema losowymi umiejętnościami (nie wybierasz ich), cooldowny -10%, ale -25% maks. Życia i -12% Ataku. Czasem trafi ultimate, czasem w ścianę.', base: BASE,
     fx: [{ k: 'cdPct', v: 10 }, { k: 'hpPct', v: -25 }, { k: 'atkPct', v: -12 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-skibidi', randomSkill: 2 },
@@ -134,12 +134,12 @@ export const SKILLS = {
     muts: [{ name: 'Mroźne Pianie', text: 'Dodatkowo 3 stosy Mrozu na wszystkich wrogach.' }, { name: 'Pianie Bojowe', text: 'Ogłuszenie trwa prawie 2 razy dłużej.' }] },
   granat: { id: 'granat', name: 'Jajeczny Granat', cd: 80, pct: 250, text: '250% Ataku w jednym uderzeniu.', key: 'granat', el: 'jajo',
     muts: [{ name: 'Granat Kasetowy', text: 'Odłamki trafiają pozostałych wrogów za 60% siły.' }, { name: 'Granat Wrzący', text: 'Dodatkowo 5 stosów Oparzenia na celu.' }] },
-  dziobniecie: { id: 'dziobniecie', name: 'Dziobnięcie Szału', cd: 120, dur: 60, text: '+50% szybkości ataku przez 6 s.', key: 'dziobniecie', el: 'krew',
+  dziobniecie: { id: 'dziobniecie', name: 'Szał Dziobów', cd: 120, dur: 60, text: '+50% szybkości ataku przez 6 s.', key: 'dziobniecie', el: 'krew',
     muts: [{ name: 'Szał Krwi', text: 'W szale każdy cios nakłada 2 stosy Krwawienia.' }, { name: 'Wieczny Szał', text: 'Szał trwa 2 razy dłużej.' }] },
   unik: { id: 'unik', name: 'Unik Skrzydłem', cd: 100, dur: 15, text: 'Nietykalność przez 1,5 s.', key: 'unik',
     muts: [{ name: 'Unik z Kontrą', text: 'Każdy zablokowany cios oddaje atakującemu 100% Ataku.' }, { name: 'Skrzydło Wiatru', text: 'Nietykalność trwa 2 razy dłużej.' }] },
   zagrzebanie: { id: 'zagrzebanie', name: 'Zagrzebanie w Sianie', cd: 160, pct: 30, text: 'Leczy 30% maks. Życia.', key: 'zagrzebanie',
-    muts: [{ name: 'Głębokie Siano', text: 'Leczy 50% maks. Życia zamiast 30%.' }, { name: 'Wściekłe Siano', text: 'Po wyjściu z siana przez 4 s każdy cios jest krytyczny.' }] },
+    muts: [{ name: 'Głębokie Siano', text: 'Leczy 50% maks. Życia zamiast 30%.' }, { name: 'Wściekłe Siano', text: 'Po wyjściu z siana przez 4 s każdy cios to mocne dziobnięcie.' }] },
   chlust: { id: 'chlust', name: 'Rosołowy Chlust', cd: 85, pct: 40, n: 3, text: '40% Ataku i 3 stosy Oparzenia na wszystkich wrogach.', key: 'chlust', el: 'ogien',
     muts: [{ name: 'Kocioł', text: '6 stosów Oparzenia zamiast 3.' }, { name: 'Rosół z Kością', text: 'Dodatkowo ogłusza wszystkich wrogów na 1 s.' }] },
   lodowy: { id: 'lodowy', name: 'Lodowy Dziób', cd: 60, pct: 150, n: 2, text: '150% Ataku i 2 stosy Mrozu na celu.', key: 'lodowy', el: 'lod',
@@ -214,7 +214,7 @@ export const SKILLS = {
     muts: [{ name: 'Wrzący Kocioł', text: '4 stosy Oparzenia za cios.' }, { name: 'Długa Zmiana', text: 'Trwa 8 s.' }] },
   zupa: { id: 'zupa', name: 'Zupa Dnia', cd: 120, pct: 15, dur: 40, text: 'Leczy 15% maks. Życia i daje +20% szybkości ataku na 4 s.', key: 'zupa',
     muts: [{ name: 'Zupa z Wkładką', text: 'Leczy 25% maks. Życia.' }, { name: 'Zupa Pikantna', text: '+40% szybkości ataku.' }] },
-  pobudka: { id: 'pobudka', name: 'Kogucia Pobudka', cd: 115, pct: 25, dur: 50, text: 'Przez 5 s +25% obrażeń i +15% szansy na krytyk.', key: 'pobudka',
+  pobudka: { id: 'pobudka', name: 'Kogucia Pobudka', cd: 115, pct: 25, dur: 50, text: 'Przez 5 s +25% obrażeń i +15% szansy na dziobnięcie.', key: 'pobudka',
     muts: [{ name: 'Pobudka Generalna', text: '+40% obrażeń.' }, { name: 'Kukuryku', text: 'Trwa 8 s.' }] },
   echo: { id: 'echo', name: 'Kurze Echo', cd: 80, dur: 40, text: 'Następna użyta umiejętność odpala się drugi raz za darmo.', key: 'echo',
     muts: [{ name: 'Echo w Wąwozie', text: 'Dotyczy dwóch następnych umiejętności.' }, { name: 'Wieczne Echo', text: 'Przez 4 s każda umiejętność odpala się dwa razy.' }] },
@@ -242,7 +242,7 @@ export const REACTIONS = {
   goraczka: { id: 'goraczka', name: 'Gorączka', of: ['poison', 'bleed'], cd: 30, dur: 50, pct: 50, spread: 3,
     text: 'Salmonella + Krwawienie: przez 5 s oba efekty bolą cel o 50% mocniej; jeśli w tym czasie zginie, każdy inny wróg dostaje 3 stosy Salmonelli.' },
   kruchosc: { id: 'kruchosc', name: 'Kruchość', of: ['frost', 'bleed'], cd: 30,
-    text: 'Mróz + Krwawienie: następne trafienie w cel jest zawsze krytyczne (także umiejętnością).' },
+    text: 'Mróz + Krwawienie: następne trafienie w cel jest zawsze mocnym dziobnięciem (także umiejętnością).' },
 };
 
 // Żywioły (oznaczenia kafelków): pokazywane na kartach, używane przez przepisy Wylęgarni i Odznaki.
@@ -257,7 +257,7 @@ export const SET_STEPS = [2, 3, 4, 6];
 export const SETS = {
   jajeczne: { name: 'Jajeczne', b2: 'Tykające Jajo wybucha co 6 s', b3: 'Wybuchy leczą 3% maks. Życia', b4: 'Jaja wybuchają o 25% szybciej', b6: 'Pełne Gniazdo: +2 Ziarna po wygranej, wybuchy leczą 6% maks. Życia', x: '+1 Ziarno po wygranej (maks. +3)' },
   zbozowe: { name: 'Zbożowe', b2: '+10% Ziaren z nagród', b3: 'Worek Kukurydzy bez limitu premii', b4: 'Siewnik daje +2 Ataku za wygraną zamiast +1', b6: 'Żniwa: +2% maks. Życia za każde 10 Ziaren w kieszeni (maks. 30%)', x: '+3% Ziaren z nagród' },
-  rambo: { name: 'Rambo', b2: '+20% Ataku', b3: 'Ostatni Okrzyk: raz na walkę 3 s nietykalności poniżej 20% Życia', b4: 'Okrzyk działa dwa razy na walkę, +10% szansy na krytyk', b6: 'Armia Jednego Kurczaka: pierwszy atak i co piąty zwykły atak to krytyk', x: '+2% obrażeń' },
+  rambo: { name: 'Rambo', b2: '+20% Ataku', b3: 'Ostatni Okrzyk: raz na walkę 3 s nietykalności poniżej 20% Życia', b4: 'Okrzyk działa dwa razy na walkę, +10% szansy na dziobnięcie', b6: 'Armia Jednego Kurczaka: pierwszy atak i co piąty zwykły atak to mocne dziobnięcie', x: '+2% obrażeń' },
   rosolowe: { name: 'Rosołowe', b2: '+25% obrażeń od Oparzenia', b3: 'Ataki zawsze nakładają Oparzenie', b4: 'Wrogowie zaczynają walkę z 3 stosami Oparzenia', b6: 'Wrzątek: +50% obrażeń od Oparzenia, limit Oparzenia +3 stosy', x: '+3% obrażeń od Oparzenia' },
   chlodnicze: { name: 'Chłodnicze', b2: 'Każdy stos Mrozu spowalnia o 12% zamiast 8%', b3: 'Zamrożenie wywołuje Lodową Falę: 80% Ataku we wszystkich wrogów', b4: 'Wrogowie zaczynają walkę z 2 stosami Mrozu', b6: 'Wieczna Zima: +25% obrażeń przeciw wrogom z Mrozem albo zamrożonym', x: '+1 stos Mrozu na start walki (maks. +3)' },
   korpo: { name: 'Korporacyjne', b2: 'Odpoczynek tańszy o 2 Ziarna', b3: 'Dokupowanie kafelków 25% taniej', b4: 'Odsetki: po każdej wygranej +10% posiadanych Ziaren (maks. 5)', b6: 'Zarząd: -15% cooldownu umiejętności, Odsetki do 8 Ziaren', x: '+1 darmowy reroll za każde 2 sztuki ponad 4' },
@@ -320,7 +320,7 @@ const STAT_FAMILIES = [
     ['pierze-prasowane', 'Pierze Prasowane', 5, 'Prasowane na gorąco, jak kołnierzyk dyrektora.'],
     ['pancerz-z-pierza', 'Pancerz z Pierza', 11, 'Miękki w dotyku, twardy w boju.'],
     ['zbroja-wyroczni-kurnika', 'Zbroja Wyroczni Kurnika', 17, 'Wyrocznia przewidziała ciosy. Zbroja już je zna.']] },
-  { fam: 'krytyk', k: 'crit', fmt: v => `+${v}% szansy na trafienie krytyczne`, lv: [
+  { fam: 'krytyk', k: 'crit', fmt: v => `+${v}% szansy na dziobnięcie`, lv: [
     ['zezowate-oko', 'Zezowate Oko', 5, 'Patrzy w dwie strony naraz. Czasem trafia w obie.'],
     ['oko-kontrolera-jakosci', 'Oko Kontrolera Jakości', 12, 'Odrzuca wszystko, w tym twoich wrogów.'],
     ['czujne-oko', 'Czujne Oko', 28, 'Widzi słabe punkty. Szczególnie Prezesa.'],
@@ -361,7 +361,7 @@ export const TILES = [
   { id: 'kukurydziany-grad', name: 'Kukurydziany Grad', type: 'skill', rarity: 0, skill: 'grad', text: 'Umiejętność: 5 pocisków po 60% Ataku, cooldown 6,5 s', flavor: 'Deszcz ziarna, który nikogo nie nakarmi.' },
   { id: 'pianie-grozy', name: 'Pianie Grozy', type: 'skill', rarity: 1, skill: 'pianie', text: 'Umiejętność: ogłusza wrogów na 2 s, cooldown 9 s', flavor: 'Kikiriki, które słychać na dwudziestym piętrze.' },
   { id: 'jajeczny-granat', name: 'Jajeczny Granat', type: 'skill', rarity: 1, skill: 'granat', text: 'Umiejętność: 250% Ataku w jednym uderzeniu, cooldown 8 s', flavor: 'Zniesione ze złości.' },
-  { id: 'dziobniecie-szalu', name: 'Dziobnięcie Szału', type: 'skill', rarity: 1, skill: 'dziobniecie', text: 'Umiejętność: +50% szybkości ataku przez 6 s, cooldown 12 s', flavor: 'Gdy kurczak się wścieknie, dziób nie zna litości.' },
+  { id: 'dziobniecie-szalu', name: 'Szał Dziobów', type: 'skill', rarity: 1, skill: 'dziobniecie', text: 'Umiejętność: +50% szybkości ataku przez 6 s, cooldown 12 s', flavor: 'Gdy kurczak się wścieknie, dziób nie zna litości.' },
   { id: 'unik-skrzydlem', name: 'Unik Skrzydłem', type: 'skill', rarity: 2, skill: 'unik', lock: 'u-unik', text: 'Umiejętność: nietykalność przez 1,5 s, cooldown 10 s', flavor: 'Trzepot, którego nie dogoni żadna łyżka.' },
   { id: 'rosolowy-chlust', name: 'Rosołowy Chlust', type: 'skill', rarity: 1, skill: 'chlust', tags: ['ogien'], text: 'Umiejętność: 40% Ataku i 3 stosy Oparzenia na wszystkich, cooldown 8,5 s', flavor: 'Gorący wywar prosto z kotła. Uwaga, parzy.' },
   { id: 'lodowy-dziob', name: 'Lodowy Dziób', type: 'skill', rarity: 0, skill: 'lodowy', tags: ['lod'], text: 'Umiejętność: 150% Ataku i 2 stosy Mrozu, cooldown 6 s', flavor: 'Dziób trzymany całą noc w zamrażarce.' },
@@ -399,7 +399,7 @@ export const TILES = [
   { id: 'przerwa-kawowa', name: 'Przerwa Kawowa', type: 'skill', rarity: 0, skill: 'kawa', text: 'Umiejętność: leczy 12% teraz i 12% po 3 s, 30% uniku, cooldown 15 s', flavor: 'Piętnaście minut, które trwa trzy sekundy.' },
   { id: 'kociol-zemsty', name: 'Kocioł Zemsty', type: 'skill', rarity: 1, skill: 'zemsta', tags: ['ogien'], text: 'Umiejętność: przez 4 s każdy cios, który dostajesz, daje atakującemu 2 stosy Oparzenia, cooldown 10 s', flavor: 'Kto bije kurczaka, ten się poparzy.' },
   { id: 'zupa-dnia', name: 'Zupa Dnia', type: 'skill', rarity: 0, skill: 'zupa', text: 'Umiejętność: leczy 15% maks. Życia i +20% szybkości ataku na 4 s, cooldown 12 s', flavor: 'Dziś rosół. Wczoraj też.' },
-  { id: 'kogucia-pobudka', name: 'Kogucia Pobudka', type: 'skill', rarity: 0, skill: 'pobudka', text: 'Umiejętność: przez 5 s +25% obrażeń i +15% szansy na krytyk, cooldown 11,5 s', flavor: 'Piąta rano. Dla wszystkich.' },
+  { id: 'kogucia-pobudka', name: 'Kogucia Pobudka', type: 'skill', rarity: 0, skill: 'pobudka', text: 'Umiejętność: przez 5 s +25% obrażeń i +15% szansy na dziobnięcie, cooldown 11,5 s', flavor: 'Piąta rano. Dla wszystkich.' },
   { id: 'kurze-echo', name: 'Kurze Echo', type: 'skill', rarity: 2, skill: 'echo', text: 'Umiejętność: następna umiejętność odpala się drugi raz za darmo, cooldown 8 s', flavor: 'Gdak, gdak, gdak, gdak.' },
   { id: 'przyspieszony-obieg', name: 'Przyspieszony Obieg', type: 'skill', rarity: 2, skill: 'obieg', text: 'Umiejętność: skraca o 35% pozostały cooldown pozostałych umiejętności, cooldown 12 s', flavor: 'Zlecenie w trybie pilnym. Jak wszystkie.' },
   // Przedmioty z synergią
@@ -409,10 +409,10 @@ export const TILES = [
   { id: 'worek-kukurydzy', name: 'Worek Kukurydzy', type: 'item', rarity: 0, set: 'zbozowe', text: '+8% Ataku za każde 10 Ziaren (maks. +40%)', fx: [{ k: 'worek', v: 1 }], flavor: 'Bogactwo mierzy się w kolbach.' },
   { id: 'mlocarnia', name: 'Młocarnia', type: 'item', rarity: 1, set: 'zbozowe', text: '+8% Ataku; 15% szans na rozbicie 10% Pancerza wroga przy trafieniu', fx: [{ k: 'shred', v: 15 }, { k: 'atkPct', v: 8 }], flavor: 'Co na polu zrobi cep, to w fabryce zrobi dziób.' },
   { id: 'siewnik', name: 'Siewnik', type: 'item', rarity: 2, set: 'zbozowe', lock: 'u-siewnik', text: '+1 Ataku na stałe co drugą wygraną rundę', fx: [{ k: 'siewnik', v: 1 }], flavor: 'Kto sieje wygrane, ten zbiera awans.' },
-  { id: 'opaska-rambo', name: 'Opaska Rambo', type: 'item', rarity: 1, set: 'rambo', text: '+15% obrażeń, +10% szansy na trafienie krytyczne', fx: [{ k: 'dmg', v: 15 }, { k: 'crit', v: 10 }], flavor: 'Nic tak nie dodaje odwagi jak kawałek czerwonego materiału.' },
+  { id: 'opaska-rambo', name: 'Opaska Rambo', type: 'item', rarity: 1, set: 'rambo', text: '+15% obrażeń, +10% szansy na dziobnięcie', fx: [{ k: 'dmg', v: 15 }, { k: 'crit', v: 10 }], flavor: 'Nic tak nie dodaje odwagi jak kawałek czerwonego materiału.' },
   { id: 'kamizelka-kuloodporna', name: 'Kamizelka Kuloodporna', type: 'item', rarity: 0, set: 'rambo', text: '+15 Pancerza, -10% szybkości ataku', fx: [{ k: 'armor', v: 15 }, { k: 'aspdPct', v: -10 }], flavor: 'Ciężka, ale rosół zostaje na zewnątrz.' },
   { id: 'ostrogi-bojowe', name: 'Ostrogi Bojowe', type: 'item', rarity: 1, set: 'rambo', text: 'Ataki krwawią: +1 obrażenie / s na stos Krwawienia', fx: [{ k: 'bleed', v: 1 }], flavor: 'Dwa kolce, jedna reputacja.' },
-  { id: 'okulary-aviatory', name: 'Okulary Aviatory', type: 'item', rarity: 2, set: 'rambo', lock: 'u-okulary', text: '+30% do siły trafienia krytycznego', fx: [{ k: 'critMult', v: 30 }], flavor: 'Gdy wchodzisz do biura w okularach, nikt nie pyta o urlop.' },
+  { id: 'okulary-aviatory', name: 'Okulary Aviatory', type: 'item', rarity: 2, set: 'rambo', lock: 'u-okulary', text: '+30% Mocy Dziobnięcia', fx: [{ k: 'critMult', v: 30 }], flavor: 'Gdy wchodzisz do biura w okularach, nikt nie pyta o urlop.' },
   { id: 'zepsute-jajo', name: 'Zepsute Jajo', type: 'item', rarity: 1, set: 'jajeczne', tags: ['trucizna', 'jajo'], text: 'Wybuchy jaj i Granat nakładają 3 stosy Salmonelli; 10% szans na Salmonellę przy ataku', fx: [{ k: 'eggPoison', v: 3 }, { k: 'poisonHit', v: 10 }], flavor: 'Nikt nie chce wiedzieć, ile leżało w kącie.' },
   { id: 'mokra-pasza', name: 'Mokra Pasza', type: 'item', rarity: 0, set: 'zbozowe', tags: ['trucizna', 'ziarno'], text: '25% szans na Salmonellę przy ataku, +20% obrażeń Salmonelli', fx: [{ k: 'poisonHit', v: 25 }, { k: 'poisonPct', v: 20 }], flavor: 'Pachnie jak magazyn po powodzi.' },
   { id: 'kolczatka', name: 'Kolczatka', type: 'item', rarity: 1, set: 'rambo', tags: ['krew'], text: 'Ataki krwawią (+1 na stos), +2 do limitu stosów Krwawienia', fx: [{ k: 'bleed', v: 1 }, { k: 'bleedMax', v: 2 }], flavor: 'Obroża po psie łańcuchowym. Teraz w lepszych rękach.' },
@@ -478,7 +478,7 @@ export const TILES = [
   { id: 'jajko-dinozaura', name: 'Jajko Dinozaura', type: 'item', rarity: 3, legend: true, grow: { max: 4, per: 1 }, dino: true, text: 'Rośnie: po 4 wygranych piętrach wykluwa się Dinozaur (+30% Ataku i maks. Życia)', flavor: 'Leży w kurniku od mezozoiku. Nikt nie pytał dlaczego.' },
   { id: 'plan-b', name: 'Plan B', type: 'item', rarity: 3, legend: true, text: 'W każdej walce, gdy spadniesz do zera, wstajesz z 15% Życia i 1,5 s nietykalności (raz na walkę)', fx: [{ k: 'planB', v: 1 }], flavor: 'Plan A był zbyt optymistyczny.' },
   { id: 'akcje-zarzadu', name: 'Akcje Zarządu', type: 'item', rarity: 3, legend: true, tags: ['korpo'], text: 'Po każdej wygranej +25% posiadanych Ziaren (maks. 12) i +20% Ziaren z nagród', fx: [{ k: 'bigInterest', v: 25 }, { k: 'coinPct', v: 20 }], flavor: 'Giełda kurzych jaj notuje wzrosty. Zawsze o jedno piętro za późno.' },
-  { id: 'dziob-mistrza', name: 'Dziób Mistrza Ceremonii', type: 'item', rarity: 3, legend: true, text: 'Umiejętności mogą zadawać trafienia krytyczne; +20% szansy na trafienie krytyczne i +25% do jego siły', fx: [{ k: 'skillCrit', v: 1 }, { k: 'crit', v: 20 }, { k: 'critMult', v: 25 }], flavor: 'Każde dziobnięcie to małe przedstawienie.' },
+  { id: 'dziob-mistrza', name: 'Dziób Mistrza Ceremonii', type: 'item', rarity: 3, legend: true, text: 'Umiejętności mogą zadawać mocne dziobnięcia; +20% szansy na dziobnięcie i +25% Mocy Dziobnięcia', fx: [{ k: 'skillCrit', v: 1 }, { k: 'crit', v: 20 }, { k: 'critMult', v: 25 }], flavor: 'Każde dziobnięcie to małe przedstawienie.' },
   // Wykluty z Jajka Dinozaura (nie w ofertach)
   { id: 'dinozaur', name: 'Dinozaur', type: 'item', rarity: 3, hatched: true, text: '+30% Ataku i +30% maks. Życia', fx: [{ k: 'atkPct', v: 30 }, { k: 'hpPct', v: 30 }], flavor: 'Wykluł się. Ptaki to przecież dinozaury. Prezes tego nie zauważył.' },
 ];
@@ -490,7 +490,7 @@ const HATCHED = [
   { id: 'termos', name: 'Termos', of: ['chochla', 'kostka-lodu'], sets: ['rosolowe', 'chlodnicze'], tags: ['ogien', 'lod'], text: '40% szans na Oparzenie i 40% szans na Mróz przy każdym ataku', fx: [{ k: 'burnHit', v: 40 }, { k: 'frostHit', v: 40 }], flavor: 'Trzyma ciepło. I zimno. Nikt nie wie jak.' },
   { id: 'ostrogi-rzeznika', name: 'Ostrogi Rzeźnika', of: ['ostrogi-bojowe', 'kolczatka'], sets: ['rambo', 'rambo'], tags: ['krew'], text: 'Każdy atak nakłada 2 stosy Krwawienia (8 na stos), limit Krwawienia +4', fx: [{ k: 'bleed', v: 8 }, { k: 'bleedMax', v: 4 }, { k: 'bleedStacks', v: 2 }], flavor: 'Rzeźnik zrezygnował z pracy. Ostrogi zostały.' },
   { id: 'zloty-spadochron', name: 'Złoty Spadochron', of: ['zlote-jajo', 'teczka'], sets: ['jajeczne', 'korpo'], tags: ['jajo', 'korpo'], text: '+7 Ziaren po każdej wygranej rundzie, nikt nie kradnie ci Ziaren', fx: [{ k: 'coinFlat', v: 7 }, { k: 'noSteal', v: 1 }], flavor: 'Zarząd ląduje miękko. Teraz ty też.' },
-  { id: 'spojrzenie-rambo', name: 'Spojrzenie Rambo', of: ['okulary-aviatory', 'opaska-rambo'], sets: ['rambo', 'rambo'], tags: ['krew'], text: '+20% obrażeń, +25% szansy na trafienie krytyczne, +50% siły trafienia krytycznego', fx: [{ k: 'dmg', v: 20 }, { k: 'crit', v: 25 }, { k: 'critMult', v: 50 }], flavor: 'Wrogowie mdleją, zanim zdejmie okulary.' },
+  { id: 'spojrzenie-rambo', name: 'Spojrzenie Rambo', of: ['okulary-aviatory', 'opaska-rambo'], sets: ['rambo', 'rambo'], tags: ['krew'], text: '+20% obrażeń, +25% szansy na dziobnięcie, +50% Mocy Dziobnięcia', fx: [{ k: 'dmg', v: 20 }, { k: 'crit', v: 25 }, { k: 'critMult', v: 50 }], flavor: 'Wrogowie mdleją, zanim zdejmie okulary.' },
   { id: 'kurtka-puchowa', name: 'Kurtka Puchowa', of: ['kamizelka-kuloodporna', 'szron'], sets: ['rambo', 'chlodnicze'], tags: ['lod'], text: '+30 Pancerza; każdy wróg, który cię trafi, dostaje 2 stosy Mrozu', fx: [{ k: 'armor', v: 30 }, { k: 'frostThorns', v: 2 }], flavor: 'Puch z własnych piór. Bez komentarza.' },
   { id: 'kompostownik', name: 'Kompostownik', of: ['mokra-pasza', 'zepsute-jajo'], sets: ['zbozowe', 'jajeczne'], tags: ['trucizna'], text: '40% szans na Salmonellę przy ataku, +50% jej obrażeń; jaja i Granat nakładają 3 stosy; przy śmierci wroga przechodzą WSZYSTKIE stosy', fx: [{ k: 'poisonHit', v: 40 }, { k: 'poisonPct', v: 50 }, { k: 'eggPoison', v: 3 }, { k: 'spreadPct', v: 50 }], flavor: 'Nic się nie marnuje. Zwłaszcza zaraza.' },
   { id: 'feniks-z-rosolu', name: 'Feniks z Rosołu', of: ['gniazdo-zapasowe', 'lubczyk'], sets: ['jajeczne', 'rosolowe'], tags: ['ogien'], text: 'Raz na run: wskrzeszenie z 70% Życia i 6 stosami Oparzenia na wszystkich wrogach; +15 maks. Życia, płonący wrogowie leczą', fx: [{ k: 'revivePct', v: 70 }, { k: 'reviveBurn', v: 6 }, { k: 'hpFlat', v: 15 }, { k: 'burnHeal', v: 5 }], flavor: 'Powstaje z garnka. Pachnie lubczykiem.' },
@@ -502,11 +502,11 @@ export const RECIPES = HATCHED.map(h => ({ out: h.id, of: h.of }));
 export const MILESTONE_EVERY = 3;
 export const MILESTONES = {
   'ziarno-mocy': { name: 'Kolba Mocy', text: '+15% Ataku', fx: [{ k: 'atkPct', v: 15 }] },
-  'ostry-dziob': { name: 'Dziób Brzytwa', text: '+8% szansy na trafienie krytyczne, +20% jego siły', fx: [{ k: 'crit', v: 8 }, { k: 'critMult', v: 20 }] },
+  'ostry-dziob': { name: 'Dziób Brzytwa', text: '+8% szansy na dziobnięcie, +20% Mocy Dziobnięcia', fx: [{ k: 'crit', v: 8 }, { k: 'critMult', v: 20 }] },
   'twardy-grzebien': { name: 'Koguci Hełm', text: '+10% maks. Życia, +4 Pancerza', fx: [{ k: 'hpPct', v: 10 }, { k: 'armor', v: 4 }] },
   'szybki-dziob': { name: 'Młot Pneumatyczny', text: '+12% szybkości ataku', fx: [{ k: 'aspdPct', v: 12 }] },
   'pancerz-z-pierza': { name: 'Pierzasta Twierdza', text: '+6 Pancerza, +25 maks. Życia', fx: [{ k: 'armor', v: 6 }, { k: 'hpFlat', v: 25 }] },
-  'czujne-oko': { name: 'Sokole Oko', text: '+30% siły trafienia krytycznego', fx: [{ k: 'critMult', v: 30 }] },
+  'czujne-oko': { name: 'Sokole Oko', text: '+30% Mocy Dziobnięcia', fx: [{ k: 'critMult', v: 30 }] },
   'zwinne-nogi': { name: 'Taniec Kurczaka', text: '+5% uniku, +8% szybkości ataku', fx: [{ k: 'evade', v: 5 }, { k: 'aspdPct', v: 8 }] },
   'cieple-gniazdko': { name: 'Kurza Drzemka', text: '+3 Regeneracji / s, +10 maks. Życia', fx: [{ k: 'regen', v: 30 }, { k: 'hpFlat', v: 10 }] },
   'czterolistna-koniczyna': { name: 'Pięciolistna Koniczyna', text: '+15 Szczęścia, +2 Ziarna po każdej rundzie', fx: [{ k: 'luck', v: 15 }, { k: 'coinFlat', v: 2 }] },
@@ -574,7 +574,7 @@ export const ENEMIES = {
   'wozek-widlowy': { id: 'wozek-widlowy', name: 'Wózek Widłowy', zone: 1, hp: 71, atk: 8, aspd: 50, armor: 4, evade: 0, crit: 0, spec: { every: 110, windup: 20, mult: 300 }, art: 'forklift', text: 'Szarżuje. Ogłusz go albo unikaj.' },
   'balwan-z-chlodni': { id: 'balwan-z-chlodni', name: 'Bałwan z Chłodni', zone: 1, hp: 75, atk: 6, aspd: 80, armor: 3, evade: 0, crit: 0, slow: { pct: 20, ticks: 30 }, art: 'snowman', text: 'Każdym trafieniem spowalnia twoje ataki.' },
   'jajo-sortownik': { id: 'jajo-sortownik', name: 'Jajo-Sortownik', zone: 2, hp: 60, atk: 5, aspd: 90, armor: 8, evade: 0, crit: 0, shieldHits: 3, art: 'robot', text: 'Tarcza pochłania pierwsze 3 ciosy.' },
-  'kot-ochroniarz': { id: 'kot-ochroniarz', name: 'Kot Ochroniarz', zone: 2, hp: 39, atk: 6, aspd: 130, armor: 2, evade: 25, crit: 25, art: 'cat', text: 'Wysoki unik i krytyk.' },
+  'kot-ochroniarz': { id: 'kot-ochroniarz', name: 'Kot Ochroniarz', zone: 2, hp: 39, atk: 6, aspd: 130, armor: 2, evade: 25, crit: 25, art: 'cat', text: 'Wysoki unik i dziobnięcie.' },
   'ksiegowy-kanarek': { id: 'ksiegowy-kanarek', name: 'Księgowy Kanarek', zone: 2, hp: 37, atk: 5, aspd: 100, armor: 0, evade: 0, crit: 0, steal: { n: 1, max: 99 }, art: 'canary', text: 'Każdy cios zabiera Ziarno.' },
   'kaczka-podpalaczka': { id: 'kaczka-podpalaczka', name: 'Kaczka Podpalaczka', zone: 0, hp: 22, atk: 2, aspd: 100, armor: 0, evade: 0, crit: 0, ignite: 30, art: 'duck', text: 'Jej ciosy cię podpalają: Oparzenie co sekundę.' },
   'kurczak-z-zamrazarki': { id: 'kurczak-z-zamrazarki', name: 'Kurczak z Zamrażarki', zone: 1, hp: 52, atk: 6, aspd: 80, armor: 2, evade: 0, crit: 0, rise: 50, resist: ['frost'], art: 'zombie', text: 'Odporny na Mróz. Po śmierci wstaje z połową Życia, chyba że płonie.' },
@@ -605,7 +605,7 @@ export const BOSSES = {
     text: 'Każdy cios zabiera Ziarno (do 6), co 7 s Audyt: zdejmuje statusy i daje tarczę, a co 15 s blokuje ci jedną umiejętność.', quote: 'Nie ma budżetu na twoje zwycięstwo.' },
   'wampir-hr': { id: 'wampir-hr', slot: 'prezes', name: 'Wampir z Działu HR', title: 'Zarząd', hp: 112, atk: 12, aspd: 90, armor: 5, evade: 10, crit: 0, art: 'cat', tint: 'blood', mech: ['summon', 'rage'], vamp: 45, summon: { every: 180, n: 1, max: 3 }, rage: { at: 40, aspd: 145 },
     text: 'Leczy się 45% zadanych obrażeń, przyzywa stażystów na rozmowy kwalifikacyjne, a poniżej 40% życia wpada w szał.', quote: 'Zapraszamy na rozmowę. Nie wychodzi się z niej żywym.' },
-  // Dodatkowe (opcjonalne) rundy po wygranej na piętrze 3 i 6 (EXTRA_AT): extra: true, slot: null. Pies Pipsztala to osobny wróg (EXTRA_DOG).
+  // Dodatkowe (opcjonalne) rundy po wygranej na piętrze 3 i 6 (EXTRA_AT): extra: true, slot: null. Pies Pipsztala, Lakuś, to osobny wróg (EXTRA_DOG).
   gruszka: { id: 'gruszka', slot: null, extra: true, name: 'Gruszka', title: 'Pan Sadu', hp: 120, atk: 7, aspd: 95, armor: 5, evade: 0, crit: 10, art: 'gruszka', idle: 20, mech: ['rage'], rage: { at: 40, aspd: 135 },
     text: 'Wielki kurczak z głową gruszki. Na starcie wyśmiewa twój build, a poniżej 40% życia wpada w szał.', quote: 'Najpierw cię wyśmieję, potem obiorę.' },
   pipsztal: { id: 'pipsztal', slot: null, extra: true, name: 'Pipsztal', title: 'Dresiarz z Psem', hp: 145, atk: 10, aspd: 90, armor: 4, evade: 0, crit: 20, art: 'pipsztal', mech: ['stunhero', 'pet'], stunHero: { every: 70, dur: 12 },
@@ -620,9 +620,9 @@ export const BOSSES = {
 };
 // Pule wariantów bossów na miejsce (slot z MODES.*.bosses). Wariant losuje się z ziarna runu (rules.js → bossFor).
 export const BOSS_POOL = { brojler: ['brojler', 'szef-nocnej', 'krol-szczurow'], skubarka: ['skubarka', 'wielka-chlodnia', 'wozek-prototyp'], prezes: ['prezes', 'dyrektor-finansowy', 'wampir-hr'] };
-// Dodatkowe rundy: piętro -> boss. Pies Pipsztala: wróg pomocniczy (minion), spowalnia atakami.
+// Dodatkowe rundy: piętro -> boss. Pies Pipsztala (Lakuś): wróg pomocniczy (minion), spowalnia atakami.
 export const EXTRA_AT = { 3: 'gruszka', 6: 'pipsztal' };
-export const EXTRA_DOG = { id: 'pies-pipsztala', name: 'Pies Pipsztala', hp: 42, atk: 3, aspd: 110, armor: 0, evade: 0, crit: 0, art: 'pipdog', minion: true, slow: { pct: 20, ticks: 30 }, text: 'Sika na ciebie i spowalnia twoje ataki.' };
+export const EXTRA_DOG = { id: 'pies-pipsztala', name: 'Lakuś', hp: 42, atk: 3, aspd: 110, armor: 0, evade: 0, crit: 0, art: 'pipdog', minion: true, slow: { pct: 20, ticks: 30 }, text: 'Sika na ciebie i spowalnia twoje ataki.' };
 export const SUPER_BOSSES = ['super-skubarka', 'super-rada', 'super-prezes'];
 
 // ---------- Szablony zwykłych pięter ----------
@@ -657,7 +657,7 @@ export const BADGES = {
   'karta-multisport': { name: 'Karta Multisport', text: '+3 Regeneracji / s, +5% uniku', fx: [{ k: 'regen', v: 30 }, { k: 'evade', v: 5 }] },
   'awans': { name: 'Awans', text: '+20% Ataku', fx: [{ k: 'atkPct', v: 20 }] },
   'kawa-z-ekspresu': { name: 'Kawa z Ekspresu', text: '+15% szybkości ataku', fx: [{ k: 'aspdPct', v: 15 }] },
-  'nagana-z-wpisem': { name: 'Nagana z Wpisem', text: '+10% szansy na trafienie krytyczne; krytyki nakładają 2 stosy Krwawienia', fx: [{ k: 'crit', v: 10 }, { k: 'critBleed', v: 2 }] },
+  'nagana-z-wpisem': { name: 'Nagana z Wpisem', text: '+10% szansy na dziobnięcie; mocne dziobnięcia nakładają 2 stosy Krwawienia', fx: [{ k: 'crit', v: 10 }, { k: 'critBleed', v: 2 }] },
   'fundusz-socjalny': { name: 'Fundusz Socjalny', text: 'Odpoczynek leczy 2 razy więcej i kosztuje 1 Ziarno mniej', fx: [{ k: 'restBonus', v: 20 }, { k: 'restDisc', v: 1 }] },
   'klucz-do-serwerowni': { name: 'Klucz do Serwerowni', text: 'Efekty statusowe trwają 50% dłużej, Oparzenie i Salmonella +15% obrażeń', fx: [{ k: 'stDur', v: 50 }, { k: 'burnPct', v: 15 }, { k: 'poisonPct', v: 15 }] },
   'parasol-ochronny': { name: 'Parasol Ochronny', text: 'Pierwsze 3 ciosy wrogów w każdej walce są zablokowane', fx: [{ k: 'parasol', v: 3 }] },

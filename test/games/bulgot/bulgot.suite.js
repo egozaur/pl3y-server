@@ -1418,7 +1418,7 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
 });
 
 test('RUN_V = 7: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 17, 'wersja reguł');
+  eq(R.RUN_V, 18, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1881,7 +1881,7 @@ test('Nowości: kompletność danych (klątwy, trasy, bossowie, osiągnięcia), 
   for (const id of D.SUPER_BOSSES) assert(D.BOSSES[id].super, 'super-boss ' + id);
   for (const [id, b] of Object.entries(D.KURNIK)) { assert(b.name && b.text && b.cost.length === 3 && b.cost[0] < b.cost[2], 'budynek ' + id); }
   for (const a of ['a-klatwa', 'a-klatwy3', 'a-dogrywka', 'a-dogrywka15', 'a-duch', 'a-towarzysz', 'a-trasy', 'a-kurnik', 'a-kurnik-max']) assert(D.ACH_BY_ID[a], 'osiągnięcie ' + a);
-  eq(R.RUN_V, 17, 'RUN_V 17');
+  eq(R.RUN_V, 18, 'RUN_V 18');
 });
 
 test('Jajko Dinozaura: tylko jedno na run (po wykluciu nie wraca do ofert)', () => {
@@ -2118,8 +2118,8 @@ test('etap 4: wzmocnienia: Pobudka, Echo, Przyspieszony Obieg', () => {
   const o0 = ob(0); assert(o0[1] < o0[0], 'Obieg skraca cooldown pozostałych'); const o1 = ob(1); assert(o1[1] < o0[1], 'Turbo Obieg skraca mocniej');
   const o2 = new Fight(setup({ hp: 400, lo: { skills: [{ id: 'obieg', lvl: 3, mut: 2 }] }, enemies: [foe({ hp: 1e7, atk: 1, aspd: 10 })] })); o2.hp = 50; o2.skills[0].cd = 0; o2.step([0]); assert(o2.hp > 50, 'Obieg Zamknięty leczy');
 });
-test('etap 4: RUN_V 17, nowe umiejętności trafiają do ofert', () => {
-  eq(R.RUN_V, 17, 'RUN_V');
+test('etap 4: RUN_V 18, nowe umiejętności trafiają do ofert', () => {
+  eq(R.RUN_V, 18, 'RUN_V');
   const seen = new Set();
   for (let seed = 1; seed < 300; seed++) { const r = R.newRun({ mode: 'full', char: 'pyrtek', garnek: 0, pool: ALL, seed }); const run = r.run; for (const o of (run.cur && run.cur.offer) || []) { const t = D.TILE_BY_ID[o.id || o]; if (t && t.skill && NEW20.includes(t.skill)) seen.add(t.skill); } }
   assert(seen.size >= 5, 'nowe umiejętności pojawiają się w ofertach (widziano ' + seen.size + ')');

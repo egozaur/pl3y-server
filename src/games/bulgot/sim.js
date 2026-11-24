@@ -43,7 +43,7 @@ export class Fight {
     this.chain = 0; this.chainT = -99; this.chainSlots = []; this.skillBonus = 0; this.chains = 0; this.reacts = 0; this.reactSeen = [];
     if (this.S.startBurn || this.S.startFrost) for (const e of this.enemies) { if (this.S.startBurn) this.applyStatus(e, 'burn', this.S.startBurn); if (this.S.startFrost) this.applyStatus(e, 'frost', this.S.startFrost); }
     this.stolen = 0; this.dealt = 0; this.taken = 0; this.maxHit = 0; this.kills = 0; this.used = 0; this.lowest = this.hp;
-    this.critRolls = 0; this.critHits = 0;   // tylko do ciekawostek: ile razy losowano krytyk i ile razy wypadł
+    this.critRolls = 0; this.critHits = 0;   // tylko do ciekawostek: ile razy losowano dziobnięcie (crit) i ile razy wypadło
     // Etap 4: 20 nowych umiejętności
     this.coinsHave = this.loadout.coins | 0;                  // Bonus Kwartalny czyta Ziarna z kieszeni
     this.echoLeft = 0; this.echoUntil = 0;                    // Kurze Echo
@@ -97,10 +97,10 @@ export class Fight {
     let raw = fl(this.S.atk * pct / 100);
     raw = fl(raw * (100 + this.S.dmg + this.skillBonus + (this.S.overtime && this.tick >= 200 ? this.S.overtime : 0) + (this.S.vsCold && (t.frost > 0 || this.tick < t.frozenUntil) ? this.S.vsCold : 0) + (this.S.vsBurn && t.burn > 0 ? this.S.vsBurn : 0) + (this.tick < this.dmgUntil ? this.dmgBonus : 0) + (this.tick < this.buffUntil ? this.buffDmg : 0) + (this.tick < (t.vulnUntil || 0) ? t.vulnPct : 0)) / 100);
     let crit = false;
-    if (t.brittle) { t.brittle = false; crit = true; raw = fl(raw * this.S.critMult / 100); }   // Kruchość: trafienie zawsze krytyczne
+    if (t.brittle) { t.brittle = false; crit = true; raw = fl(raw * this.S.critMult / 100); }   // Kruchość: trafienie zawsze jest mocnym dziobnięciem
     else if (canCrit || (this.S.skillCrit && this.inSkill)) {
       const volley = this.S.volley && kind === 'atk' && this.volleyN++ % 5 === 0;   // Armia Jednego Kurczaka: pierwszy i co piąty atak
-      const forced = this.tick < this.critUntil || !!volley;   // jak wcześniej: wymuszony krytyk nie losuje (kolejność losowań bez zmian)
+      const forced = this.tick < this.critUntil || !!volley;   // jak wcześniej: wymuszone mocne dziobnięcie nie losuje (kolejność losowań bez zmian)
       if (!forced) this.critRolls++;
       if (forced || this.rng.int(100) < this.S.crit + (this.tick < this.buffUntil ? this.buffCrit : 0)) { crit = true; if (!forced) this.critHits++; raw = fl(raw * this.S.critMult / 100); }
     }
@@ -228,7 +228,7 @@ export class Fight {
     if (!s || this.over || this.tick < s.cd || this.tick < s.blockedUntil || this.tick < this.heroStunUntil) return false;
     const def = SKILLS[s.id], pw = s.lvl >= 2 ? 130 : 100, m = s.lvl >= 3 ? (s.mut || 1) : 0;
     s.cd = this.tick + fl((s.lvl >= 2 ? fl(def.cd * 80 / 100) : def.cd) * (100 - Math.min(80, (this.S.cdPct || 0) + (slot === 0 ? this.S.alphaCd || 0 : 0))) / 100);   // Kogut Alfa skraca cooldown 1. slotu
-    this.inSkill = true;   // Dziób Mistrza: trafienia umiejętności mogą być krytyczne
+    this.inSkill = true;   // Dziób Mistrza: trafienia umiejętności mogą być mocnymi dziobnięciami
     this.used++;
     this.push({ k: 'skill', slot, id: s.id, mut: m });
     const alive = this.alive(), P = x => fl(x * pw / 100), tick = this.tick;

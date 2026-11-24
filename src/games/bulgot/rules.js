@@ -57,7 +57,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 17;
+export const RUN_V = 18;
 
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null, curses = [], kurnik = {} }) {
   const M = MODES[mode], ch = CHARS[char];
@@ -739,8 +739,8 @@ export function buildSetup(run) {
   const rp = garnekRamp(run.mode, run.round), gm = { ...gm0, enemyHp: fl(gm0.enemyHp * rp / 100), enemyAtk: fl(gm0.enemyAtk * rp / 100), bossHp: fl(gm0.bossHp * rp / 100) };   // premie palnika rosną z piętrem
   if (extraOn(run)) {   // dodatkowa runda: sam boss (Pipsztal z psem), bez szablonów, tras i cech
     const def = BOSSES[run.extra.id];
-    const be = concrete(def, s, gm, { boss: def.id, title: def.title, aspd: fl(def.aspd * (100 + gm.bossAspd) / 100), idle: def.idle || 0 });
-    if (gm.bossHp) be.hp = fl(be.hp * (100 + gm.bossHp) / 100);
+    const gmx = { ...gm, enemyHp: fl(gm.enemyHp / 2), enemyAtk: fl(gm.enemyAtk / 2) };   // dodatkowa runda jest opcjonalna: premie palnika dla bossów (życie, szybkość) jej nie dotyczą, a premie dla zwykłych wrogów liczą się w połowie
+    const be = concrete(def, s, gmx, { boss: def.id, title: def.title, aspd: def.aspd, idle: def.idle || 0 });
     const bp = M.extraPct || { hp: 100, atk: 100 }; be.hp = Math.max(1, fl(be.hp * bp.hp / 100)); be.atk = Math.max(1, fl(be.atk * bp.atk / 100));
     const foes = [be];
     if ((def.mech || []).includes('pet')) foes.unshift(concrete(EXTRA_DOG, s, gm, { pet: true }));
@@ -824,7 +824,7 @@ export function fightFinish(run, inputs) {
   const entry = () => ({ r: run.round, zone: setup.zone, boss: setup.boss, elite: setup.elite, tpl: setup.tpl || null, enemies: setup.enemies.map(e => ({ n: e.name, hp: e.hp, atk: e.atk })),
     offer: c.offer, picked: c.picked, bought: c.bought, upgrades: c.upgrades || [], rerolls: c.rerolls, rested: c.rested || 0, event: c.event, bet: c.bet || null,
     hero: { maxHp: S.maxHp, atk: S.atk, aspd: S.aspd, armor: S.armor, crit: S.crit, evade: S.evade, regen: S.regen }, tiles: run.tiles.length, skills: run.skills.map(s => s.id + (s.lvl > 1 ? '*' : '')),
-    coinsBefore, coinsAfter: run.coins, hpBefore, hpAfter: res.hp, win: res.win, ticks: res.ticks, dealt: res.dealt, taken: res.taken, maxHit: res.maxHit, skillsUsed: res.skillsUsed, stolen: res.stolen, revived: res.usedRevive, timeout: res.timeout });
+    coinsBefore, coinsAfter: run.coins, hpBefore, hpAfter: res.hp, win: res.win, foeLeft: res.foeLeft, inputs: (Array.isArray(inputs) ? inputs : []).slice(0, 120).map(x => Array.isArray(x) ? [x[0] | 0, x[1] | 0] : [0, 0]), ticks: res.ticks, dealt: res.dealt, taken: res.taken, maxHit: res.maxHit, skillsUsed: res.skillsUsed, stolen: res.stolen, revived: res.usedRevive, timeout: res.timeout });
   setCoins(run, run.coins - Math.min(run.coins, res.stolen) + (res.coinsWon || 0));
   if (res.usedRevive) run.flags.revived = true;
   // Wadliwa Partia: wady kafelków wziętych przed tą walką ujawniają się i od teraz działają.
