@@ -1,6 +1,6 @@
 // Bulgot: warunki osiągnięć (tylko serwer). Sprawdzane po zakończeniu runu na profilu i zakończonym runie.
 // Statystyki walk (`r.stats.v2`) zbieramy od wersji z osiągnięciami; starsze runy w toku nie przyznają osiągnięć „stylu” (brak danych).
-import { ACHIEVEMENTS, CHARS, TILES, RECIPES, REACTIONS, MODES, KURNIK, KURNIK_MAX } from './data.js';
+import { ACHIEVEMENTS, CHARS, CHAR_IDS, TILES, RECIPES, REACTIONS, MODES, KURNIK, KURNIK_MAX } from './data.js';
 
 const win = r => !!r && r.ended === 'win';
 const v2 = r => !!r && !!r.stats && !!r.stats.v2;
@@ -13,7 +13,7 @@ export const seenTotal = p => TILES_COUNTED.filter(t => p.seen.includes(t.id)).l
 
 // Ukończenie gry w %: zwycięstwa (tryb × postać × palnik), poznane kafelki, kombinacje (przepisy + reakcje), osiągnięcia.
 export function completion(p) {
-  const chars = Object.keys(CHARS), modes = Object.keys(MODES);
+  const chars = CHAR_IDS, modes = Object.keys(MODES);
   const parts = [
     { id: 'clears', name: 'Zwycięstwa (tryb × postać × palnik)', done: Object.keys(p.clears || {}).length, total: modes.length * chars.length * 6, w: 35 },
     { id: 'tiles', name: 'Poznane kafelki', done: seenTotal(p), total: tilesTotal(), w: 20 },
@@ -35,7 +35,7 @@ const CHECKS = {
   'a-g5': (p, r) => win(r) && r.garnek >= 5,
   'a-pyrtek': p => wonWith(p, 'pyrtek'), 'a-kwoka': p => wonWith(p, 'kwoka'), 'a-kaczor': p => wonWith(p, 'kaczor'),
   'a-indor': p => wonWith(p, 'indor'), 'a-zjarany': p => wonWith(p, 'zjarany'),
-  'a-zagroda': p => Object.keys(CHARS).every(c => wonWith(p, c)),
+  'a-zagroda': p => CHAR_IDS.every(c => wonWith(p, c)),
   'a-bez-synergii': (p, r) => win(r) && v2(r) && !st(r).syn,
   'a-bez-zakupow': (p, r) => win(r) && v2(r) && !st(r).buys,
   'a-bez-rerolli': (p, r) => win(r) && v2(r) && !st(r).rerolls,
@@ -69,7 +69,7 @@ const CHECKS = {
   'a-reakcje-all': p => (p.reactions || []).length >= Object.keys(REACTIONS).length,
   'a-kolekcjoner': p => p.seen.length >= 40,
   'a-zbieracz': p => seenTotal(p) >= tilesTotal(),
-  'a-wszystkie-postacie': p => Object.keys(CHARS).every(c => p.chars.includes(c)),
+  'a-wszystkie-postacie': p => CHAR_IDS.every(c => p.chars.includes(c)),
   'a-pierwszy': p => p.counters.runs >= 1,
   'a-wytrwaly': p => p.counters.runs - p.counters.wins >= 5,
   'a-weteran': p => p.counters.runs >= 10,

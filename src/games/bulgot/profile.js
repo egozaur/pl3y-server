@@ -150,6 +150,10 @@ const CHECKS = {
   'u-skibidi': (p, r) => !!r && (r.stats.skillUses || 0) >= 100,
   'u-emeryt': (p, r) => !!r && r.mode === 'full' && r.stats.maxRound >= 15,
   'u-sigma': (p, r) => !!r && r.stats.bossKills.length >= 3,
+  'u-sanepid': p => (p.bosses.brojler || 0) > 0,
+  'u-wanda': (p, r) => !!r && !!r.stats.hatched && r.stats.hatched.length > 0,
+  'u-zwiazkowiec': (p, r) => !!r && (r.stats.chains || 0) >= 1,
+  'u-pacyfista': (p, r) => !!r && (r.stats.skillUses || 0) >= 60,
   'u-koniczyna': (p, r) => !!r && r.stats.maxCoins >= 100,
   'u-unik': p => (p.bosses.brojler || 0) > 0,
   'u-zagrzebanie': (p, r) => !!r && r.stats.lowWin,
@@ -177,6 +181,7 @@ export function evaluate(p, r) {
   for (const u of UNLOCKS) {
     if (p.unlocked.includes(u.id)) continue;
     const ok = CHECKS[u.id];
+    if (u.kind === 'char' && CHARS[u.target] && CHARS[u.target].retired) continue;   // wycofane postacie nie odblokowują się już
     if (ok && ok(p, r)) {
       p.unlocked.push(u.id);
       if (u.kind === 'char' && !p.chars.includes(u.target)) p.chars.push(u.target);

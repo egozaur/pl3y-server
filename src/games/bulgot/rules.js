@@ -3,7 +3,8 @@
 // Każda funkcja zwraca { ok: true, ... } albo { err, code }. Stan zapisuje i autoryzuje BgPlayer (player.js).
 import { mix, hash, makeRng } from './rng.js';
 import { SKILLS, TILES, RECIPES, BADGES, BADGE_OFFER, BADGE_POOL, AFFIXES, MODES, CHARS, TILE_BY_ID, ENEMIES, BOSSES, RULES, FLOOR_TPL, garnekRamp, RARITY_WEIGHTS, TYPE_WEIGHTS, DECREES, FLAWS, NEMESIS_TITLES, NEMESIS_NAMES, garnekMods, formFor, BOSS_POOL, SUPER_BOSSES, EXTRA_AT, EXTRA_DOG, ROUTES, CURSES, CURSE_MAX, cursePct, COMPANIONS, COMPANION_OFFER, KURNIK, KURNIK_MAX } from './data.js';
-import { heroStats, setCounts } from './stats.js';
+import { heroStats, setCounts, elemCounts } from './stats.js';
+import { COUNTERS, COUNTER_OF, COUNTER_K, ARCHETYPES } from './data.js';
 import { runFight } from './sim.js';
 
 const fl = Math.floor;
@@ -57,7 +58,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 18;
+export const RUN_V = 19;
 
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null, curses = [], kurnik = {} }) {
   const M = MODES[mode], ch = CHARS[char];
@@ -77,7 +78,8 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null
   run.decrees = decreesOf(run.seed);
   run.coins += kLv(run, 'spizarnia');   // Kurnik: Spiżarnia
   if (kLv(run, 'pisklecarnia') === 1) { const ks = Object.keys(COMPANIONS); run.companion = { id: makeRng(mix(run.seed, hash('startcomp'))).pick(ks), lvl: compLevel(run) }; }   // Kurnik: Pisklęcarnia
-  if (ch.startTiles) run.tiles = ch.startTiles.slice();   // Dinozaur zaczyna z Jajkiem
+  if (ch.startTiles) run.tiles = ch.startTiles.slice();   // Dinozaur zaczyna z Jajkiem, Rzeźnik z Ostrogami, Wanda z Tykającym Jajem
+  if (ch.startCompanion && !run.companion) { const ks = Object.keys(COMPANIONS); run.companion = { id: makeRng(mix(run.seed, hash('startcomp'))).pick(ks), lvl: compLevel(run) }; }   // Kurczak Pacyfista: towarzysz od początku
   if (ch.randomSkill) {   // Kurczak Mutant (1) i Skibidi (2): losowe umiejętności na start, bez powtórzeń
     const rr = makeRng(mix(run.seed, hash('mutskill'))), keys = Object.keys(SKILLS); run.skills = [];
     while (run.skills.length < Math.min(ch.randomSkill === true ? 1 : ch.randomSkill, maxSkillsOf(run), keys.length)) { const id = rr.pick(keys); if (!run.skills.some(s => s.id === id)) run.skills.push({ id, lvl: 1 }); }
@@ -675,12 +677,15 @@ const riskyDoor = run => !!(run.door && run.door.risky);
 export function floorTemplate(run) {
   const M = MODES[run.mode], r = run.round;
   if (bossAt(run, r) || r <= M.early.rounds || isElite(run) || riskyDoor(run) || isNemesisRound(run)) return null;
-  const zi = zoneOf(run.mode, r), keys = Object.keys(FLOOR_TPL).filter(k => k !== 'zwiad' || zi < 2);
+  const zi = zoneOf(run.mode, r), keys = Object.keys(FLOOR_TPL).filter(k => (k !== 'zwiad' || zi < 2) && zi >= (FLOOR_TPL[k].minZone || 0));
   let tot = 0; for (const k of keys) tot += FLOOR_TPL[k].w;
   let x = makeRng(mix(run.seed, r, hash('tpl'))).int(tot);
   for (const k of keys) { x -= FLOOR_TPL[k].w; if (x < 0) return k === 'zwykle' ? null : k; }
   return null;
 }
+// Limit wrogów w jednej walce: bazowy + za każdego towarzysza gracza (dziś najwyżej jednego).
+export const petCount = run => (run.companion ? 1 : 0);
+export const enemyCap = run => RULES.foeCap + RULES.foePerPet * petCount(run);
 const soloPool = zone => Object.values(ENEMIES).filter(e => e.zone === zone && !e.minion && !e.swarm).map(e => e.id);
 
 export function encounterIds(run) {
@@ -697,6 +702,8 @@ export function encounterIds(run) {
   if (tpl === 'czempion') return [rr.pick(solo)];
   if (tpl === 'roj') return Array.from({ length: FLOOR_TPL.roj.n }, () => rr.pick(solo));
   if (tpl === 'zwiad') return [rr.pick(soloPool(zi + 1))];
+  if (tpl === 'horda') { const n = Math.min(enemyCap(run), 4 + zi + petCount(run)); return Array.from({ length: n }, () => rr.pick(solo)); }
+  if (tpl === 'armia') return Array.from({ length: enemyCap(run) }, () => rr.pick(solo));
   if (tpl === 'para') { const a = rr.pick(solo); return [a, rr.pick(solo.filter(id => id !== a))]; }
   // Strefa I: do 2 wrogów naraz; strefy II i III: w późniejszych rundach strefy do 3.
   let count = k <= 1 ? 1 : k <= 3 ? 1 + rr.int(2) : (zi === 0 ? 2 : 2 + rr.int(2));
@@ -705,6 +712,43 @@ export function encounterIds(run) {
   const sw = ids.find(id => ENEMIES[id].swarm);
   const out = sw ? Array(ENEMIES[sw].swarm).fill(sw) : ids;
   return isElite(run) || riskyDoor(run) ? out.slice(0, 2) : out;   // elita (i ryzykowne drzwi) przychodzi najwyżej z jednym pomocnikiem
+}
+
+// Profil buildu gracza (adaptacja bossów, elit i dodatkowych bossów): wynik punktowy każdego stylu, main = najsilniejszy powyżej progu.
+// Czysta funkcja wyposażenia, bez losowania. Nie zdradza ziarna, więc nadaje się do widoku.
+export function buildProfile(run) {
+  const S = statsOf(run), ec = elemCounts(run.tiles, run.skills), sk = id => run.skills.some(x => x.id === id);
+  const healSk = ['zagrzebanie', 'pogotowie', 'zupa', 'kawa', 'garsc'].filter(sk).length;
+  const all = {
+    fire: 2 * (ec.ogien || 0) + (S.burnHit ? 3 : 0) + (S.startBurn ? 2 : 0) + (S.smoke ? 4 : 0) + S.burnPct / 20,
+    frost: 2 * (ec.lod || 0) + (S.frostHit ? 3 : 0) + (S.startFrost ? 2 : 0),
+    poison: 2 * (ec.trucizna || 0) + (S.poisonHit ? 3 : 0) + S.poisonPct / 20,
+    bleed: 2 * (ec.krew || 0) + (S.bleed ? 3 : 0) + (S.critBleed ? 1 : 0),
+    crit: Math.max(0, (S.crit - 15) / 6 + (S.critMult - 150) / 30),
+    armor: S.armor / 6,
+    heal: S.regen / 8 + S.healBonus / 5 + healSk * 2,
+    skills: run.skills.reduce((a, x) => a + (x.lvl >= 2 ? 2 : 1) + (x.lvl >= 3 ? 1 : 0), 0) + S.cdPct / 15,
+    eggs: S.egg ? 4 + 2 * (ec.jajo || 0) : 0,
+  };
+  let main = null, best = 4.5;
+  for (const k of Object.keys(all)) if (all[k] > best) { best = all[k]; main = k; }
+  return { main, score: best, all };
+}
+// Plan kontr dla bossa / elity / dodatkowego bossa. kind: 'boss' | 'extra' | 'elite'. Liczba i siła rosną z palnikiem (COUNTER_K).
+export function counterPlan(run, kind) {
+  if (kind === 'elite' && run.round <= MODES[run.mode].early.rounds) return [];   // wczesne piętra zostają spokojne
+  const prof = buildProfile(run), p = Math.min(5, run.garnek | 0);
+  const k = COUNTER_K[p] / 100 * (kind === 'elite' ? 0.4 : kind === 'extra' ? 0.3 : 1);
+  const ids = [];
+  if (prof.main) ids.push(COUNTER_OF[prof.main]);
+  if (kind === 'boss' && (p >= 3 || !ids.length)) ids.push('swiat');
+  else if (!ids.length && kind === 'elite') ids.push('swiat');   // dodatkowi bossowie bez wyraźnego stylu gracza nie dostają kontry (są opcjonalni)
+  const ats = kind === 'boss' ? [[50, 50, 50, 55, 60, 65][p], 30] : [50, 30];
+  return ids.map((id, i) => {
+    const C = COUNTERS[id];
+    const n = !C.n ? 0 : kind === 'boss' ? (id === 'swiat' ? Math.round(1.6 + 0.9 * p / 5) : C.n) : kind === 'extra' ? 0 : (id === 'swiat' && p >= 3 ? 2 : 1);   // elity i dodatkowi bossowie: mniej pomocników
+    return { id, at: ats[i], heal: Math.min(100, Math.round(C.heal * k)), dur: Math.round(C.dur * k), n, pct: C.pct || 0, add: C.add || null, pw: id === 'swiat' ? 45 : 60 };
+  });
 }
 
 // Cechy elity: losowane z ziarna runu (widoczne w podglądzie piętra, bo dotyczą bieżącego spotkania).
@@ -741,6 +785,7 @@ export function buildSetup(run) {
     const def = BOSSES[run.extra.id];
     const gmx = { ...gm, enemyHp: fl(gm.enemyHp / 2), enemyAtk: fl(gm.enemyAtk / 2) };   // dodatkowa runda jest opcjonalna: premie palnika dla bossów (życie, szybkość) jej nie dotyczą, a premie dla zwykłych wrogów liczą się w połowie
     const be = concrete(def, s, gmx, { boss: def.id, title: def.title, aspd: def.aspd, idle: def.idle || 0 });
+    be.counters = counterPlan(run, 'extra');
     const bp = M.extraPct || { hp: 100, atk: 100 }; be.hp = Math.max(1, fl(be.hp * bp.hp / 100)); be.atk = Math.max(1, fl(be.atk * bp.atk / 100));
     const foes = [be];
     if ((def.mech || []).includes('pet')) foes.unshift(concrete(EXTRA_DOG, s, gm, { pet: true }));
@@ -757,6 +802,7 @@ export function buildSetup(run) {
     if (run.flags.bossHpBonus) be.hp = fl(be.hp * (100 + run.flags.bossHpBonus) / 100);
     if (gm.bossHp) be.hp = fl(be.hp * (100 + gm.bossHp) / 100);   // wyższe palniki: mocniejsi bossowie
     if (def.auditEvery) be.audit = def.auditEvery;
+    be.counters = counterPlan(run, 'boss');
     enemies = [be];
     if (def.guards) {
       const g = ENEMIES['kot-ochroniarz'];
@@ -776,15 +822,20 @@ export function buildSetup(run) {
     if (tpl === 'czempion') { const e0 = enemies[0]; e0.hp = fl(e0.hp * TP.hp / 100); e0.champion = true; e0.name = 'Czempion ' + e0.name; }
     if (tpl === 'roj') for (const e of enemies) { e.hp = Math.max(1, fl(e.hp * TP.hp / 100)); e.atk = Math.max(1, fl(e.atk * TP.atk / 100)); }
     if (tpl === 'zwiad') enemies[0].scout = true;
+    if (TP && TP.many) {   // Horda i Armia: słabsi wrogowie, dowódca Armii mocniejszy, część wchodzi od razu, reszta falami po RULES.waveSize
+      enemies.forEach((e, i) => { const lead = tpl === 'armia' && i === 0; e.hp = Math.max(1, fl(e.hp * (lead ? TP.leaderHp : TP.hp) / 100)); e.atk = Math.max(1, fl(e.atk * (lead ? 100 : TP.atk) / 100)); if (lead) { e.name = 'Dowódca ' + e.name; e.champion = true; } });
+      const first = tpl === 'armia' ? 3 : Math.ceil(enemies.length / 2);
+      enemies.forEach((e, i) => { if (i >= first) e.arrive = RULES.waveGap * (1 + fl((i - first) / RULES.waveSize)); });
+    }
     if (tpl === 'para') { const big = enemies[0].hp >= enemies[1].hp ? enemies[0] : enemies[1]; big.armor += TP.armor; for (const e of enemies) e.regenPct = (e.regenPct || 0) + TP.regen; }
-    if (elite) { const e0 = enemies[0]; e0.hp = fl(e0.hp * 130 / 100); e0.atk = fl(e0.atk * 112 / 100); e0.elite = true; e0.name = 'Elitarny ' + e0.name; e0.affixes = eliteAffixes(run); for (const a of e0.affixes) applyAffix(e0, a); }
+    if (elite) { const e0 = enemies[0]; e0.hp = fl(e0.hp * 130 / 100); e0.atk = fl(e0.atk * 112 / 100); e0.elite = true; e0.name = 'Elitarny ' + e0.name; e0.affixes = eliteAffixes(run); for (const a of e0.affixes) applyAffix(e0, a); e0.counters = counterPlan(run, 'elite'); }
     // Rozwidlenie Korytarza: za ryzykownymi drzwiami pierwszy wróg ma cechę elity.
-    if (riskyDoor(run) && !elite) { const e0 = enemies[0]; e0.hp = fl(e0.hp * RULES.doorHp / 100); e0.atk = fl(e0.atk * RULES.doorAtk / 100); e0.elite = true; e0.name = 'Elitarny ' + e0.name; e0.affixes = [run.door.affix]; applyAffix(e0, run.door.affix); }
+    if (riskyDoor(run) && !elite) { const e0 = enemies[0]; e0.hp = fl(e0.hp * RULES.doorHp / 100); e0.atk = fl(e0.atk * RULES.doorAtk / 100); e0.elite = true; e0.name = 'Elitarny ' + e0.name; e0.affixes = [run.door.affix]; applyAffix(e0, run.door.affix); e0.counters = counterPlan(run, 'elite'); }
     // Awans Wroga: Nemezis (z każdym awansem mocniejszy).
     if (isNemesisRound(run)) {
       const n = run.nemesis, e0 = enemies[0], lv = (n.lvl || 1) - 1;
       e0.hp = fl(e0.hp * (RULES.nemesisHp + 10 * lv) / 100); e0.atk = fl(e0.atk * (RULES.nemesisAtk + 5 * lv) / 100);
-      e0.elite = true; e0.nemesis = true; e0.name = nemesisName(n); e0.affixes = [n.affix]; applyAffix(e0, n.affix);
+      e0.elite = true; e0.nemesis = true; e0.name = nemesisName(n); e0.affixes = [n.affix]; applyAffix(e0, n.affix); e0.counters = counterPlan(run, 'elite');
     }
     // Lombard Lisa: każdy przepadły zastaw wzmacnia Lisy Windykatory.
     if (run.foxDebt) for (const e of enemies) if (e.id === 'lis-windykator') { const m = 100 + RULES.pawnFox * run.foxDebt; e.hp = fl(e.hp * m / 100); e.atk = fl(e.atk * m / 100); e.steal = { n: 1, max: 3 + run.foxDebt }; }
@@ -1016,6 +1067,7 @@ export function view(run) {
   if (!over) {
     if (!hideFoes(run)) { v.enemies = encounterIds(run); v.tpl = floorTemplate(run); }
     else { v.enemies = bossAt(run) ? encounterIds(run) : null; v.tpl = null; v.hidden = !bossAt(run); }
+    if (bossAt(run) || isElite(run) || isNemesisRound(run)) { const pm = buildProfile(run).main; v.intel = pm ? ARCHETYPES[pm] : null; }   // zapowiedź adaptacji: tylko nazwa stylu, bez kontry
   }
   return v;
 }

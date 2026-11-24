@@ -50,7 +50,7 @@ export class BgPlayer {
         }
         const mode = b.mode, char = b.char, g = Number(b.garnek) | 0;
         if (!MODES[mode]) return json({ err: 'Nieznany tryb.', code: 'mode' }, 400);
-        if (!CHARS[char] || !profile.chars.includes(char)) return json({ err: 'Ta postać jest jeszcze zablokowana.', code: 'char' }, 400);
+        if (!CHARS[char] || CHARS[char].retired || !profile.chars.includes(char)) return json({ err: 'Ta postać jest jeszcze zablokowana.', code: 'char' }, 400);
         if (g < 0 || g > profile.garnek) return json({ err: 'Ten poziom Garnka jest jeszcze zablokowany.', code: 'garnek' }, 400);
         const seed = mix(Date.now() & 0x7fffffff, hash(pl.n), (crypto.getRandomValues(new Uint32Array(1)))[0]);
         // Testament Pyrtka działa w runie inną postacią niż ta, która go spisała (chyba że masz tylko jedną postać).

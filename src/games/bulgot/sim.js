@@ -36,12 +36,14 @@ export class Fight {
     if (this.comp) this.comp.next = this.comp.L.every || 0;
     this.revive = !!h.revive; this.revived = false; this.okUsed = 0; this.volleyN = 0;
     this.uid = 0;
-    this.enemies = setup.enemies.map(e => this.mk(e));
-    if (this.S.scare) for (const e of this.enemies) e.stunUntil = Math.max(e.stunUntil, e.boss ? fl(this.S.scare / 2) : this.S.scare);   // Strach na Wróble
+    // Hordy i Armie: wrogowie z `arrive` wchodzą do walki dopiero w tym ticku (falami); do tego czasu czekają w `pending`.
+    this.enemies = setup.enemies.filter(e => !e.arrive).map(e => this.mk(e));
+    this.pending = setup.enemies.filter(e => e.arrive).sort((a, b) => a.arrive - b.arrive);
+    for (const e of this.enemies) this.enterFx(e);
     this.burnDealt = 0; this.freezes = 0;
     this.furyFrom = setup.fury || FURY_FROM; this.decree = this.loadout.decree || null;
     this.chain = 0; this.chainT = -99; this.chainSlots = []; this.skillBonus = 0; this.chains = 0; this.reacts = 0; this.reactSeen = [];
-    if (this.S.startBurn || this.S.startFrost) for (const e of this.enemies) { if (this.S.startBurn) this.applyStatus(e, 'burn', this.S.startBurn); if (this.S.startFrost) this.applyStatus(e, 'frost', this.S.startFrost); }
+    for (const e of this.enemies) this.enterStatus(e);
     this.stolen = 0; this.dealt = 0; this.taken = 0; this.maxHit = 0; this.kills = 0; this.used = 0; this.lowest = this.hp;
     this.critRolls = 0; this.critHits = 0;   // tylko do ciekawostek: ile razy losowano dziobnięcie (crit) i ile razy wypadło
     // Etap 4: 20 nowych umiejętności
@@ -53,6 +55,8 @@ export class Fight {
     this.thornFireUntil = 0; this.thornFireN = 2;             // Kocioł Zemsty
     this.soupUntil = 0; this.soupPct = 20;                    // Zupa Dnia
     this.buffUntil = 0; this.buffDmg = 0; this.buffCrit = 0;  // Kogucia Pobudka
+    this.dodgeBonus = 0; this.rampN = 0;   // Pan Jajeczko (adrenalina z uników) i Barista (rozgrzewka)
+    this.noHealUntil = 0; this.noHealPct = 0; this.eggOffUntil = 0; this.counters = 0;   // kontry bossów: Nożyce Budżetowe (blokada leczenia), Wielka Patelnia (jaja)
   }
 
   mk(e) {
@@ -68,6 +72,24 @@ export class Fight {
     return o;
   }
 
+  // Strach na Wróble: ogłuszenie wchodzącego wroga (połowa dla bossa).
+  enterFx(e) {
+    const d = (this.S.scare || 0) + (this.S.strike || 0);   // Strach na Wróble i Strajk Włoski (Kogut Związkowiec)
+    if (d) e.stunUntil = Math.max(e.stunUntil, this.tick + (e.boss ? fl(d / 2) : d));
+  }
+  // Statusy na starcie walki (zestawy Rosołowe i Chłodnicze).
+  enterStatus(e) { if (this.S.startBurn) this.applyStatus(e, 'burn', this.S.startBurn); if (this.S.startFrost) this.applyStatus(e, 'frost', this.S.startFrost); }
+  // Wchodzi kolejna fala: wróg dostaje zegary względem bieżącego ticku i chwilę nie atakuje.
+  spawn(def) {
+    const o = this.mk({ ...def, arrive: 0 });
+    if (o.spec) o.nextSpec = this.tick + o.spec.every;
+    if (o.audit) o.nextAudit = this.tick + o.audit;
+    o.idleUntil = this.tick + RULES.waveIdle;
+    this.enemies.push(o);
+    this.enterFx(o); this.enterStatus(o);
+    this.push({ k: 'arrive', uid: o.uid });
+    return o;
+  }
   alive() { return this.enemies.filter(e => !e.dead); }
   target() { return this.enemies.find(e => !e.dead) || null; }
   push(e) { e.t = this.tick; this.ev.push(e); }
@@ -76,6 +98,7 @@ export class Fight {
     let a = this.S.aspd;
     if (this.tick < this.hasteUntil) a = fl(a * 150 / 100);
     if (this.tick < this.soupUntil) a = fl(a * (100 + this.soupPct) / 100);   // Zupa Dnia
+    if (this.S.ramp) a = fl(a * (100 + Math.min(60, this.rampN * this.S.ramp)) / 100);   // Barista: rozgrzewka w walce
     if (this.tick < this.slowUntil) a = fl(a * 80 / 100);
     return Math.max(10, a);
   }
@@ -83,6 +106,7 @@ export class Fight {
 
   heal(n) {
     if (n <= 0 || this.hp <= 0) return;
+    if (this.tick < this.noHealUntil) { n = fl(n * (100 - this.noHealPct) / 100); if (n <= 0) return; }   // Nożyce Budżetowe
     const before = this.hp;
     this.hp = Math.min(this.S.maxHp, this.hp + n);
     if (this.hp > before) this.push({ k: 'heal', n: this.hp - before });
@@ -95,7 +119,7 @@ export class Fight {
     if (t.evade && this.rng.int(100) < t.evade) { this.push({ k: 'miss', to: t.uid }); return 0; }
     if (kind === 'atk' && this.tick < this.heroBlindUntil && this.rng.int(100) < this.heroBlindPct) { this.push({ k: 'miss', to: t.uid }); return 0; }   // Szef Nocnej Zmiany: oślepienie
     let raw = fl(this.S.atk * pct / 100);
-    raw = fl(raw * (100 + this.S.dmg + this.skillBonus + (this.S.overtime && this.tick >= 200 ? this.S.overtime : 0) + (this.S.vsCold && (t.frost > 0 || this.tick < t.frozenUntil) ? this.S.vsCold : 0) + (this.S.vsBurn && t.burn > 0 ? this.S.vsBurn : 0) + (this.tick < this.dmgUntil ? this.dmgBonus : 0) + (this.tick < this.buffUntil ? this.buffDmg : 0) + (this.tick < (t.vulnUntil || 0) ? t.vulnPct : 0)) / 100);
+    raw = fl(raw * (100 + this.S.dmg + this.skillBonus + (this.S.overtime && this.tick >= 200 ? this.S.overtime : 0) + (this.S.vsCold && (t.frost > 0 || this.tick < t.frozenUntil) ? this.S.vsCold : 0) + (this.S.vsBurn && t.burn > 0 ? this.S.vsBurn : 0) + (this.tick < this.dmgUntil ? this.dmgBonus : 0) + (this.tick < this.buffUntil ? this.buffDmg : 0) + (this.tick < (t.vulnUntil || 0) ? t.vulnPct : 0) + this.dodgeBonus + (this.S.vsStun && (this.tick < t.stunUntil || this.tick < t.frozenUntil) ? this.S.vsStun : 0) + (this.S.sanepid && t.poison >= 5 ? this.S.sanepid : 0)) / 100);
     let crit = false;
     if (t.brittle) { t.brittle = false; crit = true; raw = fl(raw * this.S.critMult / 100); }   // Kruchość: trafienie zawsze jest mocnym dziobnięciem
     else if (canCrit || (this.S.skillCrit && this.inSkill)) {
@@ -104,6 +128,7 @@ export class Fight {
       if (!forced) this.critRolls++;
       if (forced || this.rng.int(100) < this.S.crit + (this.tick < this.buffUntil ? this.buffCrit : 0)) { crit = true; if (!forced) this.critHits++; raw = fl(raw * this.S.critMult / 100); }
     }
+    if (crit && this.tick < (t.helmUntil || 0)) { raw = fl(raw * 100 / this.S.critMult); crit = false; }   // Kask Ochronny
     let d = Math.max(1, fl(raw * 100 / (100 + Math.max(0, t.armor))));
     if (t.shieldHits > 0) { t.shieldHits--; this.push({ k: 'shield', to: t.uid }); return 0; }
     if (t.shield > 0) { const a = Math.min(t.shield, d); t.shield -= a; d -= a; this.push({ k: 'shieldhit', to: t.uid, d: a }); if (d <= 0) return a; }
@@ -131,6 +156,7 @@ export class Fight {
     if (!t || t.dead || t.immune || n <= 0) return false;
     n += this.S.allStatus || 0;   // Złoty Rosołek
     if (t.resist && t.resist.includes(kind)) { this.push({ k: 'resist', to: t.uid, s: kind }); return false; }
+    if (t.noUntil && this.tick < (t.noUntil[kind] || 0)) { this.push({ k: 'resist', to: t.uid, s: kind }); return false; }   // kontra bossa: chwilowa odporność
     const def = STATUS[kind], S = this.S;
     const until = this.tick + fl(def.dur * (100 + (S.stDur || 0)) / 100) * (kind === 'frost' && this.decree === 'oszczednosci' ? 2 : 1);
     if (kind === 'frost') {
@@ -180,8 +206,8 @@ export class Fight {
   // Obrażenia jednego stosu na sekundę.
   dotPer(kind) {
     const S = this.S;
-    if (kind === 'bleed') return S.bleed + fl(S.atk * STATUS.bleed.per / 100);
-    const bonus = kind === 'burn' ? (S.burnPct || 0) : (S.poisonPct || 0);
+    if (kind === 'bleed') return fl((S.bleed + fl(S.atk * STATUS.bleed.per / 100)) * (100 + (S.dotPct || 0)) / 100);
+    const bonus = (kind === 'burn' ? (S.burnPct || 0) : (S.poisonPct || 0)) + (S.dotPct || 0);
     const d = Math.max(1, fl(S.atk * STATUS[kind].per * (100 + bonus) / 10000));
     return kind === 'burn' && this.decree === 'oszczednosci' ? Math.max(1, fl(d / 2)) : d;
   }
@@ -214,6 +240,7 @@ export class Fight {
     // Kurczak z Zamrażarki wstaje raz, chyba że płonie
     if (t.rise && !t.risen && !(t.burn > 0)) { t.risen = true; t.hp = Math.max(1, fl(t.maxHp * t.rise / 100)); t.frost = 0; this.push({ k: 'rise', uid: t.uid }); return; }
     t.dead = true; t.hp = 0; this.kills++;
+    if (this.S.bleedKillHeal && t.bleed > 0 && this.hp > 0) this.heal(Math.max(1, fl(this.S.maxHp * this.S.bleedKillHeal / 100)));   // Kogut Rzeźnik
     this.push({ k: 'kill', uid: t.uid });
     if (t.burn > 0 && this.S.burnSpread) { const nx = this.enemies.find(e => !e.dead && !e.immune); if (nx) this.applyStatus(nx, 'burn', Math.max(1, fl(t.burn * this.S.burnSpread / 100))); }   // Wywar Dnia
     if (t.poison > 0) { const nx = this.enemies.find(e => !e.dead && !e.immune); if (nx) this.applyStatus(nx, 'poison', Math.max(1, fl(t.poison * (STATUS.poison.spread + (this.S.spreadPct || 0)) / 100))); }
@@ -226,7 +253,7 @@ export class Fight {
   useSkill(slot) {
     const s = this.skills[slot];
     if (!s || this.over || this.tick < s.cd || this.tick < s.blockedUntil || this.tick < this.heroStunUntil) return false;
-    const def = SKILLS[s.id], pw = s.lvl >= 2 ? 130 : 100, m = s.lvl >= 3 ? (s.mut || 1) : 0;
+    const def = SKILLS[s.id], pw = fl((s.lvl >= 2 ? 130 : 100) * (100 + (this.S.skillPow || 0)) / 100), m = s.lvl >= 3 ? (s.mut || 1) : 0;
     s.cd = this.tick + fl((s.lvl >= 2 ? fl(def.cd * 80 / 100) : def.cd) * (100 - Math.min(80, (this.S.cdPct || 0) + (slot === 0 ? this.S.alphaCd || 0 : 0))) / 100);   // Kogut Alfa skraca cooldown 1. slotu
     this.inSkill = true;   // Dziób Mistrza: trafienia umiejętności mogą być mocnymi dziobnięciami
     this.used++;
@@ -556,7 +583,7 @@ export class Fight {
     if (this.tick < this.invulnUntil) { this.push({ k: 'block', from: e.uid }); if (this.unikKontra) this.heroHit(e, 100, false, 'kontra'); return; }
     if (this.parasol > 0) { this.parasol--; this.push({ k: 'block', from: e.uid }); return; }
     if (this.tick < this.blindUntil && this.rng.int(100) < this.blindPct) { this.push({ k: 'dodge', from: e.uid }); return; }
-    if (this.S.evade && this.rng.int(100) < this.S.evade) { this.push({ k: 'dodge', from: e.uid }); return; }
+    if (this.S.evade && this.rng.int(100) < this.S.evade) { this.push({ k: 'dodge', from: e.uid }); if (this.S.dodgeAtk) this.dodgeBonus = Math.min(50, this.dodgeBonus + this.S.dodgeAtk); return; }
     if (this.tick < this.coffeeEvadeUntil && this.rng.int(100) < this.coffeeEvade) { this.push({ k: 'dodge', from: e.uid }); return; }   // Przerwa Kawowa
     let pct = 100 + this.furyExtra();
     if (has(e, 'tyrant') && e.p3) pct += 2 * fl((this.tick - e.p3At) / 10);
@@ -565,7 +592,8 @@ export class Fight {
     let crit = false;
     if (e.crit && this.rng.int(100) < e.crit) { crit = true; raw = fl(raw * 150 / 100); }
     const lid = this.S.burnArmor ? Math.min(12, this.enemies.reduce((a, x) => a + (x.dead ? 0 : x.burn), 0)) * this.S.burnArmor : 0;   // Tłusta Pokrywka
-    let d = Math.max(1, fl(raw * 100 / (100 + this.S.armor + lid)));
+    const arm = this.tick < (e.pierceUntil || 0) ? fl(this.S.armor * (100 - e.pierce) / 100) : this.S.armor;   // Wiertło Dyrektora
+    let d = Math.max(1, fl(raw * 100 / (100 + arm + lid)));
     if (this.S.frostWeak && (e.frost > 0 || this.tick < e.frozenUntil)) d = Math.max(1, fl(d * (100 - this.S.frostWeak) / 100));   // Lodowa Spódnica
     const kontra = this.tick < this.kontraUntil;
     if (kontra) d = Math.max(1, fl(d * (100 - this.kontraRed) / 100));
@@ -609,6 +637,11 @@ export class Fight {
   // ---------- fazy i zagrywki bossów ----------
   phases() {
     for (const e of this.enemies) {
+      if (e.dead || !e.counters) continue;
+      const pc = e.hp * 100 / e.maxHp;
+      for (const c of e.counters) if (!c.done && pc < c.at) { c.done = true; this.counter(e, c); if (e.dead) break; }
+    }
+    for (const e of this.enemies) {
       if (e.dead || !e.boss) continue;
       const pctHp = e.hp * 100 / e.maxHp;
       if (has(e, 'rage') && !e.raged && pctHp < e.rage.at) { e.raged = true; e.p2 = true; e.aspdPct = e.rage.aspd; this.push({ k: 'phase', uid: e.uid, n: 2 }); }
@@ -620,6 +653,37 @@ export class Fight {
         if (!e.pb2 && pctHp < 66) { e.pb2 = true; e.p2 = true; e.nextBlock = this.tick + 50; this.push({ k: 'phase', uid: e.uid, n: 2 }); }
       }
       if (has(e, 'tyrant') && !e.p3 && pctHp < 33) { e.p3 = true; e.p3At = this.tick; this.push({ k: 'phase', uid: e.uid, n: 3 }); }
+    }
+  }
+
+  // Kontra bossa / elity na build gracza (setup.enemies[i].counters, plan liczy rules.js → counterPlan). Reakcja jest czasowa i jednorazowa.
+  counter(e, c) {
+    const tick = this.tick, until = tick + (c.dur || 0);
+    this.counters++;
+    this.push({ k: 'counter', uid: e.uid, id: c.id, dur: c.dur || 0 });
+    if (c.heal) e.hp = Math.min(e.maxHp, e.hp + fl(e.maxHp * c.heal / 100));
+    e.noUntil = e.noUntil || {};
+    const clear = kind => { e[kind] = 0; if (kind === 'frost') { e.frozenUntil = 0; } };
+    switch (c.id) {
+      case 'straz': e.noUntil.burn = until; clear('burn'); break;
+      case 'piec': e.noUntil.frost = until; clear('frost'); e.stunUntil = Math.min(e.stunUntil, tick); break;
+      case 'odtrutka': e.noUntil.poison = until; clear('poison'); break;
+      case 'bandaz': e.noUntil.bleed = until; clear('bleed'); break;
+      case 'helm': e.helmUntil = until; break;
+      case 'wiertlo': e.pierceUntil = until; e.pierce = c.pct || 50; break;
+      case 'nozyce': this.noHealUntil = until; this.noHealPct = c.pct || 70; break;
+      case 'cisza': for (const s of this.skills) s.blockedUntil = Math.max(s.blockedUntil, until); break;
+      case 'omlet': this.eggOffUntil = until; break;
+      default: break;
+    }
+    // pomocnicy: wchodzą od razu (do 8 żywych pomocników naraz)
+    const m = this.setup.minion;
+    let n = this.enemies.filter(x => x.minion && !x.dead).length;
+    for (let i = 0; i < (c.n || 0) && n < 8 && m; i++, n++) {
+      const pw = c.pw || 100, o = this.mk({ ...m, minion: true, name: c.add || m.name, idle: 15, hp: Math.max(1, fl(m.hp * pw / 100)), atk: Math.max(1, fl(m.atk * pw / 100)) });
+      this.enemies.unshift(o);
+      this.enterFx(o); this.enterStatus(o);
+      this.push({ k: 'summon', uid: o.uid });
     }
   }
 
@@ -688,7 +752,7 @@ export class Fight {
       return;
     }
     if (e.spec && this.tick >= e.nextSpec) { e.windup = { end: this.tick + e.spec.windup }; this.push({ k: 'telegraph', uid: e.uid, end: e.windup.end }); return; }
-    const smoked = this.tick < (e.smokeUntil || 0) ? 100 - RULES.smokeSlow : 100;   // Chmura Dymu (dla pozostałych postaci mnożnik 100% nic nie zmienia)
+    const smoked = (this.tick < (e.smokeUntil || 0) ? 100 - RULES.smokeSlow : 100) * (this.S.sanepid && e.poison >= 5 ? 80 : 100) / 100;   // Chmura Dymu; Sanepid: zamknięty wróg -20% szybkości   // Chmura Dymu (dla pozostałych postaci mnożnik 100% nic nie zmienia)
     e.acc += fl(fl(fl(e.aspd * e.aspdPct / 100) * (100 - Math.min(60, e.frost * (STATUS.frost.slow + (this.S.frostSlow || 0)))) / 100) * smoked / 100);
     while (e.acc >= 1000 && !this.over && !e.dead) { e.acc -= 1000; this.enemyHit(e, 100); }
   }
@@ -735,12 +799,13 @@ export class Fight {
         else { const d = this.hburn * this.hburnPer; this.hp -= d; this.taken += d; if (this.hp < this.lowest) this.lowest = Math.max(0, this.hp); this.push({ k: 'hurt', d, crit: false, kind: 'burn' }); if (this.hp <= 0) this.heroDown(); }
       }
     }
+    if (this.eggOffUntil && t < this.eggOffUntil && this.nextEgg < this.eggOffUntil) this.nextEgg = this.eggOffUntil;
     if (this.S.egg && this.nextEgg && t >= this.nextEgg) {
       this.nextEgg = t + this.S.egg;
       const tg = this.target();
       if (tg) {
         this.push({ k: 'egg' });
-        for (const x of (this.S.eggAll ? this.alive() : [tg])) { this.heroHit(x, 120, false, 'egg'); if (this.S.eggPoison) this.applyStatus(x, 'poison', this.S.eggPoison); if (this.S.eggBurn) this.applyStatus(x, 'burn', this.S.eggBurn); } if (this.S.eggHeal) this.heal(fl(this.S.maxHp * this.S.eggHeal / 100)); }
+        for (const x of (this.S.eggAll ? this.alive() : [tg])) { this.heroHit(x, fl(120 * (100 + Math.min(60, (this.S.eggGrow || 0) * (this.loadout.floors | 0))) / 100), false, 'egg'); if (this.S.eggPoison) this.applyStatus(x, 'poison', this.S.eggPoison); if (this.S.eggBurn) this.applyStatus(x, 'burn', this.S.eggBurn); } if (this.S.eggHeal) this.heal(fl(this.S.maxHp * this.S.eggHeal / 100)); }
     }
     if (this.S.surprise && !this.nextSurprise) this.nextSurprise = t + this.S.surprise;
     if (this.S.surprise && this.nextSurprise && t >= this.nextSurprise) {   // Jajko Niespodzianka: losowy skutek wybuchu
@@ -760,39 +825,49 @@ export class Fight {
     // Towarzysz
     if (this.comp && this.comp.L.every && t >= this.comp.next) { this.comp.next = t + this.comp.L.every; this.compAct(); }
     // atak bohatera
-    if (this.tick >= this.heroStunUntil) this.acc += this.heroAspd();
+    if (this.tick >= this.heroStunUntil && !this.S.noAttack) this.acc += this.heroAspd();   // Kurczak Pacyfista nie wykonuje zwykłych ataków
     while (this.acc >= 1000 && this.tick >= this.heroStunUntil) {
       const tg = this.target();
       if (!tg) { this.acc = 1000; break; }
       this.acc -= 1000;
-      this.push({ k: 'swing' });
+      this.push({ k: 'swing' }); this.rampN++;
       this.heroHit(tg, 100, true, 'atk');
       if (this.S.double && this.rng.int(100) < this.S.double) { const t2 = this.target(); if (t2) this.heroHit(t2, 100, true, 'atk'); }   // Karabin Maszynowy
     }
+    // Fala: kolejni wrogowie wchodzą w wyznaczonym ticku, a gdy plansza jest pusta, najbliższa fala przychodzi od razu.
+    if (this.pending.length) {
+      const empty = !this.enemies.some(e => !e.dead && !e.minion);
+      const due = this.pending[0].arrive;
+      if (t >= due || empty) {
+        const shift = empty && t < due ? due - t : 0;
+        while (this.pending.length && this.pending[0].arrive <= due) this.spawn(this.pending.shift());
+        if (shift) for (const p of this.pending) p.arrive -= shift;
+      }
+    }
     this.phases();
-    if (!this.enemies.some(e => !e.dead && !e.minion)) { this.over = true; this.win = true; this.push({ k: 'victory' }); this.tick++; return; }
+    if (!this.pending.length && !this.enemies.some(e => !e.dead && !e.minion)) { this.over = true; this.win = true; this.push({ k: 'victory' }); this.tick++; return; }
     for (const e of this.enemies.slice()) { if (!e.dead && !this.over) this.enemyAct(e); }
     this.tick++;
     if (!this.over && this.tick >= MAX_TICKS) { this.over = true; this.win = false; this.timeout = true; this.push({ k: 'timeout' }); }
   }
 
   compAct() {
-    const L = this.comp.L, tg = this.target();
-    if (L.act === 'peck' && tg) { this.push({ k: 'comp', c: this.comp.id }); this.heroHit(tg, L.v, false, 'comp'); }
-    else if (L.act === 'heal' && this.hp < this.S.maxHp) { this.push({ k: 'comp', c: this.comp.id }); this.heal(Math.max(1, fl(this.S.maxHp * L.v / 100))); }
-    else if ((L.act === 'burn' || L.act === 'frost') && tg) { this.push({ k: 'comp', c: this.comp.id }); this.applyStatus(tg, L.act, L.v); }
+    const L = this.comp.L, tg = this.target(), cp = 100 + (this.S.compPow || 0);   // Pacyfista: towarzysz walczy za niego
+    if (L.act === 'peck' && tg) { this.push({ k: 'comp', c: this.comp.id }); this.heroHit(tg, fl(L.v * cp / 100), false, 'comp'); }
+    else if (L.act === 'heal' && this.hp < this.S.maxHp) { this.push({ k: 'comp', c: this.comp.id }); this.heal(Math.max(1, fl(this.S.maxHp * L.v * cp / 10000))); }
+    else if ((L.act === 'burn' || L.act === 'frost') && tg) { this.push({ k: 'comp', c: this.comp.id }); this.applyStatus(tg, L.act, Math.max(1, Math.round(L.v * cp / 100))); }
     else if (L.act === 'honk' && this.alive().length) { this.push({ k: 'comp', c: this.comp.id }); this.stunAll(L.v); }
   }
 
   result() {
     const boss = this.setup.enemies.find(e => e.boss);
     // Ile życia wrogów zostało (w %, bez pomagierów): do ciekawostek na ekranie porażki.
-    const foes = this.enemies.filter(e => !e.minion), tot = foes.reduce((a, e) => a + e.maxHp, 0), left = foes.reduce((a, e) => a + (e.dead ? 0 : Math.max(0, e.hp)), 0);
+    const foes = this.enemies.filter(e => !e.minion), wait = this.pending.filter(e => !e.minion), tot = foes.reduce((a, e) => a + e.maxHp, 0) + wait.reduce((a, e) => a + e.hp, 0), left = foes.reduce((a, e) => a + (e.dead ? 0 : Math.max(0, e.hp)), 0) + wait.reduce((a, e) => a + e.hp, 0);
     return {
-      foeLeft: tot ? Math.ceil(left * 100 / tot) : 0, foes: foes.map(e => e.name).filter(Boolean),
+      foeLeft: tot ? Math.ceil(left * 100 / tot) : 0, foes: foes.concat(wait).map(e => e.name).filter(Boolean),
       win: this.win, ticks: this.tick, hp: Math.max(0, this.hp), maxHp: this.S.maxHp, timeout: this.timeout,
       usedRevive: this.revived, stolen: this.stolen, dealt: this.dealt, taken: this.taken, maxHit: this.maxHit,
-      kills: this.kills, skillsUsed: this.used, critRolls: this.critRolls, critHits: this.critHits, critPct: this.S.crit, chains: this.chains, reactions: this.reacts, reactSeen: this.reactSeen, coinsWon: this.coinsWon, burnDealt: this.burnDealt, freezes: this.freezes, lowest: this.lowest, boss: this.win && boss ? boss.boss : null,
+      kills: this.kills, skillsUsed: this.used, critRolls: this.critRolls, critHits: this.critHits, critPct: this.S.crit, chains: this.chains, reactions: this.reacts, reactSeen: this.reactSeen, coinsWon: this.coinsWon, counters: this.counters, burnDealt: this.burnDealt, freezes: this.freezes, lowest: this.lowest, boss: this.win && boss ? boss.boss : null,
     };
   }
 }

@@ -530,7 +530,7 @@ test('run: pierwsza runda to Szczur Pasz, spotkania są deterministyczne i pasuj
     const r = fresh({ seed, mode });
     for (let round = 2; round <= D.MODES[mode].rounds; round++) {
       r.round = round; const ids = R.encounterIds(r); eq(R.encounterIds(r), ids, 'powtarzalne');
-      assert(ids.length >= 1 && ids.length <= 3, 'od 1 do 3 wrogów');
+      assert(ids.length >= 1 && ids.length <= R.enemyCap(r), 'od 1 do limitu wrogów (5 + 2 za towarzysza)');
       if (D.MODES[mode].bosses[round]) eq(ids, [D.MODES[mode].bosses[round]], 'boss w swojej rundzie');
       else for (const id of ids) assert(D.ENEMIES[id].zone === R.zoneOf(mode, round) + (R.floorTemplate(r) === 'zwiad' ? 1 : 0) && !D.ENEMIES[id].minion, 'wróg ze strefy ' + id + ' r' + round);
     }
@@ -838,7 +838,8 @@ test('nowe kafelki ofensywne: Ziarno Mocy +6 Ataku, Ostry Dziób +12% obrażeń'
 test('profil: odblokowania postaci i kafelków, liczniki, najlepszy wynik, kolejny poziom Garnka', () => {
   const p = newProfile(); eq(p.chars, ['pyrtek'], 'start'); assert(poolFor(p).length === D.STARTER_TILES.length, 'kafelki startowe');
   const run = fresh();
-  run.stats.riskPicks = 5; assert(evaluate(p, run).some(u => u.target === 'kaczor') && p.chars.includes('kaczor'), 'Kaczor: 5 kafelków ryzyka');
+  run.stats.riskPicks = 5; assert(!evaluate(p, run).some(u => u.target === 'kaczor') && !p.chars.includes('kaczor'), 'Kaczor wycofany: nie odblokowuje się już');
+  p.bosses.brojler = 1; assert(evaluate(p, run).some(u => u.target === 'sanepid') && p.chars.includes('sanepid'), 'Inspektor Sanepid: pokonaj Brojlera');
   run.stats.maxCoins = 100; evaluate(p, run); assert(p.tiles.includes('czterolistna-koniczyna'), 'Koniczyna: 100 Ziaren');
   run.stats.maxHit = 150; run.stats.lowWin = true; evaluate(p, run); assert(p.tiles.includes('okulary-aviatory') && p.tiles.includes('zagrzebanie-w-sianie'), 'Okulary i Zagrzebanie');
   run.stats.maxRound = 10; evaluate(p, run); assert(p.tiles.includes('gniazdo-zapasowe'), 'Gniazdo: runda 10 w pełnym');
@@ -847,10 +848,10 @@ test('profil: odblokowania postaci i kafelków, liczniki, najlepszy wynik, kolej
   onBossKill(p, 'skubarka'); evaluate(p, null); assert(p.tiles.includes('zakazana-pasza'), 'Zakazana Pasza: Skubarka pokonana');
   const w = fresh({ mode: 'quick' }); w.ended = 'win'; w.done = 10; w.score = 12000; w.phase = 'over';
   let e = onRunEnd(p, w); assert(e.newBest && e.garnekUnlocked && p.garnek === 1 && p.flags.winQuick, 'wygrana szybkiego: rekord i Garnek 1');
-  evaluate(p, null); assert(p.chars.includes('indor') && p.tiles.includes('siewnik'), 'Indor i Siewnik po wygranej w szybkim');
+  evaluate(p, null); assert(!p.chars.includes('indor') && p.tiles.includes('siewnik'), 'Siewnik po wygranej w szybkim (Indor wycofany)');
   const wf = fresh(); wf.ended = 'win'; wf.done = 20; wf.score = 9000; wf.phase = 'over'; wf.garnek = 0;
   e = onRunEnd(p, wf); assert(!e.garnekUnlocked && p.garnek === 1, 'wygrana na niższym poziomie nie podnosi Garnka'); evaluate(p, null);
-  assert(p.chars.includes('kwoka'), 'Kwoka: ukończony pełny run');
+  assert(!p.chars.includes('kwoka'), 'Kwoka wycofana: pełny run jej nie odblokowuje');
   const w1 = fresh(); w1.garnek = 1; w1.ended = 'win'; w1.done = 20; w1.score = 50; w1.phase = 'over'; assert(onRunEnd(p, w1).garnekUnlocked && p.garnek === 2, 'Garnek N+1 po wygranej na N');
   assert(p.best.full.score === 9000, 'najlepszy wynik się nie obniża');
   const rich = fresh(); rich.ended = 'lose'; rich.coins = 31; rich.phase = 'over'; onRunEnd(p, rich); onRunEnd(p, rich); evaluate(p, null); assert(p.tiles.includes('hazard-w-kurniku'), 'Hazard: porażka z >30 Ziarnami');
@@ -865,26 +866,20 @@ test('profil: odblokowania postaci i kafelków, liczniki, najlepszy wynik, kolej
   const chk = (id, cond) => { const pp = newProfile(), rr = fresh(); rr.stats.v2 = 1; cond(pp, rr); evaluate(pp, rr); return pp.chars.includes(id); };
   assert(!chk('barista', () => {}) && chk('barista', (pp, rr) => { rr.stats.fastWin = 9; }) && !chk('barista', (pp, rr) => { rr.stats.fastWin = 10; }), 'Barista: walka w mniej niż sekundę');
   assert(chk('ges', (pp, rr) => { rr.stats.maxCoins = 200; }) && !chk('ges', (pp, rr) => { rr.stats.maxCoins = 199; }), 'Gęś: 200 Ziaren naraz');
-  assert(chk('lodziarz', (pp, rr) => { rr.stats.freezes = 8; }) && !chk('lodziarz', (pp, rr) => { rr.stats.freezes = 7; }), 'Lodziarz: 8 zamrożeń');
-  assert(chk('pielegniarka', (pp, rr) => { rr.stats.lowWin = true; }) && !chk('pielegniarka', () => {}), 'Pielęgniarka: wygrana na włosku');
+  // wycofane postacie nie odblokowują się już, nawet po spełnieniu dawnego warunku
+  assert(!chk('lodziarz', (pp, rr) => { rr.stats.freezes = 8; }) && !chk('pielegniarka', (pp, rr) => { rr.stats.lowWin = true; }) && !chk('mutant', (pp, rr) => { rr.stats.muts = 3; }) && !chk('wegan', pp => { pp.flags.winQuick = true; pp.flags.winFull = true; }) && !chk('sigma', (pp, rr) => { rr.stats.bossKills = ['brojler', 'skubarka', 'prezes']; }), 'wycofane postacie się nie odblokowują');
+  // nowe postacie-wyzwania
+  assert(chk('wanda', (pp, rr) => { rr.stats.hatched = ['legenda']; }) && !chk('wanda', () => {}), 'Wanda: wyklucie czegoś w Wylęgarni');
+  assert(chk('zwiazkowiec', (pp, rr) => { rr.stats.chains = 1; }) && !chk('zwiazkowiec', () => {}), 'Związkowiec: Pełna Kurza Seria');
+  assert(chk('pacyfista', (pp, rr) => { rr.stats.skillUses = 60; }) && !chk('pacyfista', (pp, rr) => { rr.stats.skillUses = 59; }), 'Pacyfista: 60 użyć umiejętności');
   assert(chk('rzeznik', pp => { pp.bosses.skubarka = 1; }) && !chk('rzeznik', () => {}), 'Rzeźnik: Skubarka pokonana');
-  assert(chk('wrozka', (pp, rr) => { rr.stats.badges = 3; }) && !chk('wrozka', (pp, rr) => { rr.stats.badges = 2; }), 'Wróżka: 3 Odznaki');
-  assert(chk('stazysta', pp => { pp.counters.runs = 5; pp.counters.wins = 0; }) && !chk('stazysta', pp => { pp.counters.runs = 5; pp.counters.wins = 1; }), 'Stażysta: 5 przegranych runów');
-  assert(chk('mutant', (pp, rr) => { rr.stats.muts = 3; }) && !chk('mutant', (pp, rr) => { rr.stats.muts = 2; }), 'Mutant: 3 mutacje');
-  assert(chk('dinozaur', (pp, rr) => { rr.stats.dino = 1; }) && !chk('dinozaur', () => {}), 'Dinozaur: wyklucie');
   // memiczne kurczaki: każdy ma swój warunek
   assert(chk('gigachad', (pp, rr) => { rr.stats.maxHit = 100; }) && !chk('gigachad', (pp, rr) => { rr.stats.maxHit = 99; }), 'Gigachad: trafienie za 100');
   assert(chk('jajeczko', pp => { pp.counters.runs = 10; }) && !chk('jajeczko', pp => { pp.counters.runs = 9; }), 'Pan Jajeczko: 10 runów');
-  assert(chk('krypto', (pp, rr) => { rr.stats.maxCoins = 150; }) && chk('baba', (pp, rr) => { rr.stats.maxCoins = 80; }) && !chk('baba', (pp, rr) => { rr.stats.maxCoins = 79; }), 'Krypto i Baba: Ziarna naraz');
-  assert(chk('alkoholik', pp => { pp.counters.runs = 10; pp.counters.wins = 0; }) && !chk('alkoholik', pp => { pp.counters.runs = 10; pp.counters.wins = 1; }), 'Alkoholik: 10 porażek');
-  assert(chk('wegan', pp => { pp.flags.winQuick = true; pp.flags.winFull = true; }) && !chk('wegan', pp => { pp.flags.winQuick = true; }), 'Wegan: oba tryby');
-  assert(chk('influencer', (pp, rr) => { rr.stats.badges = 5; }) && !chk('influencer', (pp, rr) => { rr.stats.badges = 4; }), 'Influencer: 5 Odznak');
-  assert(chk('skibidi', (pp, rr) => { rr.stats.skillUses = 100; }) && !chk('skibidi', (pp, rr) => { rr.stats.skillUses = 99; }), 'Skibidi: 100 użyć umiejętności');
   assert(chk('emeryt', (pp, rr) => { rr.mode = 'full'; rr.stats.maxRound = 15; }) && !chk('emeryt', (pp, rr) => { rr.mode = 'full'; rr.stats.maxRound = 14; }), 'Emeryt: runda 15 w pełnym');
-  assert(chk('sigma', (pp, rr) => { rr.stats.bossKills = ['brojler', 'skubarka', 'prezes']; }) && !chk('sigma', (pp, rr) => { rr.stats.bossKills = ['brojler', 'skubarka']; }), 'Sigma: trzy bossy');
   nr.stats.fastWin = 5; nr.stats.v2 = 1; nr.stats.maxCoins = 200; nr.stats.muts = 3; nr.stats.lowWin = true; nr.stats.dino = 1; p.counters.runs = 99; p.counters.wins = 1; p.bosses.skubarka = 1;
-  nr.stats.maxHit = 150; nr.stats.badges = 5; nr.stats.skillUses = 100; nr.mode = 'full'; nr.stats.maxRound = 15; nr.stats.bossKills = ['brojler', 'skubarka', 'prezes']; p.flags.winQuick = true; p.flags.winFull = true; evaluate(p, nr);
-  assert(p.unlocked.length === D.UNLOCKS.length, 'wszystkie odblokowania sprawdzalne');
+  nr.stats.hatched = ['x']; nr.stats.chains = 1; p.bosses.brojler = 1; nr.stats.maxHit = 150; nr.stats.badges = 5; nr.stats.skillUses = 100; nr.mode = 'full'; nr.stats.maxRound = 15; nr.stats.bossKills = ['brojler', 'skubarka', 'prezes']; p.flags.winQuick = true; p.flags.winFull = true; evaluate(p, nr);
+  assert(p.unlocked.length === D.UNLOCKS.filter(u => !(u.kind === 'char' && D.CHARS[u.target].retired)).length, 'wszystkie aktywne odblokowania sprawdzalne');
 });
 
 // ---------- Durable Objects ----------
@@ -1225,9 +1220,9 @@ test('BgPlayer: Testament Pyrtka (po przegranej, piąta karta następnego runu, 
   assert(r.j.run.offer.includes(opts[0]) && r.j.run.will === opts[0] && r.j.profile.will === null, 'kafelek z testamentu w pierwszej ofercie');
   const k = r.j.run.offer.indexOf(opts[0]); r = await post(o, 'pick', { pl: PL, i: k, slot: 0, mut: 1 }); assert(r.j.run.will === null, 'testament zużyty');
   await post(o, 'abandon', { pl: PL }); await post(o, 'will', { pl: PL, i: 0 });
-  st.m.get('profile').chars.push('kwoka');
+  st.m.get('profile').chars.push('barista');
   r = await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' }); assert(r.j.run.will === null && r.j.profile.will, 'ta sama postać: testament czeka');
-  await post(o, 'abandon', { pl: PL }); r = await post(o, 'start', { pl: PL, mode: 'quick', char: 'kwoka' }); assert(r.j.run.will && r.j.profile.will === null, 'inna postać: działa');
+  await post(o, 'abandon', { pl: PL }); r = await post(o, 'start', { pl: PL, mode: 'quick', char: 'barista' }); assert(r.j.run.will && r.j.profile.will === null, 'inna postać: działa');
   await post(o, 'abandon', { pl: PL });
   const prof = st.m.get('profile'); prof.nemesis = { enemy: 'szczur-pasz', title: 'Kierownik', given: 'Zbigniew', affix: 'szybki', tile: null, lvl: 1 };
   r = await post(o, 'state', { pl: PL }); assert(r.j.profile.nemesis.name === 'Kierownik Szczur Pasz Zbigniew', 'Nemezis w profilu publicznym');
@@ -1418,7 +1413,7 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
 });
 
 test('RUN_V = 7: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 18, 'wersja reguł');
+  eq(R.RUN_V, 19, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1587,12 +1582,12 @@ test('Jajko Dinozaura: po 4 wygranych piętrach wykluwa się Dinozaur (+30% Atak
 
 // ---------- nowe postacie ----------
 test('nowe postacie: 14 postaci, każda ma blokadę i odblokowanie, tylko Zjarany ma hasło, Dinozaur jest sekretny', () => {
-  eq(Object.keys(D.CHARS).length, 24, '24 postacie');
-  for (const id of ['barista', 'ges', 'lodziarz', 'pielegniarka', 'rzeznik', 'wrozka', 'stazysta', 'mutant', 'dinozaur', 'gigachad', 'jajeczko', 'krypto', 'alkoholik', 'wegan', 'baba', 'influencer', 'skibidi', 'emeryt', 'sigma']) {
+  eq(Object.keys(D.CHARS).length, 28, '28 wpisów (12 aktywnych + 16 wycofanych na potrzeby historii)'); eq(D.CHAR_IDS.length, 12, '12 aktywnych postaci');
+  for (const id of D.CHAR_IDS.filter(c => c !== 'pyrtek')) {
     const c = D.CHARS[id]; assert(c && c.lock && D.UNLOCK_BY_ID[c.lock] && D.UNLOCK_BY_ID[c.lock].kind === 'char' && D.UNLOCK_BY_ID[c.lock].target === id, 'blokada ' + id);
     assert(R.newRun({ mode: 'quick', char: id, garnek: 0, pool: ALL, seed: 11 }).ok, 'start runu ' + id);
   }
-  assert(D.CHARS.dinozaur.secret && D.UNLOCK_BY_ID['u-dino'].secret && !D.CHARS.barista.secret, 'sekretny tylko Dinozaur (i Zjarany)');
+  assert(D.CHARS.zjarany.secret && !D.CHARS.barista.secret, 'sekretny jest Zjarany'); for (const c of Object.values(D.CHARS)) if (c.retired) assert(!D.CHAR_IDS.includes(c.id), 'wycofana postać nie jest aktywna: ' + c.id);
   eq(Object.values(D.CHARS).filter(c => c.hasCode).map(c => c.id), ['zjarany'], 'hasło tylko do Zjaranego');
 });
 
@@ -1610,11 +1605,11 @@ test('memiczne kurczaki: Gigachad ma 1 slot, Pan Jajeczko 1 życie, Skibidi 2 lo
 
 test('postacie: Barista, Gęś, Lodziarz, Pielęgniarka, Rzeźnik, Wróżka — statystyki i start', () => {
   const S = ch => heroStats(loadout({ char: ch }));
-  let s = S('barista'); eq([s.aspd, s.maxHp, s.atk], [135, 52, 8], 'Barista: +35% szybkości, -25% Życia, -5% Ataku');
+  let s = S('barista'); eq([s.aspd, s.maxHp, s.atk, s.ramp], [100, 56, 8, 5], 'Barista: rozgrzewka +5% za cios, -20% Życia, -5% Ataku');
   const g = R.newRun({ mode: 'quick', char: 'ges', garnek: 0, pool: ALL, seed: 5 }).run; eq([g.coins, R.statsOf(g).coinFlat, R.view(g).interestMax], [15, 1, 6], 'Gęś: 15 Ziaren, +1 po rundzie, Odsetki do 6');
   s = S('lodziarz'); eq([s.frostHit, s.frostWeak, s.aspd], [15, 10, 75], 'Lodziarz'); eq(R.newRun({ mode: 'quick', char: 'lodziarz', garnek: 0, pool: ALL, seed: 5 }).run.skills, [{ id: 'lodowy', lvl: 1 }], 'Lodziarz zaczyna z Lodowym Dziobem');
   s = S('pielegniarka'); eq([s.regen, s.healBonus, s.atk], [8, 5, 6], 'Pielęgniarka'); eq(R.newRun({ mode: 'quick', char: 'pielegniarka', garnek: 0, pool: ALL, seed: 5 }).run.skills[0].id, 'zagrzebanie', 'zaczyna z Zagrzebaniem');
-  s = S('rzeznik'); eq([s.bleed, s.bleedMax, s.maxHp, s.atk], [1, 1, 59, 8], 'Rzeźnik'); eq(R.newRun({ mode: 'quick', char: 'rzeznik', garnek: 0, pool: ALL, seed: 5 }).run.skills[0].id, 'darcie', 'zaczyna z Darciem Pierza');
+  s = S('rzeznik'); eq([s.bleed, s.bleedMax, s.maxHp, s.atk, s.bleedKillHeal], [1, 1, 63, 8, 5], 'Rzeźnik'); eq(R.newRun({ mode: 'quick', char: 'rzeznik', garnek: 0, pool: ALL, seed: 5 }).run.skills[0].id, 'darcie', 'zaczyna z Darciem Pierza');
   const w = R.newRun({ mode: 'quick', char: 'wrozka', garnek: 0, pool: ALL, seed: 5 }).run; eq([R.statsOf(w).luck, w.freeLeft, R.statsOf(w).maxHp], [30, 1, 70], 'Wróżka: 30 Szczęścia, darmowy reroll, bez kary do Życia');
 });
 
@@ -1881,7 +1876,7 @@ test('Nowości: kompletność danych (klątwy, trasy, bossowie, osiągnięcia), 
   for (const id of D.SUPER_BOSSES) assert(D.BOSSES[id].super, 'super-boss ' + id);
   for (const [id, b] of Object.entries(D.KURNIK)) { assert(b.name && b.text && b.cost.length === 3 && b.cost[0] < b.cost[2], 'budynek ' + id); }
   for (const a of ['a-klatwa', 'a-klatwy3', 'a-dogrywka', 'a-dogrywka15', 'a-duch', 'a-towarzysz', 'a-trasy', 'a-kurnik', 'a-kurnik-max']) assert(D.ACH_BY_ID[a], 'osiągnięcie ' + a);
-  eq(R.RUN_V, 18, 'RUN_V 18');
+  eq(R.RUN_V, 19, 'RUN_V 19');
 });
 
 test('Jajko Dinozaura: tylko jedno na run (po wykluciu nie wraca do ofert)', () => {
@@ -2118,8 +2113,8 @@ test('etap 4: wzmocnienia: Pobudka, Echo, Przyspieszony Obieg', () => {
   const o0 = ob(0); assert(o0[1] < o0[0], 'Obieg skraca cooldown pozostałych'); const o1 = ob(1); assert(o1[1] < o0[1], 'Turbo Obieg skraca mocniej');
   const o2 = new Fight(setup({ hp: 400, lo: { skills: [{ id: 'obieg', lvl: 3, mut: 2 }] }, enemies: [foe({ hp: 1e7, atk: 1, aspd: 10 })] })); o2.hp = 50; o2.skills[0].cd = 0; o2.step([0]); assert(o2.hp > 50, 'Obieg Zamknięty leczy');
 });
-test('etap 4: RUN_V 18, nowe umiejętności trafiają do ofert', () => {
-  eq(R.RUN_V, 18, 'RUN_V');
+test('etap 4: RUN_V 19, nowe umiejętności trafiają do ofert', () => {
+  eq(R.RUN_V, 19, 'RUN_V');
   const seen = new Set();
   for (let seed = 1; seed < 300; seed++) { const r = R.newRun({ mode: 'full', char: 'pyrtek', garnek: 0, pool: ALL, seed }); const run = r.run; for (const o of (run.cur && run.cur.offer) || []) { const t = D.TILE_BY_ID[o.id || o]; if (t && t.skill && NEW20.includes(t.skill)) seen.add(t.skill); } }
   assert(seen.size >= 5, 'nowe umiejętności pojawiają się w ofertach (widziano ' + seen.size + ')');
@@ -2241,4 +2236,80 @@ test('audyt balansu (2026-11-23): Pyrtek +7%, Ostrogi i Kolczatka 1/s, Siewnik c
   const hits = Array.from({ length: 200 }, (_, k) => { const h = fresh({ seed: 100 + k }); h.coins = 10; force(h, 'hazard-w-kurniku'); R.pickTile(h, 0); return R.bet(h, 5).won; }).filter(Boolean).length;
   assert(hits > 100 && hits < 140, 'rzut w Hazardzie wygrywa się w ok. 60% przypadków: ' + hits + ' / 200');
   assert(D.TILE_BY_ID['szklane-skrzydlo'].fx[0].v === 100 && D.TILE_BY_ID['szklane-skrzydlo'].fx[1].v === -40, 'Szklane Skrzydło: +100% Ataku, -40% Życia');
+});
+
+// ---------- aktualizacja 2026-11-24: hordy i fale, adaptacja bossów, 12 postaci-wyzwań ----------
+test('Horda i Armia: do 5 wrogów (7 z towarzyszem), część wchodzi od razu, reszta falami, walka kończy się dopiero po ostatniej fali', () => {
+  const found = { horda: null, armia: null };
+  for (let seed = 1; seed < 800 && !(found.horda && found.armia); seed++) for (const round of [9, 10, 11, 14, 15]) {
+    const r = fresh({ seed }); r.round = round; const t = R.floorTemplate(r);
+    if ((t === 'horda' || t === 'armia') && !found[t]) found[t] = r;
+  }
+  assert(found.horda && found.armia, 'szablony Horda i Armia się losują');
+  for (const [t, r] of Object.entries(found)) {
+    const su = R.buildSetup(r), late = su.enemies.filter(e => e.arrive), first = su.enemies.filter(e => !e.arrive);
+    assert(su.enemies.length >= 4 && su.enemies.length <= R.enemyCap(r), t + ': 4 do limitu wrogów');
+    assert(late.length >= 1 && first.length >= 2, t + ': część wchodzi od razu, reszta falami');
+    assert(late.every(e => e.arrive % D.RULES.waveGap === 0 && e.arrive >= D.RULES.waveGap), t + ': fale co waveGap ticków');
+    const f = new Fight(su); eq(f.enemies.length, first.length, 'na starcie tylko pierwsza grupa'); eq(f.pending.length, late.length, 'reszta czeka');
+    r.companion = { id: 'pisklak', lvl: 1 }; eq(R.enemyCap(r), 7, 'limit 5 + 2 za towarzysza');
+    const res = runFight(su, []); assert(res.ticks > 0 && (res.win || res.hp === 0 || res.timeout), 'walka z falami się rozstrzyga');
+    eq(runFight(su, []), res, 'deterministyczna powtórka');
+  }
+  const lone = setup({ lo: { char: 'pyrtek' }, enemies: [foe({ hp: 1 }), foe({ id: 'p2', hp: 5, arrive: 600 })] });
+  const g = play(lone); assert(g.res.ticks < 300 && g.res.win, 'gdy plansza pusta, fala wchodzi od razu (ticków: ' + g.res.ticks + ')'); eq(evs(g.ev, 'arrive').length, 1, 'zdarzenie wejścia fali');
+});
+
+test('Adaptacja bossów: profil buildu wybiera kontrę, siła i liczba rosną z palnikiem, elity i dodatkowi bossowie dostają lżejsze kontry', () => {
+  const fire = fresh({ seed: 3 });
+  fire.tiles = D.TILES.filter(t => (t.tags || []).includes('ogien') && t.type === 'item').slice(0, 5).map(t => t.id); fire.skills = [{ id: 'chlust', lvl: 1 }];
+  eq(R.buildProfile(fire).main, 'fire', 'build ognia'); eq(R.counterPlan(fire, 'boss')[0].id, 'straz', 'kontra: Straż Pożarna');
+  const none = fresh({ seed: 3 }); eq(R.buildProfile(none).main, null, 'bez stylu'); eq(R.counterPlan(none, 'boss').map(c => c.id), ['swiat'], 'bez stylu: świta');
+  const durs = [0, 2, 4, 5].map(g => { fire.garnek = g; return R.counterPlan(fire, 'boss')[0].dur; });
+  assert(durs[0] < durs[1] && durs[1] < durs[2] && durs[2] < durs[3], 'siła kontry rośnie z palnikiem: ' + durs.join());
+  fire.garnek = 0; eq(R.counterPlan(fire, 'boss').length, 1, 'palnik 0: 1 kontra'); fire.garnek = 4; eq(R.counterPlan(fire, 'boss').length, 2, 'palnik 4: 2 kontry');
+  fire.round = 7; const el = R.counterPlan(fire, 'elite'), bo = R.counterPlan(fire, 'boss'); assert(el.length === 1 && el[0].dur < bo[0].dur, 'elita: jedna lżejsza kontra');
+  fire.round = 2; eq(R.counterPlan(fire, 'elite'), [], 'wczesne piętra bez kontr elit');
+  const run = fresh({ seed: 4, mode: 'quick' }); run.tiles = fire.tiles.slice(); run.skills = fire.skills.slice(); run.garnek = 2; run.round = 5;
+  const su = R.buildSetup(run); const boss = su.enemies.find(e => e.boss); assert(boss.counters && boss.counters.length >= 1, 'boss ma kontry'); eq(R.view(run).intel, D.ARCHETYPES.fire, 'widok zapowiada styl');
+  assert(!JSON.stringify(R.view(run)).includes('straz'), 'widok nie zdradza kontry');
+});
+
+test('Kontra Straż Pożarna: boss leczy się, Oparzenie przestaje działać na czas okna, pojawiają się strażacy; walka jest deterministyczna', () => {
+  const lo = { char: 'pyrtek', tiles: [], skills: [sk('chlust')] };
+  const boss = foe({ id: 'b', name: 'Boss', hp: 400, atk: 1, boss: 'b', mech: [], counters: [{ id: 'straz', at: 50, heal: 40, dur: 60, n: 2, pct: 0, add: 'Strażak', pw: 60 }] });
+  const s = setup({ lo, enemies: [boss] });
+  const f2 = new Fight(s); f2.enemies[0].hp = 150; f2.step([]);
+  assert(evs(f2.ev, 'counter').length === 1 && evs(f2.ev, 'summon').length === 2, 'poniżej progu: kontra i 2 strażaków');
+  assert(f2.enemies.find(e => e.boss).noUntil.burn > f2.tick, 'Oparzenie zablokowane na czas okna');
+  const bb = f2.enemies.find(e => e.boss); assert(f2.applyStatus(bb, 'burn', 3) === false, 'Oparzenie nie wchodzi w czasie okna');
+  const a = runFight(s, [[2, 0], [30, 0]]); eq(runFight(s, [[2, 0], [30, 0]]), a, 'deterministyczne');
+});
+
+test('Pozostałe kontry: Piec, Odtrutka, Apteczka, Kask, Wiertło, Nożyce, Cisza, Patelnia i Świta działają i są czasowe', () => {
+  const mk = id => { const s = setup({ lo: { char: 'pyrtek', tiles: [], skills: [sk('chlust')] }, enemies: [foe({ hp: 300, boss: 'b', mech: [], counters: [{ id, at: 99, heal: 0, dur: 50, n: 2, pct: 70, add: 'Gość', pw: 50 }] })] }); const f = new Fight(s); f.enemies[0].hp = 200; f.step([]); return f; };
+  const bossOf = f => f.enemies.find(e => e.boss);
+  assert(bossOf(mk('piec')).noUntil.frost > 0, 'Piec: odporność na Mróz');
+  assert(bossOf(mk('odtrutka')).noUntil.poison > 0 && bossOf(mk('bandaz')).noUntil.bleed > 0, 'Odtrutka i Apteczka');
+  assert(bossOf(mk('helm')).helmUntil > 0, 'Kask'); const w = mk('wiertlo'); assert(bossOf(w).pierceUntil > 0 && bossOf(w).pierce === 70, 'Wiertło');
+  const n = mk('nozyce'); assert(n.noHealUntil > 0 && n.noHealPct === 70, 'Nożyce: blokada leczenia'); n.hp = 10; n.heal(10); assert(n.hp - 10 <= 3, 'leczenie osłabione');
+  assert(mk('cisza').skills.every(x => x.blockedUntil > 0), 'Cisza blokuje umiejętności'); assert(mk('omlet').eggOffUntil > 0, 'Patelnia');
+  eq(mk('swiat').enemies.filter(e => e.minion).length, 2, 'Świta: 2 pomocników');
+});
+
+test('Postacie-wyzwania: 12 aktywnych, każda ma obietnicę i karę (efekty w statystykach i silniku)', () => {
+  const ST = (c, lo = {}) => heroStats(loadout({ char: c, ...lo }));
+  const j = ST('gigachad'); eq(j.skillPow, 125, 'Jednonoga: skill ×2,25'); eq(R.maxSkillsOf({ char: 'gigachad', curses: [] }), 1, 'jeden slot');
+  const fx = play(setup({ lo: { char: 'gigachad', skills: [sk('granat')] } }), [[15, 0]]); const hit = evs(fx.ev, 'hit').find(e => e.kind === 'granat');
+  const base = play(setup({ lo: { char: 'pyrtek', skills: [sk('granat')] } }), [[15, 0]]);
+  assert(hit && hit.d > evs(base.ev, 'hit').find(e => e.kind === 'granat').d * 1.8, 'granat Jednonogiego mocniej niż zwykły');
+  const e = ST('emeryt', { tiles: ['pancerz-z-pierza'] }); assert(e.armor >= 17 && e.atk > ST('emeryt').atk, 'Emeryt: Pancerz zamienia się w Atak');
+  assert(ST('ges', { coins: 50 }).atk > ST('ges', { coins: 0 }).atk, 'Gęś: Ziarna dają Atak'); eq(ST('ges', { coins: 500 }).atk, ST('ges', { coins: 125 }).atk, 'limit +25%');
+  const w = heroStats(loadout({ char: 'wanda', tiles: ['tykajace-jajo'] })); eq(w.sets.jajeczne, 2, 'Wanda: zestaw Jajeczny +1'); assert(w.egg > 0 && w.eggAll, 'jajo bije wszystkich');
+  const pr = R.newRun({ mode: 'quick', char: 'pacyfista', garnek: 0, pool: ALL, seed: 9 }).run; assert(pr.companion && pr.skills.length === 2, 'Pacyfista: towarzysz i 2 umiejętności'); assert(R.statsOf(pr).noAttack, 'nie atakuje');
+  const pf = play(setup({ lo: { char: 'pacyfista', skills: [sk('chlust')] }, enemies: [foe({ hp: 30 })] }), []); eq(evs(pf.ev, 'swing').length, 0, 'brak zwykłych ataków');
+  const bar = play(setup({ lo: { char: 'barista' }, enemies: [foe({ hp: 400, atk: 1 })] })); assert(evs(bar.ev, 'swing').length > 5, 'Barista bije');
+  const zw = new Fight(setup({ lo: { char: 'zwiazkowiec' }, enemies: [foe({ hp: 100, atk: 5 })] })); assert(zw.enemies[0].stunUntil >= 18, 'Strajk Włoski: wróg startuje ogłuszony');
+  assert(ST('sanepid').sanepid === 25 && ST('sanepid').poisonHit === 25, 'Sanepid'); eq(ST('jajeczko').dodgeAtk, 5, 'Jajeczko: adrenalina'); eq(ST('rzeznik').bleedKillHeal, 5, 'Rzeźnik leczy z zabójstw');
+  for (const id of D.CHAR_IDS) assert(R.newRun({ mode: 'quick', char: id, garnek: 0, pool: ALL, seed: 4 }).ok, 'start ' + id);
 });

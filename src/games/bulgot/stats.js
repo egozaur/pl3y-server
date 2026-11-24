@@ -41,6 +41,7 @@ export function heroStats(loadout, opt = {}) {
   if (ch.crypto && loadout.seed !== undefined) {   // Kurczak Kryptowalutowy: kurs zmienia się co piętro (deterministycznie z ziarna runu)
     const [lo, hi] = ch.crypto; add('allPct', lo + makeRng(mix(loadout.seed, hash('crypto'), loadout.floors || 0)).int(hi - lo + 1));
   }
+  if (ch.coinAtk) add('atkPct', Math.min(25, Math.floor((loadout.coins || 0) / 5)));   // Gęś Księgowa: Ziarna w kieszeni zamieniają się w moc
   const ids = loadout.tiles.filter((_, i) => i !== opt.off);
   const has = id => ids.includes(id);
   for (const id of ids) { const t = TILE_BY_ID[id]; if (t && t.fx) for (const f of t.fx) add(f.k, f.v); }
@@ -66,6 +67,7 @@ export function heroStats(loadout, opt = {}) {
   if (has('trofeum-z-pior')) add('hpFlat', TILE_BY_ID['trofeum-z-pior'].grow.per * gr('trofeum-z-pior'));
   if (has('skarbonka-piskleca')) add('coinFlat', 1 + gr('skarbonka-piskleca'));
   const sc = ch.noSets ? {} : setCounts(ids, loadout.decree);   // Sigma Solo: zestawy nie działają
+  if (ch.setBonus) for (const k of Object.keys(ch.setBonus)) if (sc[k]) sc[k] += ch.setBonus[k];   // Nioska Wanda: zaczęty zestaw Jajeczny liczy się o 1 sztukę więcej
   // progi statystyk (co 3 kopie)
   const cnt = {}; for (const id of ids) cnt[id] = (cnt[id] || 0) + 1;
   for (const [id, m] of Object.entries(MILESTONES)) { const n = Math.floor((cnt[id] || 0) / MILESTONE_EVERY); if (n) for (const f of m.fx) add(f.k, f.v * n); }
@@ -118,10 +120,11 @@ export function heroStats(loadout, opt = {}) {
   if (egg && lk['jajo-lod']) egg = Math.floor(egg * 120 / 100);
 
   const all = acc.allPct || 0;
-  const atk = Math.round((b.atk + (acc.atkFlat || 0)) * (100 + (acc.atkPct || 0) + all) / 100);   // zaokrąglenie: małe premie procentowe nie giną przy niskim Ataku
+  const armor = Math.max(0, Math.floor((b.armor + (acc.armor || 0)) * (100 + all) / 100));
+  const armorAtk = acc.armorAtk ? Math.min(45, Math.floor(armor / 4) * acc.armorAtk) : 0;   // Emeryt Janusz: każde 4 pkt Pancerza = +3% Ataku
+  const atk = Math.round((b.atk + (acc.atkFlat || 0)) * (100 + (acc.atkPct || 0) + all + armorAtk) / 100);   // zaokrąglenie: małe premie procentowe nie giną przy niskim Ataku
   const maxHp = Math.max(1, Math.floor((b.hp + (acc.hpFlat || 0)) * (100 + (acc.hpPct || 0) + all) / 100));
   const aspd = Math.max(20, Math.floor(b.aspd * (100 + (acc.aspdPct || 0) + all) / 100));
-  const armor = Math.max(0, Math.floor((b.armor + (acc.armor || 0)) * (100 + all) / 100));
   const crit = Math.min(100, Math.floor((b.crit + (acc.crit || 0)) * (100 + all) / 100));
   const evade = Math.min(75, Math.floor((b.evade + (acc.evade || 0)) * (100 + all) / 100));
   const regen = Math.floor(Math.floor((b.regen + (acc.regen || 0)) * (100 + all) / 100) * (loadout.noRegen ? 50 : 100) / 100);   // Garnek 5: regeneracja o połowę słabsza
@@ -158,5 +161,8 @@ export function heroStats(loadout, opt = {}) {
     coinFlat: acc.coinFlat || 0,
     coinPct: acc.coinPct || 0,
     sets: sc, links: lk,
+    // postacie-wyzwania (sim.js)
+    skillPow: acc.skillPow || 0, dodgeAtk: acc.dodgeAtk || 0, bleedKillHeal: acc.bleedKillHeal || 0, sanepid: acc.sanepid || 0, eggGrow: acc.eggGrow || 0, ramp: acc.ramp || 0,
+    strike: acc.strike || 0, vsStun: acc.vsStun || 0, noAttack: !!acc.noAttack, dotPct: acc.dotPct || 0, compPow: acc.compPow || 0,
   };
 }
