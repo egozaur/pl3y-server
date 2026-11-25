@@ -58,7 +58,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 21;
+export const RUN_V = 22;
 
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null, curses = [], kurnik = {} }) {
   const M = MODES[mode], ch = CHARS[char];
@@ -734,7 +734,7 @@ export function buildProfile(run) {
     frost: 2 * (ec.lod || 0) + (S.frostHit ? 3 : 0) + (S.startFrost ? 2 : 0),
     poison: 2 * (ec.trucizna || 0) + (S.poisonHit ? 3 : 0) + S.poisonPct / 20,
     bleed: 2 * (ec.krew || 0) + (S.bleed ? 3 : 0) + (S.critBleed ? 1 : 0),
-    crit: Math.max(0, (S.crit - 15) / 6 + (S.critMult - 150) / 30),
+    crit: Math.max(0, (S.crit - 9) / 3.6),   // sama szansa (siła mocnego dziobnięcia jest stała); skala dopasowana do dawnego wzoru z Mocą
     armor: S.armor / 6,
     heal: S.regen / 8 + S.healBonus / 5 + healSk * 2,
     skills: run.skills.reduce((a, x) => a + (x.lvl >= 2 ? 2 : 1) + (x.lvl >= 3 ? 1 : 0), 0) + S.cdPct / 15,
@@ -746,6 +746,7 @@ export function buildProfile(run) {
 }
 // Plan kontr dla bossa / elity / dodatkowego bossa. kind: 'boss' | 'extra' | 'elite'. Liczba i siła rosną z palnikiem (COUNTER_K).
 export function counterPlan(run, kind, def = null) {
+  if ((run.garnek | 0) < RULES.counterFrom) return [];   // kontry (i Świta Zarządu) tylko na palnikach 4 i 5
   if (kind === 'elite' && run.round <= MODES[run.mode].early.rounds) return [];   // wczesne piętra zostają spokojne
   const prof = buildProfile(run), p = Math.min(5, run.garnek | 0);
   const slotK = def && def.slot ? (COUNTER_SLOT_K[def.slot] || 1) : 1;   // pierwszy boss (Brojler) najlżejszy: tam build jest jeszcze niedojrzały
@@ -753,7 +754,7 @@ export function counterPlan(run, kind, def = null) {
   const ids = [];
   if (prof.main) ids.push(COUNTER_OF[prof.main]);
   const summoner = !!(def && (def.mech || []).includes('summon'));   // bossowie z własnymi pomocnikami nie dostają Świty
-  if (kind === 'boss' && !summoner && (p >= 3 || !ids.length)) ids.push('swiat');
+  if (kind === 'boss' && !summoner) ids.push('swiat');   // od palnika 4 (poniżej plan jest pusty) boss zawsze dostaje Świtę
   else if (!ids.length && kind === 'elite') ids.push('swiat');   // dodatkowi bossowie bez wyraźnego stylu gracza nie dostają kontry (są opcjonalni)
   const ats = kind === 'boss' ? [[50, 50, 50, 55, 60, 65][p], 30] : [50, 30];
   return ids.map((id, i) => {
@@ -1085,7 +1086,7 @@ export function view(run) {
   if (!over) {
     if (!hideFoes(run)) { v.enemies = encounterIds(run); v.tpl = floorTemplate(run); }
     else { v.enemies = bossAt(run) ? encounterIds(run) : null; v.tpl = null; v.hidden = !bossAt(run); }
-    if (bossAt(run) || isElite(run) || isNemesisRound(run)) { const pm = buildProfile(run).main; v.intel = pm ? ARCHETYPES[pm] : null; }   // zapowiedź adaptacji: tylko nazwa stylu, bez kontry
+    if ((bossAt(run) || isElite(run) || isNemesisRound(run)) && (run.garnek | 0) >= RULES.counterFrom) { const pm = buildProfile(run).main; v.intel = pm ? ARCHETYPES[pm] : null; }   // zapowiedź adaptacji: tylko nazwa stylu, bez kontry
   }
   return v;
 }

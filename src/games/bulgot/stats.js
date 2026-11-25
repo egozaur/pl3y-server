@@ -118,7 +118,7 @@ export function heroStats(loadout, opt = {}) {
   if (chl >= 6) add('vsCold', 25);
   if (kp >= 6) { add('cdPct', 15); add('interestPlus', 3); }
   const xs = n => Math.max(0, n - 4);
-  add('coinPct', 3 * xs(zb)); add('dmg', 2 * xs(rb)); add('coinFlat', Math.min(3, xs(je)));
+  add('coinPct', 3 * xs(zb)); add('atkPct', 2 * xs(rb)); add('coinFlat', Math.min(3, xs(je)));
   add('burnPct', 3 * xs(rs)); add('startFrost', Math.min(3, xs(chl))); add('freeReroll', Math.floor(xs(kp) / 2));
   const eggBase = has('jajko-na-twardo') ? 60 : has('tykajace-jajo') ? (je >= 2 ? 60 : 80) : 0;
   let egg = eggBase;
@@ -137,8 +137,7 @@ export function heroStats(loadout, opt = {}) {
 
   return {
     maxHp, atk, aspd, armor, crit, evade, regen,
-    critMult: b.critMult + (acc.critMult || 0),
-    dmg: b.dmg + (acc.dmg || 0),
+    critMult: b.critMult,   // stała siła mocnego dziobnięcia (nie ma już premii do niej)
     luck: b.luck + (acc.luck || 0),
     egg,   // co ile ticków wybucha Tykające Jajo
     eggAll: !!acc.eggAll, eggBurn: acc.eggBurn || 0, bleedStacks: acc.bleedStacks || 1, revivePct: acc.revivePct || 40, reviveBurn: acc.reviveBurn || 0,

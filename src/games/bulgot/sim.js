@@ -119,7 +119,7 @@ export class Fight {
     if (t.evade && this.rng.int(100) < t.evade) { this.push({ k: 'miss', to: t.uid }); return 0; }
     if (kind === 'atk' && this.tick < this.heroBlindUntil && this.rng.int(100) < this.heroBlindPct) { this.push({ k: 'miss', to: t.uid }); return 0; }   // Szef Nocnej Zmiany: oślepienie
     let raw = fl(this.S.atk * pct / 100);
-    raw = fl(raw * (100 + this.S.dmg + this.skillBonus + (this.S.overtime && this.tick >= 200 ? this.S.overtime : 0) + (this.S.vsCold && (t.frost > 0 || this.tick < t.frozenUntil) ? this.S.vsCold : 0) + (this.S.vsBurn && t.burn > 0 ? this.S.vsBurn : 0) + (this.tick < this.dmgUntil ? this.dmgBonus : 0) + (this.tick < this.buffUntil ? this.buffDmg : 0) + (this.tick < (t.vulnUntil || 0) ? t.vulnPct : 0) + this.dodgeBonus + (this.S.vsStun && (this.tick < t.stunUntil || this.tick < t.frozenUntil) ? this.S.vsStun : 0) + (this.S.sanepid && t.poison >= 5 ? this.S.sanepid : 0)) / 100);
+    raw = fl(raw * (100 + this.skillBonus +(this.S.overtime && this.tick >= 200 ? this.S.overtime : 0) + (this.S.vsCold && (t.frost > 0 || this.tick < t.frozenUntil) ? this.S.vsCold : 0) + (this.S.vsBurn && t.burn > 0 ? this.S.vsBurn : 0) + (this.tick < this.dmgUntil ? this.dmgBonus : 0) + (this.tick < this.buffUntil ? this.buffDmg : 0) + (this.tick < (t.vulnUntil || 0) ? t.vulnPct : 0) + this.dodgeBonus + (this.S.vsStun && (this.tick < t.stunUntil || this.tick < t.frozenUntil) ? this.S.vsStun : 0) + (this.S.sanepid && t.poison >= 5 ? this.S.sanepid : 0)) / 100);
     let crit = false;
     if (t.brittle) { t.brittle = false; crit = true; raw = fl(raw * this.S.critMult / 100); }   // Kruchość: trafienie zawsze jest mocnym dziobnięciem
     else if (canCrit || (this.S.skillCrit && this.inSkill)) {

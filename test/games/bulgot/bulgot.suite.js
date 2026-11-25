@@ -112,13 +112,14 @@ test('dane: kafelki, umiejętności z Mutacjami, odblokowania, spójne odwołani
 test('statystyki: baza, kafelki, procenty, zestawy, Worek, Zakazana Pasza, wyłączony kafelek', () => {
   const B = D.CHARS.pyrtek.base;
   let S = heroStats(loadout());
-  eq([S.maxHp, S.atk, S.aspd, S.crit, S.critMult], [B.hp, B.atk, 100, 5, 150], 'baza');
+  eq([S.maxHp, S.atk, S.aspd, S.crit, S.critMult], [B.hp, B.atk, 100, 5, 200], 'baza (siła mocnego dziobnięcia stała ×2)');
   S = heroStats(loadout({ tiles: ['ziarno-mocy', 'ziarno-mocy', 'twardy-grzebien', 'szybki-dziob', 'pancerz-z-pierza'] }));
   eq([S.atk, S.maxHp, S.aspd, S.armor], [12, B.hp + 16, 124, 11], 'płaskie i procentowe');
   S = heroStats(loadout({ tiles: ['pakt-z-lisem'] }));
   eq([S.atk, S.maxHp], [Math.floor(8 * 150 / 100), Math.floor(B.hp * 75 / 100)], 'Pakt z Lisem');
   S = heroStats(loadout({ tiles: ['opaska-rambo', 'ostrogi-bojowe'] }));
-  eq([S.atk, S.dmg, S.bleed, S.crit], [Math.round(8 * 120 / 100), 15, 1, 15], 'zestaw Rambo x2: +20% Ataku');
+  eq([S.atk, S.bleed, S.crit], [Math.round(8 * 135 / 100), 1, 15], 'zestaw Rambo x2: +20% Ataku z zestawu i +15% z Opaski');
+  assert(S.dmg === undefined && S.critMult === 200, 'nie ma statystyki Obrażenia, siła mocnego dziobnięcia stała ×2');
   assert(!S.okrzyk && heroStats(loadout({ tiles: ['opaska-rambo', 'ostrogi-bojowe', 'kamizelka-kuloodporna'] })).okrzyk, 'Ostatni Okrzyk od 3 przedmiotów');
   S = heroStats(loadout({ tiles: ['tykajace-jajo'] })); eq([S.egg, S.eggHeal], [80, 0], 'jajo co 8 s');
   S = heroStats(loadout({ tiles: ['tykajace-jajo', 'zlote-jajo', 'gniazdo-zapasowe'] })); eq([S.egg, S.eggHeal, S.revive], [60, 3, true], 'zestaw Jajeczne');
@@ -213,7 +214,7 @@ test('walka: Tykające Jajo, krwawienie, Młocarnia, Gniazdo Zapasowe, Ostatni O
   a = play(setup({ lo: { tiles: ['ostrogi-bojowe'] }, enemies: [foe({ hp: 100000, atk: 1, aspd: 20 })] }));
   assert(evs(a.ev, 'hit').some(e => e.kind === 'bleed' && e.d === 1), 'krwawienie 1/s na stos (Ostrogi)');
   a = play(setup({ lo: { tiles: Array(8).fill('mlocarnia').slice(0, 1) }, enemies: [foe({ hp: 100000, atk: 1, aspd: 20, armor: 40 })] }));
-  const dm = evs(a.ev, 'hit').filter(e => e.kind === 'atk'); assert(dm[dm.length - 1].d >= dm[0].d, 'rozbity pancerz nie zmniejsza obrażeń');
+  const dm = evs(a.ev, 'hit').filter(e => e.kind === 'atk' && !e.crit); assert(dm[dm.length - 1].d >= dm[0].d, 'rozbity pancerz nie zmniejsza obrażeń');
   // Gniazdo: wskrzeszenie raz
   const rv = setup({ revive: true, lo: { tiles: ['gniazdo-zapasowe'] }, hp: 5, enemies: [foe({ hp: 100000, atk: 9, aspd: 100 })] });
   a = play(rv); assert(evs(a.ev, 'revive').length === 1 && a.res.usedRevive && !a.res.win, 'wskrzeszenie dokładnie raz, potem porażka');
@@ -841,10 +842,9 @@ test('Prezes: Zebranie Zarządu, przez pierwsze 3 s nikt nie atakuje; umiejętno
   const g = play(setup({ lo: { skills: [sk('grad')] }, enemies: [foe({ hp: 100000, atk: 1, aspd: 20 })] }), [[D.SKILLS.grad.cd * 15 / 100 | 0, 0]]);
   assert(evs(g.ev, 'skill').length === 1, 'umiejętność gotowa po ' + (D.SKILLS.grad.cd * 15 / 100 | 0) + ' tickach');
 });
-test('nowe kafelki ofensywne: Ziarno Mocy +6 Ataku, Ostry Dziób +12% obrażeń', () => {
+test('nowe kafelki ofensywne: Ziarno Mocy +6 Ataku, brak rodziny Obrażeń', () => {
   eq(heroStats(loadout({ tiles: ['ziarno-mocy'] })).atk, 10, 'Ziarno Mocy');
-  eq(heroStats(loadout({ tiles: ['ostry-dziob', 'ostry-dziob'] })).dmg, 50, 'Ostry Dziób kumuluje się');
-  assert(D.TILE_BY_ID['ostry-dziob'].repeat && D.STARTER_TILES.includes('ostry-dziob'), 'dostępny od startu i powtarzalny');
+  assert(!D.TILE_BY_ID['ostry-dziob'] && !D.STAT_FAMS.some(F => F.fam === 'obrazenia'), 'Obrażenia scalone z Atakiem: rodziny i kafelków już nie ma');
 });
 // ---------- profil ----------
 test('profil: odblokowania postaci i kafelków, liczniki, najlepszy wynik, kolejny poziom Garnka', () => {
@@ -1334,9 +1334,9 @@ test('Hasło do ukrytej postaci (code): tylko „dzioby”, odblokowuje Zjaraneg
 });
 
 // ---------- poziomy statystyk, Ulepszanie, łup z bossów ----------
-test('rodziny statystyk: 9 rodzin × 3 poziomy + legendarny, stare id na poziomie 3, rosnąca moc, jedna ikona na rodzinę', () => {
-  eq(D.STAT_FAMS.length, 9, '9 rodzin');
-  const OLD = ['twardy-grzebien', 'ziarno-mocy', 'ostry-dziob', 'szybki-dziob', 'pancerz-z-pierza', 'czujne-oko', 'zwinne-nogi', 'cieple-gniazdko', 'czterolistna-koniczyna'];
+test('rodziny statystyk: 8 rodzin × 3 poziomy + legendarny, stare id na poziomie 3, rosnąca moc, jedna ikona na rodzinę', () => {
+  eq(D.STAT_FAMS.length, 8, '8 rodzin (Obrażenia scalone z Atakiem)');
+  const OLD = ['twardy-grzebien', 'ziarno-mocy', 'szybki-dziob', 'pancerz-z-pierza', 'czujne-oko', 'zwinne-nogi', 'cieple-gniazdko', 'czterolistna-koniczyna'];
   for (const F of D.STAT_FAMS) {
     eq(F.ids.length, 4, 'cztery poziomy ' + F.fam);
     const ts = F.ids.map(id => D.TILE_BY_ID[id]);
@@ -1425,7 +1425,7 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
 });
 
 test('RUN_V = 7: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 21, 'wersja reguł');
+  eq(R.RUN_V, 22, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1533,7 +1533,7 @@ test('przedmioty etapu 2: Wywar Dnia, Tłusta Pokrywka, Szczypta Soli, Lodowa Sp
 
 // ---------- etap 3: ryzyko i legendarne przedmioty ----------
 test('etap 3: pula 134 kafelki, legendarne przedmioty (legend) dopiero od 60% runu, nigdy wyklęty Dinozaur w ofertach', () => {
-  eq(D.TILES.length, 156, 'pula kafelków (136 + 20 nowych umiejętności)');
+  eq(D.TILES.length, 152, 'pula kafelków (136 + 20 nowych umiejętności)');
   const leg = D.TILES.filter(t => t.legend); eq(leg.length, 6, '6 legendarnych przedmiotów'); assert(leg.every(t => t.rarity === 3 && t.type === 'item'), 'rzadkość 3, przedmioty');
   const risk = ['pozyczka-chwilowka', 'dopalacz-z-biedronki', 'nadgodziny-bez-doplaty', 'dieta-cud', 'uklad-z-zarzadem', 'los-na-loterii']; assert(risk.every(id => D.TILE_BY_ID[id] && D.TILE_BY_ID[id].type === 'risk'), '6 kafelków ryzyka');
   const early = new Set(), late = new Set(); let dino = 0;
@@ -1553,7 +1553,7 @@ test('kafelki ryzyka etapu 3: Pożyczka (Ziarna teraz, odsetki, nie do lombardu)
   const b = fresh(); force(b, 'uklad-z-zarzadem', 'dieta-cud', 'los-na-loterii', 'dopalacz-z-biedronki'); b.coins = 1; R.pickTile(b, 0); eq([b.coins, b.flags.bossHpBonus], [13, 25], 'Układ: +12 Ziaren, boss +25% Życia');
   const S = ids => heroStats(loadout({ tiles: ids }));
   eq([S(['dopalacz-z-biedronki']).aspd, S(['dopalacz-z-biedronki']).maxHp], [140, Math.floor(70 * 75 / 100)], 'Dopalacz: +40% szybkości, -25% Życia');
-  const ng = fresh(); ng.tiles = ['nadgodziny-bez-doplaty']; ng.hp = 10; eq(R.restPctOf(ng), 10, 'Nadgodziny: Odpoczynek leczy o połowę mniej'); eq(S(['nadgodziny-bez-doplaty']).dmg, 30, '+30% obrażeń');
+  const ng = fresh(); ng.tiles = ['nadgodziny-bez-doplaty']; ng.hp = 10; eq(R.restPctOf(ng), 10, 'Nadgodziny: Odpoczynek leczy o połowę mniej'); eq(S(['nadgodziny-bez-doplaty']).atk, Math.round(8 * 130 / 100), '+30% Ataku');
   eq([S(['dieta-cud']).armor, S(['dieta-cud']).aspd], [20, 75], 'Dieta: +20 Pancerza, -25% szybkości'); eq([S(['los-na-loterii']).luck, S(['los-na-loterii']).coinFlat], [25, -1], 'Los na Loterii');
 });
 
@@ -1571,7 +1571,7 @@ test('legendarne przedmioty: Złoty Rosołek, Kogut Alfa, Plan B, Dziób Mistrza
   // Dziób Mistrza: umiejętności mogą krytykować
   const crit = tiles => { let n = 0; const x = new Fight(setup({ lo: { tiles, skills: [sk('granat')] }, enemies: [big()] })); x.hasCrit = 0; for (let i = 0; i < 40; i++) { x.skills[0].cd = 0; x.step([0]); n += x.ev.filter(e => e.k === 'hit' && e.crit && e.kind === 'granat').length; } return n; };
   assert(crit(Array(7).fill('dziob-mistrza')) > 0 && crit([]) === 0, 'Dziób Mistrza: krytyki z umiejętności (bez niego zero)');
-  eq(heroStats(loadout({ tiles: ['dziob-mistrza'] })).crit, 25, '+20% krytyka'); assert(heroStats(loadout({ tiles: ['dziob-mistrza'] })).skillCrit, 'flaga skillCrit');
+  eq(heroStats(loadout({ tiles: ['dziob-mistrza'] })).crit, 20, '+15% krytyka'); assert(heroStats(loadout({ tiles: ['dziob-mistrza'] })).skillCrit, 'flaga skillCrit');
   // Akcje Zarządu: +25% Ziaren (maks. 12)
   const a = fresh(); a.tiles = ['akcje-zarzadu']; a.coins = 20; a.hp = 70; a.phase = 'fight'; a.fight = { started: true }; R.fightFinish(a, []); assert(a.coins >= 20 + 4 + 2 + 5 - 1, 'Akcje: +25% z 20 = 5 (oraz odsetki i nagroda)');
   const a2 = fresh(); a2.tiles = ['akcje-zarzadu']; a2.coins = 100; a2.hp = 70; a2.phase = 'fight'; a2.fight = { started: true }; R.fightFinish(a2, []); assert(a2.coins <= 100 + 4 + 3 + 12, 'limit +12');
@@ -1888,7 +1888,7 @@ test('Nowości: kompletność danych (klątwy, trasy, bossowie, osiągnięcia), 
   for (const id of D.SUPER_BOSSES) assert(D.BOSSES[id].super, 'super-boss ' + id);
   for (const [id, b] of Object.entries(D.KURNIK)) { assert(b.name && b.text && b.cost.length === 3 && b.cost[0] < b.cost[2], 'budynek ' + id); }
   for (const a of ['a-klatwa', 'a-klatwy3', 'a-dogrywka', 'a-dogrywka15', 'a-duch', 'a-towarzysz', 'a-trasy', 'a-kurnik', 'a-kurnik-max']) assert(D.ACH_BY_ID[a], 'osiągnięcie ' + a);
-  eq(R.RUN_V, 21, 'RUN_V 21');
+  eq(R.RUN_V, 22, 'RUN_V 22');
 });
 
 test('Jajko Dinozaura: tylko jedno na run (po wykluciu nie wraca do ofert)', () => {
@@ -2126,7 +2126,7 @@ test('etap 4: wzmocnienia: Pobudka, Echo, Przyspieszony Obieg', () => {
   const o2 = new Fight(setup({ hp: 400, lo: { skills: [{ id: 'obieg', lvl: 3, mut: 2 }] }, enemies: [foe({ hp: 1e7, atk: 1, aspd: 10 })] })); o2.hp = 50; o2.skills[0].cd = 0; o2.step([0]); assert(o2.hp > 50, 'Obieg Zamknięty leczy');
 });
 test('etap 4: RUN_V 20, nowe umiejętności trafiają do ofert', () => {
-  eq(R.RUN_V, 21, 'RUN_V');
+  eq(R.RUN_V, 22, 'RUN_V');
   const seen = new Set();
   for (let seed = 1; seed < 300; seed++) { const r = R.newRun({ mode: 'full', char: 'pyrtek', garnek: 0, pool: ALL, seed }); const run = r.run; for (const o of (run.cur && run.cur.offer) || []) { const t = D.TILE_BY_ID[o.id || o]; if (t && t.skill && NEW20.includes(t.skill)) seen.add(t.skill); } }
   assert(seen.size >= 5, 'nowe umiejętności pojawiają się w ofertach (widziano ' + seen.size + ')');
@@ -2138,7 +2138,7 @@ test('zestawy: progi 4 i 6 oraz Nadwyżka', () => {
   const rb = ['opaska-rambo', 'kamizelka-kuloodporna', 'ostrogi-bojowe', 'okulary-aviatory', 'kolczatka', 'karabin-maszynowy', 'apteczka-polowa'];
   eq(S(rb.slice(0, 3)).okrzykN, 1, 'Rambo 3: jeden Okrzyk'); eq(S(rb.slice(0, 4)).okrzykN, 2, 'Rambo 4: dwa Okrzyki');
   assert(!S(rb.slice(0, 5)).volley && S(rb.slice(0, 6)).volley, 'Rambo 6: Armia Jednego Kurczaka');
-  assert(S(rb.slice(0, 5)).dmg - S(rb.slice(0, 4)).dmg >= 2, 'Rambo: Nadwyżka +2% obrażeń od 5. sztuki');
+  assert(D.SETS.rambo.x === '+2% Ataku' && S(rb.slice(0, 7)).atk >= S(rb.slice(0, 4)).atk, 'Rambo: Nadwyżka +2% Ataku od 5. sztuki');
   const zb = ['worek-kukurydzy', 'mlocarnia', 'siewnik', 'mokra-pasza', 'kombajn-zbozowy', 'spichlerz', 'strach-na-wroble'];
   assert(S(zb.slice(0, 4), { bonusAtk: 3 }).atk > S(zb.slice(0, 3), { bonusAtk: 3 }).atk, 'Zbożowe 4: Siewnik podwojony');
   assert(S(zb.slice(0, 6), { coins: 50 }).maxHp > S(zb.slice(0, 5), { coins: 50 }).maxHp, 'Zbożowe 6: Żniwa dają Życie za Ziarna');
@@ -2273,18 +2273,19 @@ test('Horda i Armia: do 5 wrogów (7 z towarzyszem), część wchodzi od razu, r
   const g = play(lone); assert(g.res.ticks < 300 && g.res.win, 'gdy plansza pusta, fala wchodzi od razu (ticków: ' + g.res.ticks + ')'); eq(evs(g.ev, 'arrive').length, 1, 'zdarzenie wejścia fali');
 });
 
-test('Adaptacja bossów: profil buildu wybiera kontrę, siła i liczba rosną z palnikiem, elity i dodatkowi bossowie dostają lżejsze kontry', () => {
-  const fire = fresh({ seed: 3 });
+test('Adaptacja bossów: kontry tylko na palnikach 4 i 5 (profil buildu wybiera kontrę, siła rośnie z palnikiem, elity i dodatkowi bossowie dostają lżejsze kontry)', () => {
+  const fire = fresh({ seed: 3 }); fire.garnek = 4;
   fire.tiles = D.TILES.filter(t => (t.tags || []).includes('ogien') && t.type === 'item').slice(0, 5).map(t => t.id); fire.skills = [{ id: 'chlust', lvl: 1 }];
   eq(R.buildProfile(fire).main, 'fire', 'build ognia'); eq(R.counterPlan(fire, 'boss')[0].id, 'straz', 'kontra: Straż Pożarna');
-  const none = fresh({ seed: 3 }); eq(R.buildProfile(none).main, null, 'bez stylu'); eq(R.counterPlan(none, 'boss').map(c => c.id), ['swiat'], 'bez stylu: świta');
-  const durs = [0, 2, 4, 5].map(g => { fire.garnek = g; return R.counterPlan(fire, 'boss')[0].dur; });
-  assert(durs[0] < durs[1] && durs[1] < durs[2] && durs[2] < durs[3], 'siła kontry rośnie z palnikiem: ' + durs.join());
-  fire.garnek = 0; eq(R.counterPlan(fire, 'boss').length, 1, 'palnik 0: 1 kontra'); fire.garnek = 4; eq(R.counterPlan(fire, 'boss').length, 2, 'palnik 4: 2 kontry');
+  const none = fresh({ seed: 3 }); none.garnek = 4; eq(R.buildProfile(none).main, null, 'bez stylu'); eq(R.counterPlan(none, 'boss').map(c => c.id), ['swiat'], 'bez stylu: świta');
+  const durs = [4, 5].map(g => { fire.garnek = g; return R.counterPlan(fire, 'boss')[0].dur; });
+  assert(durs[0] < durs[1], 'siła kontry rośnie z palnika 4 do 5: ' + durs.join());
+  for (const g of [0, 1, 2, 3]) { fire.garnek = g; eq(R.counterPlan(fire, 'boss'), [], 'palnik ' + g + ': bez kontr'); eq(R.counterPlan(fire, 'elite'), [], 'palnik ' + g + ': elita bez kontr'); }
+  fire.garnek = 4; eq(R.counterPlan(fire, 'boss').length, 2, 'palnik 4: 2 kontry');
   fire.round = 7; const el = R.counterPlan(fire, 'elite'), bo = R.counterPlan(fire, 'boss'); assert(el.length === 1 && el[0].dur < bo[0].dur, 'elita: jedna lżejsza kontra');
   fire.round = 2; eq(R.counterPlan(fire, 'elite'), [], 'wczesne piętra bez kontr elit');
-  const run = fresh({ seed: 4, mode: 'quick' }); run.tiles = fire.tiles.slice(); run.skills = fire.skills.slice(); run.garnek = 2; run.round = 5;
-  const su = R.buildSetup(run); const boss = su.enemies.find(e => e.boss); assert(boss.counters && boss.counters.length >= 1, 'boss ma kontry'); eq(R.view(run).intel, D.ARCHETYPES.fire, 'widok zapowiada styl');
+  const run = fresh({ seed: 4, mode: 'quick' }); run.tiles = fire.tiles.slice(); run.skills = fire.skills.slice(); run.garnek = 4; run.round = 5;
+  const su = R.buildSetup(run); const boss = su.enemies.find(e => e.boss); assert(boss.counters && boss.counters.length >= 1, 'boss ma kontry'); eq(R.view(run).intel, D.ARCHETYPES.fire, 'widok zapowiada styl'); run.garnek = 3; assert(!R.buildSetup(run).enemies.find(e => e.boss).counters.length && !R.view(run).intel, 'palnik 3: boss bez kontr i bez zapowiedzi stylu');
   assert(!JSON.stringify(R.view(run)).includes('straz'), 'widok nie zdradza kontry');
 });
 

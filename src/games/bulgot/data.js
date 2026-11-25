@@ -58,6 +58,7 @@ export const RULES = {
   // Hordy i Armie (szablony pięter z wieloma wrogami): górny limit wrogów w jednej walce = foeCap + foePerPet za każdego towarzysza gracza.
   // Część wrogów wchodzi od razu, reszta falami po 2 co `waveGap` ticków (6 s); wchodzący wróg przez `waveIdle` ticków nie atakuje.
   foeCap: 5, foePerPet: 2, waveGap: 60, waveIdle: 10, waveSize: 2,
+  counterFrom: 4,   // od którego palnika bossowie i elity kontrują build gracza (poniżej: brak kontr i brak zapowiedzi stylu)
 };
 
 // Forma kurczaka zależy od postępu (ułamek runu), nie od numeru rundy, więc tryb szybki też dochodzi do Rambo Chickena.
@@ -75,7 +76,8 @@ export function formFor(mode, round) {
 }
 
 // ---------- Postacie ----------
-const BASE = { hp: 70, atk: 8, aspd: 100, armor: 0, crit: 5, critMult: 150, evade: 0, regen: 0, luck: 0, dmg: 0 };
+// critMult = stała siła mocnego dziobnięcia (200 = podwójny cios); nie jest już statystyką ani nie rośnie od kafelków. Statystyki Obrażenia (dmg) nie ma: scalona z Atakiem.
+const BASE = { hp: 70, atk: 8, aspd: 100, armor: 0, crit: 5, critMult: 200, evade: 0, regen: 0, luck: 0 };
 export const CHARS = {
   pyrtek: { id: 'pyrtek', name: 'Pyrtek', style: 'Uniwersalny', text: 'Mały, ale zawzięty. +7% Ataku i Życia, bez fanaberii.', base: BASE, fx: [{ k: 'atkPct', v: 7 }, { k: 'hpPct', v: 7 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: null },
   kwoka: { id: 'kwoka', retired: true, name: 'Kwoka Babcia', style: 'Czołg', text: '+12% Życia, -25% szybkości ataku. Zaczyna z Zagrzebaniem w Sianie.', base: BASE,
@@ -114,13 +116,13 @@ export const CHARS = {
   krypto: { id: 'krypto', retired: true, name: 'Kurczak Kryptowalutowy', style: 'Rynek', text: 'Co piętro jego wszystkie statystyki zmieniają się losowo od -30% do +55% („rynek”). Raz jest księciem, raz bankrutem, a kurs poznasz dopiero w walce.', base: BASE,
     fx: [], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-krypto', crypto: [-30, 55] },
   alkoholik: { id: 'alkoholik', retired: true, name: 'Kogut Alkoholik', style: 'Wieczny Poniedziałek', text: '+30% szansy na dziobnięcie i +120% Mocy Dziobnięcia, ale -25% szybkości ataku i -15% maks. Życia. Trafia rzadko, za to z impetem.', base: BASE,
-    fx: [{ k: 'crit', v: 30 }, { k: 'critMult', v: 120 }, { k: 'aspdPct', v: -25 }, { k: 'hpPct', v: -15 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-alkoholik' },
+    fx: [{ k: 'crit', v: 30 },{ k: 'aspdPct', v: -25 }, { k: 'hpPct', v: -15 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-alkoholik' },
   wegan: { id: 'wegan', retired: true, name: 'Kurczak Wegan', style: 'Bez mięsa', text: 'Odpoczynek leczy o połowę mniej, -10% maks. Życia. Za to wrogowie patrzą na niego z oburzeniem. Bez skutku.', base: BASE,
     fx: [{ k: 'restHalf', v: 1 }, { k: 'hpPct', v: -10 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-wegan' },
   baba: { id: 'baba', retired: true, name: 'Baba z Targu', style: 'Drogo', text: '+25 Ziaren na start, ale wszystko kupuje o 30% drożej, -12% Ataku i -12% maks. Życia. Bez dokupowania jest bezbronna, a dokupowanie ją rujnuje.', base: BASE,
     fx: [{ k: 'buyDisc', v: -30 }, { k: 'atkPct', v: -12 }, { k: 'hpPct', v: -12 }], startSkills: [], coins: 25, freeRerolls: 0, riskWeight: 1, lock: 'u-baba' },
   influencer: { id: 'influencer', retired: true, name: 'Kurczak Influencer', style: 'Zasięgi', text: '+35% szansy na dziobnięcie i +100% Mocy Dziobnięcia, ale -25% maks. Życia i -15% Ataku. Bez dziobnięcia spada engagement, a z nim cała reszta.', base: BASE,
-    fx: [{ k: 'crit', v: 35 }, { k: 'critMult', v: 100 }, { k: 'hpPct', v: -25 }, { k: 'atkPct', v: -15 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-influencer' },
+    fx: [{ k: 'crit', v: 35 },{ k: 'hpPct', v: -25 }, { k: 'atkPct', v: -15 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-influencer' },
   skibidi: { id: 'skibidi', retired: true, name: 'Kurczak Skibidi', style: 'Chaos', text: 'Zaczyna z dwiema losowymi umiejętnościami (nie wybierasz ich), cooldowny -10%, ale -25% maks. Życia i -12% Ataku. Czasem trafi ultimate, czasem w ścianę.', base: BASE,
     fx: [{ k: 'cdPct', v: 10 }, { k: 'hpPct', v: -25 }, { k: 'atkPct', v: -12 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-skibidi', randomSkill: 2 },
   emeryt: { id: 'emeryt', name: 'Emeryt Janusz', style: 'Twardy staruszek', text: 'Za moich czasów twardzi byli. Każde 4 punkty Pancerza dają +3% Ataku (maks. +45%). +10% maks. Życia, +6 Pancerza, +1 Regeneracji / s, ale -35% szybkości ataku. Bije wolno i ciągle narzeka.', base: BASE,
@@ -274,7 +276,7 @@ export const SET_STEPS = [2, 3, 4, 6];
 export const SETS = {
   jajeczne: { name: 'Jajeczne', b2: 'Tykające Jajo wybucha co 6 s', b3: 'Wybuchy leczą 3% maks. Życia', b4: 'Jaja wybuchają o 25% szybciej', b6: 'Pełne Gniazdo: +2 Ziarna po wygranej, wybuchy leczą 6% maks. Życia', x: '+1 Ziarno po wygranej (maks. +3)' },
   zbozowe: { name: 'Zbożowe', b2: '+10% Ziaren z nagród', b3: 'Worek Kukurydzy bez limitu premii', b4: 'Siewnik daje +2 Ataku za wygraną zamiast +1', b6: 'Żniwa: +2% maks. Życia za każde 10 Ziaren w kieszeni (maks. 30%)', x: '+3% Ziaren z nagród' },
-  rambo: { name: 'Rambo', b2: '+20% Ataku', b3: 'Ostatni Okrzyk: raz na walkę 3 s nietykalności poniżej 20% Życia', b4: 'Okrzyk działa dwa razy na walkę, +10% szansy na dziobnięcie', b6: 'Armia Jednego Kurczaka: pierwszy atak i co piąty zwykły atak to mocne dziobnięcie', x: '+2% obrażeń' },
+  rambo: { name: 'Rambo', b2: '+20% Ataku', b3: 'Ostatni Okrzyk: raz na walkę 3 s nietykalności poniżej 20% Życia', b4: 'Okrzyk działa dwa razy na walkę, +10% szansy na dziobnięcie', b6: 'Armia Jednego Kurczaka: pierwszy atak i co piąty zwykły atak to mocne dziobnięcie', x: '+2% Ataku' },
   rosolowe: { name: 'Rosołowe', b2: '+25% obrażeń od Oparzenia', b3: 'Ataki zawsze nakładają Oparzenie', b4: 'Wrogowie zaczynają walkę z 3 stosami Oparzenia', b6: 'Wrzątek: +50% obrażeń od Oparzenia, limit Oparzenia +3 stosy', x: '+3% obrażeń od Oparzenia' },
   chlodnicze: { name: 'Chłodnicze', b2: 'Każdy stos Mrozu spowalnia o 12% zamiast 8%', b3: 'Zamrożenie wywołuje Lodową Falę: 80% Ataku we wszystkich wrogów', b4: 'Wrogowie zaczynają walkę z 2 stosami Mrozu', b6: 'Wieczna Zima: +25% obrażeń przeciw wrogom z Mrozem albo zamrożonym', x: '+1 stos Mrozu na start walki (maks. +3)' },
   korpo: { name: 'Korporacyjne', b2: 'Odpoczynek tańszy o 2 Ziarna', b3: 'Dokupowanie kafelków 25% taniej', b4: 'Odsetki: po każdej wygranej +10% posiadanych Ziaren (maks. 5)', b6: 'Zarząd: -15% cooldownu umiejętności, Odsetki do 8 Ziaren', x: '+1 darmowy reroll za każde 2 sztuki ponad 4' },
@@ -322,11 +324,6 @@ const STAT_FAMILIES = [
     ['ziarno-selekcjonowane', 'Ziarno Selekcjonowane', 11, 'Wybrane przez komisję, która nie przyjmowała odwołań.'],
     ['ziarno-mocy', 'Ziarno Mocy', 24, 'Jedno ziarno, a w nim cała sprawiedliwość.'],
     ['ziarno-pierwszego-jajka', 'Ziarno Pierwszego Jajka', 38, 'Z niego wszystko się zaczęło. Kura wolałaby, żebyś o to nie pytał.']] },
-  { fam: 'obrazenia', k: 'dmg', fmt: v => `+${v}% obrażeń`, lv: [
-    ['nadpilowany-dziob', 'Nadpiłowany Dziób', 5, 'Ktoś zaczął go piłować i się znudził.'],
-    ['dziob-szlifowany', 'Dziób Szlifowany', 11, 'Szlif końcowy robi dział jakości, po godzinach.'],
-    ['ostry-dziob', 'Ostry Dziób', 25, 'Naostrzony na kamieniu, na którym ostrzy się cennik.'],
-    ['dziob-prezesa', 'Dziób Prezesa', 40, 'Podpisuje wyroki szybciej niż zarządzenia.']] },
   { fam: 'szybkosc', k: 'aspdPct', fmt: v => `+${v}% szybkości ataku`, lv: [
     ['dziob-po-kawie', 'Dziób po Kawie', 5, 'Pierwsza kawa z automatu, pierwsze drgania.'],
     ['dziob-po-espresso', 'Dziób po Espresso', 11, 'Drgania zaczynają być zauważalne dla ubezpieczyciela.'],
@@ -338,10 +335,10 @@ const STAT_FAMILIES = [
     ['pancerz-z-pierza', 'Pancerz z Pierza', 11, 'Miękki w dotyku, twardy w boju.'],
     ['zbroja-wyroczni-kurnika', 'Zbroja Wyroczni Kurnika', 17, 'Wyrocznia przewidziała ciosy. Zbroja już je zna.']] },
   { fam: 'krytyk', k: 'crit', fmt: v => `+${v}% szansy na dziobnięcie`, lv: [
-    ['zezowate-oko', 'Zezowate Oko', 5, 'Patrzy w dwie strony naraz. Czasem trafia w obie.'],
-    ['oko-kontrolera-jakosci', 'Oko Kontrolera Jakości', 12, 'Odrzuca wszystko, w tym twoich wrogów.'],
-    ['czujne-oko', 'Czujne Oko', 28, 'Widzi słabe punkty. Szczególnie Prezesa.'],
-    ['oko-cyklopa-z-chlodni', 'Oko Cyklopa z Chłodni', 44, 'Jedno oko, zero litości, temperatura minus dwadzieścia.']] },
+    ['zezowate-oko', 'Zezowate Oko', 3, 'Patrzy w dwie strony naraz. Czasem trafia w obie.'],
+    ['oko-kontrolera-jakosci', 'Oko Kontrolera Jakości', 7, 'Odrzuca wszystko, w tym twoich wrogów.'],
+    ['czujne-oko', 'Czujne Oko', 17, 'Widzi słabe punkty. Szczególnie Prezesa.'],
+    ['oko-cyklopa-z-chlodni', 'Oko Cyklopa z Chłodni', 26,'Jedno oko, zero litości, temperatura minus dwadzieścia.']] },
   { fam: 'unik', k: 'evade', fmt: v => `+${v}% uniku`, lv: [
     ['slieskie-nozki', 'Śliskie Nóżki', 2, 'Posmarowane tłuszczem po wczorajszym rosole.'],
     ['nogi-akrobaty', 'Nogi Akrobaty', 5, 'Cyrk wyjechał, nogi zostały.'],
@@ -426,10 +423,10 @@ export const TILES = [
   { id: 'worek-kukurydzy', name: 'Worek Kukurydzy', type: 'item', rarity: 0, set: 'zbozowe', text: '+8% Ataku za każde 10 Ziaren (maks. +40%)', fx: [{ k: 'worek', v: 1 }], flavor: 'Bogactwo mierzy się w kolbach.' },
   { id: 'mlocarnia', name: 'Młocarnia', type: 'item', rarity: 1, set: 'zbozowe', text: '+8% Ataku; 15% szans na rozbicie 10% Pancerza wroga przy trafieniu', fx: [{ k: 'shred', v: 15 }, { k: 'atkPct', v: 8 }], flavor: 'Co na polu zrobi cep, to w fabryce zrobi dziób.' },
   { id: 'siewnik', name: 'Siewnik', type: 'item', rarity: 2, set: 'zbozowe', lock: 'u-siewnik', text: '+1 Ataku na stałe co drugą wygraną rundę', fx: [{ k: 'siewnik', v: 1 }], flavor: 'Kto sieje wygrane, ten zbiera awans.' },
-  { id: 'opaska-rambo', name: 'Opaska Rambo', type: 'item', rarity: 1, set: 'rambo', text: '+15% obrażeń, +10% szansy na dziobnięcie', fx: [{ k: 'dmg', v: 15 }, { k: 'crit', v: 10 }], flavor: 'Nic tak nie dodaje odwagi jak kawałek czerwonego materiału.' },
+  { id: 'opaska-rambo', name: 'Opaska Rambo', type: 'item', rarity: 1, set: 'rambo', text: '+15% Ataku, +10% szansy na dziobnięcie', fx: [{ k: 'atkPct', v: 15 }, { k: 'crit', v: 10 }], flavor: 'Nic tak nie dodaje odwagi jak kawałek czerwonego materiału.' },
   { id: 'kamizelka-kuloodporna', name: 'Kamizelka Kuloodporna', type: 'item', rarity: 0, set: 'rambo', text: '+15 Pancerza, -10% szybkości ataku', fx: [{ k: 'armor', v: 15 }, { k: 'aspdPct', v: -10 }], flavor: 'Ciężka, ale rosół zostaje na zewnątrz.' },
   { id: 'ostrogi-bojowe', name: 'Ostrogi Bojowe', type: 'item', rarity: 1, set: 'rambo', text: 'Ataki krwawią: +1 obrażenie / s na stos Krwawienia', fx: [{ k: 'bleed', v: 1 }], flavor: 'Dwa kolce, jedna reputacja.' },
-  { id: 'okulary-aviatory', name: 'Okulary Aviatory', type: 'item', rarity: 2, set: 'rambo', lock: 'u-okulary', text: '+30% Mocy Dziobnięcia', fx: [{ k: 'critMult', v: 30 }], flavor: 'Gdy wchodzisz do biura w okularach, nikt nie pyta o urlop.' },
+  { id: 'okulary-aviatory', name: 'Okulary Aviatory', type: 'item', rarity: 2, set: 'rambo', lock: 'u-okulary', text: '+4% szansy na dziobnięcie', fx: [{ k: 'crit', v: 4 }], flavor: 'Gdy wchodzisz do biura w okularach, nikt nie pyta o urlop.' },
   { id: 'zepsute-jajo', name: 'Zepsute Jajo', type: 'item', rarity: 1, set: 'jajeczne', tags: ['trucizna', 'jajo'], text: 'Wybuchy jaj i Granat nakładają 3 stosy Salmonelli; 10% szans na Salmonellę przy ataku', fx: [{ k: 'eggPoison', v: 3 }, { k: 'poisonHit', v: 10 }], flavor: 'Nikt nie chce wiedzieć, ile leżało w kącie.' },
   { id: 'mokra-pasza', name: 'Mokra Pasza', type: 'item', rarity: 0, set: 'zbozowe', tags: ['trucizna', 'ziarno'], text: '25% szans na Salmonellę przy ataku, +20% obrażeń Salmonelli', fx: [{ k: 'poisonHit', v: 25 }, { k: 'poisonPct', v: 20 }], flavor: 'Pachnie jak magazyn po powodzi.' },
   { id: 'kolczatka', name: 'Kolczatka', type: 'item', rarity: 1, set: 'rambo', tags: ['krew'], text: 'Ataki krwawią (+1 na stos), +2 do limitu stosów Krwawienia', fx: [{ k: 'bleed', v: 1 }, { k: 'bleedMax', v: 2 }], flavor: 'Obroża po psie łańcuchowym. Teraz w lepszych rękach.' },
@@ -460,7 +457,7 @@ export const TILES = [
   { id: 'szron', name: 'Szron na Piórach', type: 'item', rarity: 2, set: 'chlodnicze', tags: ['lod'], lock: 'u-szron', text: '+10 Pancerza; każdy wróg, który cię trafi, dostaje stos Mrozu', fx: [{ k: 'armor', v: 10 }, { k: 'frostThorns', v: 1 }], flavor: 'Zimny jak spojrzenie kadrowej.' },
   // Zestaw Korporacyjny (ekonomia)
   { id: 'teczka', name: 'Teczka', type: 'item', rarity: 0, set: 'korpo', tags: ['korpo'], text: '+2 Ziarna po każdej wygranej rundzie', fx: [{ k: 'coinFlat', v: 2 }], flavor: 'W środku drugie śniadanie i raport kwartalny.' },
-  { id: 'krawat', name: 'Krawat', type: 'item', rarity: 1, set: 'korpo', tags: ['korpo'], text: '+1 darmowy reroll w każdej rundzie, +5% obrażeń', fx: [{ k: 'freeReroll', v: 1 }, { k: 'dmg', v: 5 }], flavor: 'Zawiązany na węzeł windsorski. Albo na szyi wroga.' },
+  { id: 'krawat', name: 'Krawat', type: 'item', rarity: 1, set: 'korpo', tags: ['korpo'], text: '+1 darmowy reroll w każdej rundzie, +5% Ataku', fx: [{ k: 'freeReroll', v: 1 }, { k: 'atkPct', v: 5 }], flavor: 'Zawiązany na węzeł windsorski. Albo na szyi wroga.' },
   { id: 'polisa', name: 'Polisa Ubezpieczeniowa', type: 'item', rarity: 1, set: 'korpo', tags: ['korpo'], text: 'Nikt nie kradnie ci Ziaren; +5 Pancerza', fx: [{ k: 'noSteal', v: 1 }, { k: 'armor', v: 5 }], flavor: 'Obejmuje lisy, kanarki i inne zdarzenia losowe.' },
   { id: 'premia-kwartalna', name: 'Premia Kwartalna', type: 'item', rarity: 2, set: 'korpo', tags: ['korpo'], lock: 'u-premiakw', text: '+12 Ziaren za każdego pokonanego bossa, +10% Ataku', fx: [{ k: 'bossCoins', v: 12 }, { k: 'atkPct', v: 10 }], flavor: 'Wypłacana w ziarnie. Zarząd mówi, że to benefit.' },
   // Kafelki rosnące: zaczynają słabo i rosną z warunku (licznik w run.grow, logika w stats.js i rules.js → fightFinish).
@@ -485,7 +482,7 @@ export const TILES = [
   // Etap 3: ryzyko (nowe kafelki z ceną)
   { id: 'pozyczka-chwilowka', name: 'Pożyczka Chwilówka', type: 'risk', rarity: 1, coinsNow: 15, noPawn: true, text: '+15 Ziaren teraz, ale -2 Ziarna po każdej wygranej rundzie (odsetki)', fx: [{ k: 'coinFlat', v: -2 }], flavor: 'RRSO jest drobnym drukiem. Bardzo drobnym.' },
   { id: 'dopalacz-z-biedronki', name: 'Dopalacz z Biedronki', type: 'risk', rarity: 1, text: '+40% szybkości ataku, -25% maks. Życia', fx: [{ k: 'aspdPct', v: 40 }, { k: 'hpPct', v: -25 }], flavor: 'Promocja tygodnia. Serce też bije promocyjnie.' },
-  { id: 'nadgodziny-bez-doplaty', name: 'Nadgodziny Bez Dopłaty', type: 'risk', rarity: 1, text: '+30% obrażeń, ale Odpoczynek leczy o połowę mniej', fx: [{ k: 'dmg', v: 30 }, { k: 'restHalf', v: 1 }], flavor: 'Premia za zaangażowanie: twoje własne zaangażowanie.' },
+  { id: 'nadgodziny-bez-doplaty', name: 'Nadgodziny Bez Dopłaty', type: 'risk', rarity: 1, text: '+30% Ataku, ale Odpoczynek leczy o połowę mniej', fx: [{ k: 'atkPct', v: 30 }, { k: 'restHalf', v: 1 }], flavor: 'Premia za zaangażowanie: twoje własne zaangażowanie.' },
   { id: 'dieta-cud', name: 'Dieta Cud z Kantyny', type: 'risk', rarity: 0, text: '+20 Pancerza, ale -25% szybkości ataku', fx: [{ k: 'armor', v: 20 }, { k: 'aspdPct', v: -25 }], flavor: 'Kotlet w pancerzu z panierki. Ruszanie się nie wchodzi w menu.' },
   { id: 'uklad-z-zarzadem', name: 'Układ z Zarządem', type: 'risk', rarity: 1, coinsNow: 12, bossBoost: 25, text: '+12 Ziaren teraz, ale następny boss ma +25% Życia', flavor: 'Uścisk dłoni trwa dłużej niż umowa.' },
   { id: 'los-na-loterii', name: 'Los na Loterii', type: 'risk', rarity: 1, text: '+25 Szczęścia, ale -1 Ziarno po każdej wygranej rundzie', fx: [{ k: 'luck', v: 25 }, { k: 'coinFlat', v: -1 }], flavor: 'Szansa wygranej wynosi jeden do kogutów.' },
@@ -495,7 +492,7 @@ export const TILES = [
   { id: 'jajko-dinozaura', name: 'Jajko Dinozaura', type: 'item', rarity: 3, legend: true, grow: { max: 4, per: 1 }, dino: true, text: 'Rośnie: po 4 wygranych piętrach wykluwa się Dinozaur (+30% Ataku i maks. Życia)', flavor: 'Leży w kurniku od mezozoiku. Nikt nie pytał dlaczego.' },
   { id: 'plan-b', name: 'Plan B', type: 'item', rarity: 3, legend: true, text: 'W każdej walce, gdy spadniesz do zera, wstajesz z 15% Życia i 1,5 s nietykalności (raz na walkę)', fx: [{ k: 'planB', v: 1 }], flavor: 'Plan A był zbyt optymistyczny.' },
   { id: 'akcje-zarzadu', name: 'Akcje Zarządu', type: 'item', rarity: 3, legend: true, tags: ['korpo'], text: 'Po każdej wygranej +25% posiadanych Ziaren (maks. 12) i +20% Ziaren z nagród', fx: [{ k: 'bigInterest', v: 25 }, { k: 'coinPct', v: 20 }], flavor: 'Giełda kurzych jaj notuje wzrosty. Zawsze o jedno piętro za późno.' },
-  { id: 'dziob-mistrza', name: 'Dziób Mistrza Ceremonii', type: 'item', rarity: 3, legend: true, text: 'Umiejętności mogą zadawać mocne dziobnięcia; +20% szansy na dziobnięcie i +25% Mocy Dziobnięcia', fx: [{ k: 'skillCrit', v: 1 }, { k: 'crit', v: 20 }, { k: 'critMult', v: 25 }], flavor: 'Każde dziobnięcie to małe przedstawienie.' },
+  { id: 'dziob-mistrza', name: 'Dziób Mistrza Ceremonii', type: 'item', rarity: 3, legend: true, text: 'Umiejętności mogą zadawać mocne dziobnięcia; +15% szansy na dziobnięcie', fx: [{ k: 'skillCrit', v: 1 }, { k: 'crit', v: 15 }], flavor: 'Każde dziobnięcie to małe przedstawienie.' },
   // Wykluty z Jajka Dinozaura (nie w ofertach)
   { id: 'dinozaur', name: 'Dinozaur', type: 'item', rarity: 3, hatched: true, text: '+30% Ataku i +30% maks. Życia', fx: [{ k: 'atkPct', v: 30 }, { k: 'hpPct', v: 30 }], flavor: 'Wykluł się. Ptaki to przecież dinozaury. Prezes tego nie zauważył.' },
 ];
@@ -507,7 +504,7 @@ const HATCHED = [
   { id: 'termos', name: 'Termos', of: ['chochla', 'kostka-lodu'], sets: ['rosolowe', 'chlodnicze'], tags: ['ogien', 'lod'], text: '40% szans na Oparzenie i 40% szans na Mróz przy każdym ataku', fx: [{ k: 'burnHit', v: 40 }, { k: 'frostHit', v: 40 }], flavor: 'Trzyma ciepło. I zimno. Nikt nie wie jak.' },
   { id: 'ostrogi-rzeznika', name: 'Ostrogi Rzeźnika', of: ['ostrogi-bojowe', 'kolczatka'], sets: ['rambo', 'rambo'], tags: ['krew'], text: 'Każdy atak nakłada 2 stosy Krwawienia (8 na stos), limit Krwawienia +4', fx: [{ k: 'bleed', v: 8 }, { k: 'bleedMax', v: 4 }, { k: 'bleedStacks', v: 2 }], flavor: 'Rzeźnik zrezygnował z pracy. Ostrogi zostały.' },
   { id: 'zloty-spadochron', name: 'Złoty Spadochron', of: ['zlote-jajo', 'teczka'], sets: ['jajeczne', 'korpo'], tags: ['jajo', 'korpo'], text: '+7 Ziaren po każdej wygranej rundzie, nikt nie kradnie ci Ziaren', fx: [{ k: 'coinFlat', v: 7 }, { k: 'noSteal', v: 1 }], flavor: 'Zarząd ląduje miękko. Teraz ty też.' },
-  { id: 'spojrzenie-rambo', name: 'Spojrzenie Rambo', of: ['okulary-aviatory', 'opaska-rambo'], sets: ['rambo', 'rambo'], tags: ['krew'], text: '+20% obrażeń, +25% szansy na dziobnięcie, +50% Mocy Dziobnięcia', fx: [{ k: 'dmg', v: 20 }, { k: 'crit', v: 25 }, { k: 'critMult', v: 50 }], flavor: 'Wrogowie mdleją, zanim zdejmie okulary.' },
+  { id: 'spojrzenie-rambo', name: 'Spojrzenie Rambo', of: ['okulary-aviatory', 'opaska-rambo'], sets: ['rambo', 'rambo'], tags: ['krew'], text: '+20% Ataku, +21% szansy na dziobnięcie', fx: [{ k: 'atkPct', v: 20 }, { k: 'crit', v: 21 }], flavor: 'Wrogowie mdleją, zanim zdejmie okulary.' },
   { id: 'kurtka-puchowa', name: 'Kurtka Puchowa', of: ['kamizelka-kuloodporna', 'szron'], sets: ['rambo', 'chlodnicze'], tags: ['lod'], text: '+30 Pancerza; każdy wróg, który cię trafi, dostaje 2 stosy Mrozu', fx: [{ k: 'armor', v: 30 }, { k: 'frostThorns', v: 2 }], flavor: 'Puch z własnych piór. Bez komentarza.' },
   { id: 'kompostownik', name: 'Kompostownik', of: ['mokra-pasza', 'zepsute-jajo'], sets: ['zbozowe', 'jajeczne'], tags: ['trucizna'], text: '40% szans na Salmonellę przy ataku, +50% jej obrażeń; jaja i Granat nakładają 3 stosy; przy śmierci wroga przechodzą WSZYSTKIE stosy', fx: [{ k: 'poisonHit', v: 40 }, { k: 'poisonPct', v: 50 }, { k: 'eggPoison', v: 3 }, { k: 'spreadPct', v: 50 }], flavor: 'Nic się nie marnuje. Zwłaszcza zaraza.' },
   { id: 'feniks-z-rosolu', name: 'Feniks z Rosołu', of: ['gniazdo-zapasowe', 'lubczyk'], sets: ['jajeczne', 'rosolowe'], tags: ['ogien'], text: 'Raz na run: wskrzeszenie z 70% Życia i 6 stosami Oparzenia na wszystkich wrogach; +15 maks. Życia, płonący wrogowie leczą', fx: [{ k: 'revivePct', v: 70 }, { k: 'reviveBurn', v: 6 }, { k: 'hpFlat', v: 15 }, { k: 'burnHeal', v: 5 }], flavor: 'Powstaje z garnka. Pachnie lubczykiem.' },
@@ -519,11 +516,10 @@ export const RECIPES = HATCHED.map(h => ({ out: h.id, of: h.of }));
 export const MILESTONE_EVERY = 3;
 export const MILESTONES = {
   'ziarno-mocy': { name: 'Kolba Mocy', text: '+15% Ataku', fx: [{ k: 'atkPct', v: 15 }] },
-  'ostry-dziob': { name: 'Dziób Brzytwa', text: '+8% szansy na dziobnięcie, +20% Mocy Dziobnięcia', fx: [{ k: 'crit', v: 8 }, { k: 'critMult', v: 20 }] },
   'twardy-grzebien': { name: 'Koguci Hełm', text: '+10% maks. Życia, +4 Pancerza', fx: [{ k: 'hpPct', v: 10 }, { k: 'armor', v: 4 }] },
   'szybki-dziob': { name: 'Młot Pneumatyczny', text: '+12% szybkości ataku', fx: [{ k: 'aspdPct', v: 12 }] },
   'pancerz-z-pierza': { name: 'Pierzasta Twierdza', text: '+6 Pancerza, +25 maks. Życia', fx: [{ k: 'armor', v: 6 }, { k: 'hpFlat', v: 25 }] },
-  'czujne-oko': { name: 'Sokole Oko', text: '+30% Mocy Dziobnięcia', fx: [{ k: 'critMult', v: 30 }] },
+  'czujne-oko': { name: 'Sokole Oko', text: '+8% szansy na dziobnięcie', fx: [{ k: 'crit', v: 8 }] },
   'zwinne-nogi': { name: 'Taniec Kurczaka', text: '+5% uniku, +8% szybkości ataku', fx: [{ k: 'evade', v: 5 }, { k: 'aspdPct', v: 8 }] },
   'cieple-gniazdko': { name: 'Kurza Drzemka', text: '+3 Regeneracji / s, +10 maks. Życia', fx: [{ k: 'regen', v: 30 }, { k: 'hpFlat', v: 10 }] },
   'czterolistna-koniczyna': { name: 'Pięciolistna Koniczyna', text: '+15 Szczęścia, +2 Ziarna po każdej rundzie', fx: [{ k: 'luck', v: 15 }, { k: 'coinFlat', v: 2 }] },
