@@ -128,16 +128,19 @@ export function heroStats(loadout, opt = {}) {
   const all = acc.allPct || 0;
   const armor = Math.max(0, Math.floor((b.armor + (acc.armor || 0)) * (100 + all) / 100));
   const armorAtk = acc.armorAtk ? Math.min(45, Math.floor(armor / 4) * acc.armorAtk) : 0;   // Emeryt Janusz: każde 4 pkt Pancerza = +3% Ataku
-  const atk = Math.round((b.atk + (acc.atkFlat || 0)) * (100 + (acc.atkPct || 0) + all + armorAtk) / 100);   // zaokrąglenie: małe premie procentowe nie giną przy niskim Ataku
+  // Atak = (baza + płaskie premie) × (100 + premie %) / 100. Płaska premia rodziny „Siła” (atkT) jest w dziesiątych częściach Ataku (5 = +0,5), liczona na liczbach całkowitych; zaokrąglenie na końcu, żeby małe premie nie ginęły przy niskim Ataku.
+  const atk = Math.round(((b.atk + (acc.atkFlat || 0)) * 10 + (acc.atkT || 0)) * (100 + (acc.atkPct || 0) + all + armorAtk) / 1000);
   const maxHp = Math.max(1, Math.floor((b.hp + (acc.hpFlat || 0)) * (100 + (acc.hpPct || 0) + all) / 100));
   const aspd = Math.max(20, Math.floor(b.aspd * (100 + (acc.aspdPct || 0) + all) / 100));
-  const crit = Math.min(100, Math.floor((b.crit + (acc.crit || 0)) * (100 + all) / 100));
+  // Krytyk: szansa kończy się na 100%, a nadwyżka (critRaw − 100) zamienia się w siłę mocnego dziobnięcia: +1 pkt siły za każde `critOverPer` pkt nadwyżki, najwyżej +`critOverMax` (×2 → ×2,5).
+  const critRaw = Math.floor((b.crit + (acc.crit || 0)) * (100 + all) / 100), crit = Math.min(100, critRaw);
+  const critOver = Math.min(RULES.critOverMax, Math.floor(Math.max(0, critRaw - 100) / RULES.critOverPer));
   const evade = Math.min(75, Math.floor((b.evade + (acc.evade || 0)) * (100 + all) / 100));
   const regen = Math.floor(Math.floor((b.regen + (acc.regen || 0)) * (100 + all) / 100) * (loadout.noRegen ? 50 : 100) / 100);   // Garnek 5: regeneracja o połowę słabsza
 
   return {
-    maxHp, atk, aspd, armor, crit, evade, regen,
-    critMult: b.critMult,   // stała siła mocnego dziobnięcia (nie ma już premii do niej)
+    maxHp, atk, aspd, armor, crit, critRaw, evade, regen,
+    critMult: b.critMult + critOver,   // siła mocnego dziobnięcia: baza (×2) plus przepełnienie szansy ponad 100%
     luck: b.luck + (acc.luck || 0),
     egg,   // co ile ticków wybucha Tykające Jajo
     eggAll: !!acc.eggAll, eggBurn: acc.eggBurn || 0, bleedStacks: acc.bleedStacks || 1, revivePct: acc.revivePct || 40, reviveBurn: acc.reviveBurn || 0,

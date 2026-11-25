@@ -1325,9 +1325,9 @@ test('Hasło do ukrytej postaci (code): tylko „dzioby”, odblokowuje Zjaraneg
 });
 
 // ---------- poziomy statystyk, Ulepszanie, łup z bossów ----------
-test('rodziny statystyk: 8 rodzin × 3 poziomy + legendarny, stare id na poziomie 3, rosnąca moc, jedna ikona na rodzinę', () => {
-  eq(D.STAT_FAMS.length, 8, '8 rodzin (Obrażenia scalone z Atakiem)');
-  const OLD = ['twardy-grzebien', 'ziarno-mocy', 'szybki-dziob', 'pancerz-z-pierza', 'czujne-oko', 'zwinne-nogi', 'cieple-gniazdko', 'czterolistna-koniczyna'];
+test('rodziny statystyk: 9 rodzin × 3 poziomy + legendarny, stare id na poziomie 3, rosnąca moc, jedna ikona na rodzinę', () => {
+  eq(D.STAT_FAMS.length, 9, '9 rodzin (Atak %, Siła = płaski Atak)');
+  const OLD = ['twardy-grzebien', 'ziarno-mocy', 'szybki-dziob', 'pancerz-z-pierza', 'czujne-oko', 'zwinne-nogi', 'cieple-gniazdko', 'czterolistna-koniczyna', 'szpon-brygadzisty'];
   for (const F of D.STAT_FAMS) {
     eq(F.ids.length, 4, 'cztery poziomy ' + F.fam);
     const ts = F.ids.map(id => D.TILE_BY_ID[id]);
@@ -1524,7 +1524,7 @@ test('przedmioty etapu 2: Wywar Dnia, Tłusta Pokrywka, Szczypta Soli, Lodowa Sp
 
 // ---------- etap 3: ryzyko i legendarne przedmioty ----------
 test('etap 3: pula 134 kafelki, legendarne przedmioty (legend) dopiero od 60% runu, nigdy wyklęty Dinozaur w ofertach', () => {
-  eq(D.TILES.length, 152, 'pula kafelków (136 + 20 nowych umiejętności)');
+  eq(D.TILES.length, 160, 'pula kafelków (152 + rodzina Siła 4 + 4 przedmioty z płaskim Atakiem)');
   const leg = D.TILES.filter(t => t.legend); eq(leg.length, 6, '6 legendarnych przedmiotów'); assert(leg.every(t => t.rarity === 3 && t.type === 'item'), 'rzadkość 3, przedmioty');
   const risk = ['pozyczka-chwilowka', 'dopalacz-z-biedronki', 'nadgodziny-bez-doplaty', 'dieta-cud', 'uklad-z-zarzadem', 'los-na-loterii']; assert(risk.every(id => D.TILE_BY_ID[id] && D.TILE_BY_ID[id].type === 'risk'), '6 kafelków ryzyka');
   const early = new Set(), late = new Set(); let dino = 0;
@@ -2512,4 +2512,21 @@ test('Pojedynek: akcja duel zachowuje się jak state i nie połyka ogłoszeń od
   const d = await dpost(env, DA, 'duel', { op: 'state' }); assert(d.j.ok && d.j.duel === null && !d.j.unlocks && !d.j.profile.chars.includes('zjarany'), 'odczyt stanu meczu niczego nie odblokowuje ani nie ogłasza');
   const p = await dpost(env, DA, 'pick', { i: Math.max(0, s.j.run.offer.findIndex(id => id && id !== 'automat-z-pasza')), slot: 0, mut: 1 });
   assert(p.j.ok && (p.j.unlocks || []).some(u => u.target === 'zjarany'), 'odblokowanie ogłasza następna zwykła akcja');
+});
+
+// ---------- Patch 1.1: Siła (płaski Atak) i krytyk z przepełnieniem ----------
+test('Patch 1.1: Siła (płaski Atak w dziesiątych częściach) liczy się przed premiami %, krytyk ponad 100% zamienia się w siłę dziobnięcia', () => {
+  const r = fresh(); const b = D.CHARS[r.char].base.atk;
+  r.tiles = []; const a0 = R.statsOf(r).atk;
+  r.tiles = ['szpon-brygadzisty']; eq(R.statsOf(r).atk, Math.round(((b * 10) + 22) / 10), 'Szpon: +2,2 Ataku do bazy');
+  r.tiles = ['szpon-brygadzisty', 'ziarno-mocy']; eq(R.statsOf(r).atk, Math.round(((b * 10 + 22) * 124) / 1000), 'płaski Atak mnoży się przez premie procentowe');
+  r.tiles = ['hantle-z-kantyny']; const h = R.statsOf(r); assert(h.atk >= a0 && h.aspd < 100, 'Hantle: więcej Ataku, wolniej');
+  assert(D.TILE_BY_ID['szpon-brygadzisty'].text === '+2,2 Ataku' && D.TILE_BY_ID['pazurek-z-tasmy'].text === '+0,4 Ataku', 'opis w dziesiątych częściach');
+  // krytyk: szansa ucięta do 100, nadwyżka +1 pkt siły za każde critOverPer pkt, najwyżej +critOverMax
+  r.tiles = []; const s0 = R.statsOf(r); eq([s0.crit, s0.critRaw, s0.critMult], [5, 5, 200], 'baza: bez przepełnienia');
+  r.tiles = Array(9).fill('czujne-oko'); const s = R.statsOf(r);
+  assert(s.critRaw > 100 && s.crit === 100, 'szansa ucięta do 100%, surowa wartość zachowana: ' + s.critRaw);
+  eq(s.critMult, 200 + Math.min(D.RULES.critOverMax, Math.floor((s.critRaw - 100) / D.RULES.critOverPer)), 'nadwyżka zamieniona w siłę dziobnięcia');
+  assert(s.critMult > 200 && s.critMult <= 200 + D.RULES.critOverMax, 'siła rośnie, ale ma limit ×2,5');
+  r.tiles = Array(3).fill('czujne-oko'); const m = R.statsOf(r); assert(m.critRaw <= 100 ? m.critMult === 200 : m.crit === 100, 'poniżej 100% siła bez zmian');
 });

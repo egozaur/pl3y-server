@@ -32,6 +32,8 @@ export const RULES = {
   eliteCoinsPct: 50, scoreRound: 1000, scoreCoin: 50, scoreTimeMax: 2000, garnekScore: 25, maxSkills: 3, maxSkillLvl: 3,
   // Odsetki w Spiżarni: +1 Ziarno za każde `interestPer` niewydanych Ziaren po wygranej walce, najwyżej `interestMax` (Kaczor: CHARS.kaczor.interestMax).
   interestPer: 10, interestMax: 3,
+  // Krytyk ponad 100%: szansa jest ucięta do 100, a nadwyżka daje +1 pkt siły dziobnięcia za każde critOverPer pkt, najwyżej +critOverMax (×2 → ×2,5).
+  critOverPer: 3, critOverMax: 50,
   // Łup z bossa: po pokonaniu bossa (poza ostatnim) wybierasz 1 z `lootSize` legendarnych statystyk (kafelki z flagą boss).
   lootSize: 3, lootChance: 15, upgradeCost: 2,   // % szans, że po bossie (nie ostatnim) pojawia się okno wyboru łupu
   // Lombard Lisa: zastaw = pełna cena rzadkości teraz, wykup na następnym piętrze za `pawnBack`% ceny; przepadek wzmacnia Lisy o `pawnFox`%.
@@ -321,6 +323,12 @@ const STAT_FAMILIES = [
     ['ziarno-selekcjonowane', 'Ziarno Selekcjonowane', 11, 'Wybrane przez komisję, która nie przyjmowała odwołań.'],
     ['ziarno-mocy', 'Ziarno Mocy', 24, 'Jedno ziarno, a w nim cała sprawiedliwość.'],
     ['ziarno-pierwszego-jajka', 'Ziarno Pierwszego Jajka', 38, 'Z niego wszystko się zaczęło. Kura wolałaby, żebyś o to nie pytał.']] },
+  // Siła: płaski Atak w dziesiątych częściach (5 = +0,5), dodawany do bazy PRZED premiami procentowymi (stats.js, klucz atkT).
+  { fam: 'sila', k: 'atkT', fmt: v => `+${tenths(v)} Ataku`, lv: [
+    ['pazurek-z-tasmy', 'Pazurek z Taśmy', 4, 'Ostry ledwo co, ale własny.'],
+    ['pazur-hodowlany', 'Pazur Hodowlany', 10, 'Przycięty według normy, której nikt nie czytał.'],
+    ['szpon-brygadzisty', 'Szpon Brygadzisty', 22, 'Brygadzista wskazuje nim, kto zostaje po godzinach.'],
+    ['szpon-rosolowego-krola', 'Szpon Rosołowego Króla', 36, 'Wbity w stół obrad. Stół do dziś nie może go wyjąć.']] },
   { fam: 'szybkosc', k: 'aspdPct', fmt: v => `+${v}% szybkości ataku`, lv: [
     ['dziob-po-kawie', 'Dziób po Kawie', 5, 'Pierwsza kawa z automatu, pierwsze drgania.'],
     ['dziob-po-espresso', 'Dziób po Espresso', 11, 'Drgania zaczynają być zauważalne dla ubezpieczyciela.'],
@@ -437,6 +445,10 @@ export const TILES = [
   { id: 'kura-nioska', name: 'Kura Nioska', type: 'item', rarity: 2, set: 'jajeczne', tags: ['jajo'], text: '+1 Ziarno po wygranej za każdy przedmiot z zestawu Jajeczne w sprzęcie (maks. +4)', fx: [{ k: 'nioska', v: 1 }], flavor: 'Znosi jaja o stałej cenie. Rynek jest zdziwiony.' },
   { id: 'kombajn-zbozowy', name: 'Kombajn Zbożowy', type: 'item', rarity: 1, set: 'zbozowe', tags: ['ziarno'], text: '20% szans, że zwykły atak uderza też pozostałych wrogów za 40% obrażeń', fx: [{ k: 'cleave', v: 20 }], flavor: 'Żniwa trwają cały rok. Zwłaszcza w kurniku.' },
   { id: 'spichlerz', name: 'Spichlerz', type: 'item', rarity: 0, set: 'zbozowe', tags: ['ziarno'], text: '+12 maks. Życia, +20% Ziaren z nagród', fx: [{ k: 'hpFlat', v: 12 }, { k: 'coinPct', v: 20 }], flavor: 'Pełny spichlerz, pełny kurczak.' },
+  // Płaski Atak (klucz atkT: dziesiąte części Ataku, dodawane przed premiami procentowymi).
+  { id: 'hantle-z-kantyny', name: 'Hantle z Kantyny', type: 'item', rarity: 1, text: '+2,4 Ataku, -20% szybkości ataku', fx: [{ k: 'atkT', v: 24 }, { k: 'aspdPct', v: -20 }], flavor: 'Podnoszone w przerwie obiadowej. Przerwa trwała cztery minuty.' },
+  { id: 'kolczasta-obroza', name: 'Kolczasta Obroża', type: 'item', rarity: 1, text: '+1,2 Ataku, +6% szansy na dziobnięcie', fx: [{ k: 'atkT', v: 12 }, { k: 'crit', v: 6 }], flavor: 'Pasuje do każdego stroju służbowego.' },
+  { id: 'zadlo-pracownika-miesiaca', name: 'Żądło Pracownika Miesiąca', type: 'item', rarity: 2, text: '+2 Ataku i +10% Ataku', fx: [{ k: 'atkT', v: 20 }, { k: 'atkPct', v: 10 }], flavor: 'Wyróżnienie przyznane za zasługi. Zasługi są tajne.' },
   { id: 'strach-na-wroble', name: 'Strach na Wróble', type: 'item', rarity: 1, set: 'zbozowe', tags: ['ziarno'], text: 'Wrogowie zaczynają walkę ogłuszeni na 1,5 s (bossowie na 0,8 s)', fx: [{ k: 'scare', v: 15 }], flavor: 'Wróble się go boją. Wrogowie też, nie wiedzieć czemu.' },
   { id: 'karabin-maszynowy', name: 'Karabin Maszynowy', type: 'item', rarity: 2, set: 'rambo', tags: ['krew'], text: '10% szans, że zwykły atak uderza dwa razy', fx: [{ k: 'double', v: 10 }], flavor: 'Pokój wywalczony serią.' },
   { id: 'apteczka-polowa', name: 'Apteczka Polowa', type: 'item', rarity: 1, set: 'rambo', tags: ['krew'], text: 'Raz na walkę: gdy spadniesz poniżej 50% Życia, leczy 10% maks. Życia', fx: [{ k: 'medkit', v: 10 }], flavor: 'Plaster, bandaż i woda utleniona. Reszta to hart ducha.' },
@@ -463,6 +475,7 @@ export const TILES = [
   { id: 'skarbonka-piskleca', name: 'Skarbonka Pisklęcia', type: 'item', rarity: 0, grow: { max: 5, per: 1 }, text: 'Rośnie: +1 Ziarno po wygranej, +1 więcej za każde piętro bez Odpoczynku (maks. +6)', flavor: 'Brzęczy. Pisklę mówi, że to oszczędności na emeryturę.' },
   // Ryzyko i wydarzenia
   { id: 'pakt-z-lisem', name: 'Pakt z Lisem', type: 'risk', rarity: 1, text: '+50% Ataku, -25% maks. Życia do końca runu', fx: [{ k: 'atkPct', v: 50 }, { k: 'hpPct', v: -25 }], flavor: 'Lis ma drobny druk. Bardzo drobny.' },
+  { id: 'nasiona-wscieklosci', name: 'Nasiona Wściekłości', type: 'risk', rarity: 2, text: '+4,8 Ataku, -15% maks. Życia', fx: [{ k: 'atkT', v: 48 }, { k: 'hpPct', v: -15 }], flavor: 'Kiełkują szybko i bez uprzedzenia.' },
   { id: 'szklane-skrzydlo', name: 'Szklane Skrzydło', type: 'risk', rarity: 2, lock: 'u-szklane', text: '+100% Ataku, -40% maks. Życia', fx: [{ k: 'atkPct', v: 100 }, { k: 'hpPct', v: -40 }], flavor: 'Piękne, kruche i bardzo, bardzo groźne.' },
   { id: 'tajemnicza-skrzynka', name: 'Tajemnicza Skrzynka', type: 'risk', rarity: 1, repeat: true, event: 'skrzynka', lock: 'u-skrzynka', text: 'Losowy kafelek epicki, ale 25% szans na pułapkę (-15% Życia)', flavor: 'Kto otwiera nieznane skrzynki, ten kończy w rosole albo w legendach.' },
   { id: 'sklepik-babci-kwoki', name: 'Sklepik Babci Kwoki', type: 'risk', rarity: 0, repeat: true, event: 'sklepik', text: 'Wydarzenie: kupujesz 1 z 3 kafelków za 60% zwykłej ceny', flavor: 'Babcia nie bierze kart. Babcia bierze ziarno.' },
@@ -513,6 +526,7 @@ export const RECIPES = HATCHED.map(h => ({ out: h.id, of: h.of }));
 export const MILESTONE_EVERY = 3;
 export const MILESTONES = {
   'ziarno-mocy': { name: 'Kolba Mocy', text: '+15% Ataku', fx: [{ k: 'atkPct', v: 15 }] },
+  'szpon-brygadzisty': { name: 'Kolekcja Szponów', text: '+2,4 Ataku', fx: [{ k: 'atkT', v: 24 }] },
   'twardy-grzebien': { name: 'Koguci Hełm', text: '+10% maks. Życia, +4 Pancerza', fx: [{ k: 'hpPct', v: 10 }, { k: 'armor', v: 4 }] },
   'szybki-dziob': { name: 'Młot Pneumatyczny', text: '+12% szybkości ataku', fx: [{ k: 'aspdPct', v: 12 }] },
   'pancerz-z-pierza': { name: 'Pierzasta Twierdza', text: '+6 Pancerza, +25 maks. Życia', fx: [{ k: 'armor', v: 6 }, { k: 'hpFlat', v: 25 }] },
