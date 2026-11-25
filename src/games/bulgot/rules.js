@@ -426,23 +426,31 @@ export function restPctOf(run, S = statsOf(run)) {
 // Poziom 3 → legendarny to nie ulepszanie (legendarne to tylko łup z bossów). Tylko w fazie oferty, więc powtórka walki się nie zmienia.
 export const UPGRADE_COST = RULES.upgradeCost;
 export const upgradable = run => [...new Set(run.tiles)].filter(id => { const t = TILE_BY_ID[id]; return t && t.next && run.tiles.filter(x => x === id).length >= UPGRADE_COST; });
-export function upgrade(run, id) {
+// Patch 1.1: zlew poziomu 2 → 3 ma wybór. „Czysty” działa jak dotąd; „przegrzany” (hot) daje kafelek poziomu 3 z wadą fabryczną
+// (jak Wadliwa Partia: +RULES.flawBoost% dodatnich efektów od razu, losowa wada ujawnia się po następnej walce). Zlew 1 → 2 nie ma wyboru.
+export function upgrade(run, id, hot = false) {
   if (run.phase !== 'offer') return fail('Zlewać kafelki można tylko przed wyborem kafelka.', 'phase');
   const t = TILE_BY_ID[id];
   if (!t || !run.tiles.includes(id)) return fail('Nie masz takiego kafelka.', 'index');
   if (!t.next) return fail('Ten kafelek nie ma wyższego poziomu.', 'level');
   if (run.tiles.filter(x => x === id).length < UPGRADE_COST) return fail('Do ulepszenia potrzebujesz ' + UPGRADE_COST + ' kopii tego kafelka.', 'copies');
+  if (hot && t.lvl !== 2) return fail('Przegrzać można tylko zlew poziomu 2 w poziom 3.', 'level');
   const before = statsOf(run).maxHp;
   for (let k = 0; k < UPGRADE_COST; k++) run.tiles.splice(run.tiles.lastIndexOf(id), 1);
   // wada fabryczna nie może mieć więcej wpisów niż kopii (stopiona kopia zabiera swoją wadę)
   const left = run.tiles.filter(x => x === id).length, fw = (run.flawed || []).filter(w => w.id === id);
   for (let k = left; k < fw.length; k++) run.flawed.splice(run.flawed.lastIndexOf(fw[k]), 1);
   run.tiles.push(t.next);
+  if (hot) {
+    const rr = makeRng(mix(run.seed, run.round, hash('heat'), (run.flawed || []).length));
+    (run.flawed = run.flawed || []).push({ id: t.next, flaw: rr.pick(Object.keys(FLAWS)), on: false, round: run.round });
+    run.stats.heated = (run.stats.heated || 0) + 1;
+  }
   const after = statsOf(run).maxHp;
   run.hp = Math.max(1, after > before ? run.hp + (after - before) : Math.min(run.hp, after));
   run.stats.upgrades = (run.stats.upgrades || 0) + 1;
-  (cur(run).upgrades = cur(run).upgrades || []).push({ from: id, to: t.next });
-  return { ok: true, upgraded: { from: id, to: t.next } };
+  (cur(run).upgrades = cur(run).upgrades || []).push(hot ? { from: id, to: t.next, hot: true } : { from: id, to: t.next });
+  return { ok: true, upgraded: hot ? { from: id, to: t.next, hot: true } : { from: id, to: t.next } };
 }
 
 // ---------- Lombard Lisa ----------

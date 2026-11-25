@@ -80,7 +80,7 @@ export class BgPlayer {
       }
       case 'pawn': r = need(run) || pawn(run, String(b.id || '')); break;
       case 'redeem': r = need(run) || redeem(run); break;
-      case 'upgrade': r = need(run) || upgrade(run, String(b.id || '')); break;
+      case 'upgrade': r = need(run) || upgrade(run, String(b.id || ''), b.hot === true || b.hot === 1); break;
       case 'will': {
         const opts = willOptions(run), i = Number(b.i);
         if (!opts) return json({ err: 'Teraz nie spiszesz testamentu.', code: 'phase', ...this.out(profile, run) }, 409);
