@@ -2544,3 +2544,14 @@ test('Patch 1.1: zlew 2→3 z wyborem: przegrzany daje wadę fabryczną i +flawB
   assert(hot.log.length === 0 && hot.cur.upgrades[0].hot === true, 'decyzja zapisana w dzienniku rundy');
   const x = mk('pazur-hodowlany'); x.phase = 'fight'; eq(R.upgrade(x, 'pazur-hodowlany', true).code, 'phase', 'poza fazą oferty nie można');
 });
+
+test('Patch 1.1: view().preview podaje zmianę statystyk po wzięciu kafelka z oferty (bez umiejętności i wydarzeń), nie zdradza przyszłości', () => {
+  const r = fresh(); r.offer = ['ziarno-mocy', 'czujne-oko', 'hantle-z-kantyny', 'szron']; r.phase = 'offer';
+  const v = R.view(r), pv = v.preview;
+  assert(pv && pv['ziarno-mocy'].atk > 0, 'Ziarno Mocy zwiększa Atak: ' + JSON.stringify(pv['ziarno-mocy']));
+  assert(pv['czujne-oko'].crit > 0 && pv['czujne-oko'].atk === undefined, 'Czujne Oko zmienia tylko krytyk');
+  assert(pv['hantle-z-kantyny'].aspd < 0 && pv['hantle-z-kantyny'].atk > 0, 'Hantle: więcej Ataku, wolniej');
+  assert(Object.keys(pv).every(id => r.offer.includes(id)), 'tylko tyle, ile w bieżącej ofercie');
+  assert(!('seed' in v) && !JSON.stringify(v).includes('"seed"'), 'widok nadal nie zdradza ziarna');
+  const f = fresh(); f.phase = 'fight'; eq(R.view(f).preview, null, 'poza ofertą brak podglądu');
+});

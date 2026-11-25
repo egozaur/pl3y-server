@@ -1037,6 +1037,19 @@ function viewPending(run) {
   const g = P.ghost;
   return { kind: 'arena', ghost: { nick: g.nick, avatar: g.avatar | 0, char: g.char, wear: g.wear || null, floors: g.floors, mirror: !!g.mirror, win: !!g.win, tiles: g.tiles || [], stats: ghostStats(g, run.round) } };
 }
+// Podgląd zmiany statystyk po wzięciu kafelka z bieżącej oferty (Patch 1.1): różnice 8 statystyk (krytyk surowy) liczone z własnych kafelków gracza.
+// Pomija umiejętności i wydarzenia (nie zmieniają statystyk) oraz wpływ ewentualnej wady fabrycznej i Wylęgarni; nic nie zdradza o przyszłości.
+function previewOf(run, S0) {
+  if (!['offer', 'bonus', 'loot'].includes(run.phase)) return null;
+  const ids = [...new Set((run.phase === 'loot' ? (run.pending && run.pending.offer) : run.offer) || [])].filter(Boolean), out = {};
+  for (const id of ids) {
+    const t = TILE_BY_ID[id]; if (!t || t.type === 'skill' || t.event) continue;
+    const S1 = statsOf({ ...run, tiles: [...run.tiles, id] }), d = {};
+    for (const k of ['atk', 'aspd', 'crit', 'maxHp', 'armor', 'evade', 'regen', 'luck']) { const a = k === 'crit' ? S1.critRaw : S1[k], b = k === 'crit' ? S0.critRaw : S0[k]; if (a !== b) d[k] = a - b; }
+    out[id] = d;
+  }
+  return out;
+}
 // Bez ziarna runu: oferty i spotkania z przyszłości nie dają się wyliczyć po stronie przeglądarki.
 export function view(run) {
   if (!run) return null;
@@ -1052,7 +1065,7 @@ export function view(run) {
     boss: bossAt(run), bossSlot: bossSlotOf(bossAt(run)), elite: !over && isElite(run), hero: S,
     decree: over ? null : decreeOf(run), priceMul: priceMul(run), grow: run.grow || {}, flawAt: run.phase === 'offer' ? run.flawAt : -1,
     flawed: (run.flawed || []).map(w => ({ id: w.id, flaw: w.on ? w.flaw : null, on: w.on })),
-    up: run.phase === 'offer' ? upgradable(run) : [], pawned: run.pawned ? { ...run.pawned, cost: redeemCost(run.pawned), canRedeem: run.round === run.pawned.round + 1 } : null, foxDebt: run.foxDebt || 0, lostPawn: run.lostPawn || null,
+    preview: over ? null : previewOf(run, S), up: run.phase === 'offer' ? upgradable(run) : [], pawned: run.pawned ? { ...run.pawned, cost: redeemCost(run.pawned), canRedeem: run.round === run.pawned.round + 1 } : null, foxDebt: run.foxDebt || 0, lostPawn: run.lostPawn || null,
     will: run.will && !run.willUsed && run.round === 1 ? run.will : null,
     nemesis: run.nemesis ? { name: nemesisName(run.nemesis), enemy: run.nemesis.enemy, affix: run.nemesis.affix, tile: run.nemesis.tile, lvl: run.nemesis.lvl || 1, round: run.nemesis.round, beaten: run.nemesis.beaten } : null,
     // Tablica Zarządu (faktury za pokonane piętra): tylko liczby z dziennika wygranych walk, bez składu przyszłych pięter.
