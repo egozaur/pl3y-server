@@ -791,6 +791,7 @@ export const KURNIK = {
   pisklecarnia: { name: 'Pisklęcarnia', icon: 'pisklecarnia', text: 'Poz. 1: zaczynasz z losowym towarzyszem. Poz. 2: towarzysza wybierasz z 3 na starcie runu. Poz. 3: wybierasz z 3, a towarzysz zaczyna o poziom wyżej.', cost: [25, 60, 110] },
 };
 export const KURNIK_MAX = 3;
+export const KURNIK_MIN_STAZ = 20;   // Kurnik kupuje się i działa dopiero od tego poziomu Stażu (wcześniej tylko podgląd)
 
 // ---------- Temperatura Garnka (poziomy trudności) ----------
 export const GARNEK = [

@@ -1,6 +1,6 @@
 // Bulgot: profil gracza (Księga Kurnika): odblokowania, liczniki, najlepsze wyniki, Temperatura Garnka.
 // Czyste funkcje na obiekcie `profile`; zapis robi BgPlayer.
-import { STARTER_TILES, UNLOCKS, UNLOCK_BY_ID, MODES, RULES, KURNIK, KURNIK_MAX, STAZ, stazCost, stazTitle, LEVEL_REWARDS, REWARD_BY_ID, SHOP, SOUPS, SOUP_BY_ID, CURSES, CHARS, TILE_BY_ID } from './data.js';
+import { STARTER_TILES, UNLOCKS, UNLOCK_BY_ID, MODES, RULES, KURNIK, KURNIK_MAX, KURNIK_MIN_STAZ, STAZ, stazCost, stazTitle, LEVEL_REWARDS, REWARD_BY_ID, SHOP, SOUPS, SOUP_BY_ID, CURSES, CHARS, TILE_BY_ID } from './data.js';
 import { nemesisName } from './rules.js';
 import { evaluateAch, completion } from './achievements.js';
 import { ACHIEVEMENTS } from './data.js';
@@ -198,10 +198,22 @@ export function onNemesisBeaten(p) { p.nemesis = null; p.counters.nemesisKills =
 // Wywoływane po rozstrzygnięciu walki z bossem.
 export function onBossKill(p, bossId) { p.bosses[bossId] = (p.bosses[bossId] || 0) + 1; }
 
-// Kurnik: kupno kolejnego poziomu budynku za Pióra. Zwraca { ok, id, lvl, cost } albo { err, code }.
+// Kurnik jest otwarty od 20. poziomu Stażu; wcześniej gracz widzi budynki, ale nic nie kupuje i nic nie działa.
+export const kurnikOpen = p => stazLevel(p.xp | 0).level >= KURNIK_MIN_STAZ;
+// Jednorazowa bramka (przy wczytaniu profilu): kto nie dobił do 20. poziomu, traci dotychczasowe ulepszenia (Pióra zostają, bez zwrotu).
+// Kopia w `kurnikLegacy` jest tylko zapasem na wypadek zmiany decyzji; żaden kod jej nie czyta. Zwraca true, gdy profil się zmienił.
+export function kurnikGate(p) {
+  p.flags = p.flags || {};
+  if (p.flags.kurnikGate) return false;
+  p.flags.kurnikGate = true;
+  if (!kurnikOpen(p) && Object.keys(p.kurnik || {}).some(k => (p.kurnik[k] | 0) > 0)) { p.kurnikLegacy = p.kurnik; p.kurnik = {}; if (p.counters) p.counters.kurnikBuys = 0; }
+  return true;
+}
+// Kupno kolejnego poziomu budynku za Pióra. Zwraca { ok, id, lvl, cost } albo { err, code }.
 export function kurnikBuy(p, id) {
   const B = KURNIK[id];
   if (!B) return { err: 'Nie ma takiego budynku.', code: 'index' };
+  if (!kurnikOpen(p)) return { err: 'Kurnik odblokuje się na ' + KURNIK_MIN_STAZ + '. poziomie Stażu.', code: 'locked' };
   p.kurnik = p.kurnik || {};
   const lvl = p.kurnik[id] | 0;
   if (lvl >= KURNIK_MAX) return { err: 'Ten budynek ma już maksymalny poziom.', code: 'max' };
@@ -255,7 +267,7 @@ export function publicProfile(p) {
   return {
     nick: p.nick, avatar: p.avatar || 0, chars: p.chars, tiles: p.tiles, garnek: p.garnek, best: p.best,
     counters: p.counters, bosses: p.bosses, seen: p.seen, unlocked: p.unlocked, ach: p.ach || [], clears: p.clears || {}, completion: completion(p), recipes: p.recipes || [], reactions: p.reactions || [],
-    nemesis: p.nemesis ? { ...p.nemesis, name: nemesisName(p.nemesis) } : null, will: p.will || null, feathers: p.feathers | 0, kurnik: p.kurnik || {},
+    nemesis: p.nemesis ? { ...p.nemesis, name: nemesisName(p.nemesis) } : null, will: p.will || null, feathers: p.feathers | 0, kurnik: p.kurnik || {}, kurnikOpen: kurnikOpen(p), kurnikNeed: KURNIK_MIN_STAZ,
     staz: { ...stazLevel(p.xp | 0), xp: p.xp | 0, title: stazTitle(stazLevel(p.xp | 0).level), talons: p.talons | 0 },
     lvlPending: p.lvlPending && p.lvlPending[0] ? { lvl: p.lvlPending[0].lvl, opts: p.lvlPending[0].opts, left: p.lvlPending.length } : null,
     wardrobe: p.wardrobe || { owned: [], eq: {} }, buffs: p.buffs || {}, soups: p.soups || {}, casino: p.casino || null,

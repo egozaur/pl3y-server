@@ -7,7 +7,7 @@
 import { mix, hash } from './rng.js';
 import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, endRun, swapSkills, view, statsOf, pawn, redeem, upgrade, willOptions, ghostOf, RUN_V } from './rules.js';
 import { DUEL, duelSetDl, autoStep } from './duel.js';
-import { newProfile, poolFor, evaluate, evaluateAchievements, onBossKill, onRunEnd, onNemesisBeaten, markSeen, publicProfile, kurnikBuy, levelChoose, shopBuyItem, wearItem, takeBuffs, dailyKey, dailyOf, dailyView } from './profile.js';
+import { newProfile, poolFor, evaluate, evaluateAchievements, onBossKill, onRunEnd, onNemesisBeaten, markSeen, publicProfile, kurnikBuy, kurnikOpen, kurnikGate, levelChoose, shopBuyItem, wearItem, takeBuffs, dailyKey, dailyOf, dailyView } from './profile.js';
 import { MODES, CHARS, UNLOCKS, TILE_BY_ID, UNLOCK_BY_ID, STARTER_TILES, CASINO_REROLLS } from './data.js';
 
 export class BgPlayer {
@@ -30,6 +30,7 @@ export class BgPlayer {
     const st = this.ctx.storage;
     const profile = (await st.get('profile')) || newProfile();
     profile.nick = pl.nick; profile.avatar = pl.avatar || 0;
+    kurnikGate(profile);   // jednorazowo: Kurnik od 20. poziomu Stażu, niżsi tracą ulepszenia (zapis na końcu żądania)
     let run = (await st.get('run')) || null;
     const path = url.pathname.replace(/^\//, '');
     const extra = {};
@@ -68,7 +69,7 @@ export class BgPlayer {
         const seed = mix(Date.now() & 0x7fffffff, hash(pl.n), (crypto.getRandomValues(new Uint32Array(1)))[0]);
         // Testament Pyrtka działa w runie inną postacią niż ta, która go spisała (chyba że masz tylko jedną postać).
         const w = profile.will, useWill = !!(w && TILE_BY_ID[w.tile] && !(profile.chars.length > 1 && w.char === char));
-        r = newRun({ mode, char, garnek: g, pool: poolFor(profile), seed, now: this.now(), nemesis: profile.nemesis || null, will: useWill ? w.tile : null, curses: Array.isArray(b.curses) ? b.curses.map(String) : [], kurnik: profile.kurnik || {} });
+        r = newRun({ mode, char, garnek: g, pool: poolFor(profile), seed, now: this.now(), nemesis: profile.nemesis || null, will: useWill ? w.tile : null, curses: Array.isArray(b.curses) ? b.curses.map(String) : [], kurnik: kurnikOpen(profile) ? (profile.kurnik || {}) : {} });
         if (r.ok) {
           run = r.run; if (useWill) profile.will = null;
           const bf = takeBuffs(profile); run.buffs = bf;   // premie z nagród za poziom Stażu (jednorazowe)

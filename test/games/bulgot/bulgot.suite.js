@@ -59,6 +59,7 @@ function mkNs(make) {
 }
 const post = (o, path, body) => o.fetch(new Request('https://bg/' + path, { method: 'POST', body: JSON.stringify(body) })).then(async r => ({ status: r.status, j: await r.json() }));
 const PL = { n: 'ala', nick: 'Ala', avatar: 2 };
+const KURNIK_XP = Array.from({ length: D.KURNIK_MIN_STAZ }, (_, i) => D.stazCost(i + 1)).reduce((a, b) => a + b, 0);   // Nadgodziny na dokładnie 20. poziom Stażu
 
 // Nowy run z pełną pulą kafelków (do testów reguł).
 // Okólniki i wady są wyłączone (decrees = null, flawAt = -1), żeby testy reguł liczyły czyste wartości; mają własne testy.
@@ -1860,6 +1861,8 @@ test('Kurnik: Pióra za run, kupno poziomów, efekty na starcie runu i w statyst
   // kupno
   const { kurnikBuy } = await import('../../../src/games/bulgot/profile.js');
   const q = newProfile(); q.feathers = 100;
+  eq(kurnikBuy(q, 'spizarnia').code, 'locked', 'poniżej 20. poziomu Stażu Kurnik jest zamknięty'); eq(q.feathers, 100, 'zamknięty Kurnik nie zabiera Piór');
+  q.xp = KURNIK_XP;   // dokładnie 20. poziom Stażu
   assert(kurnikBuy(q, 'spizarnia').ok && q.kurnik.spizarnia === 1 && q.feathers === 100 - D.KURNIK.spizarnia.cost[0], 'poz. 1');
   assert(kurnikBuy(q, 'spizarnia').ok && kurnikBuy(q, 'spizarnia').ok && q.kurnik.spizarnia === 3, 'poz. 3');
   eq(kurnikBuy(q, 'spizarnia').code, 'max', 'maks. poziom'); eq(kurnikBuy(q, 'nie-ma').code, 'index', 'nieznany budynek');
@@ -1875,10 +1878,27 @@ test('Kurnik: Pióra za run, kupno poziomów, efekty na starcie runu i w statyst
   assert(R.newRun({ mode: 'full', char: 'pyrtek', garnek: 0, pool: ALL, seed: 3, kurnik: { spizarnia: 99, zly: 2 } }).run.kurnik.spizarnia === D.KURNIK_MAX, 'poziom przycięty do maksimum, nieznane budynki ignorowane');
   // BgPlayer: akcja kurnik
   const env = mkEnv(), o = new BgPlayer({ storage: mkStorage() }, env);
-  assert((await post(o, 'kurnik', { pl: PL, id: 'spizarnia' })).j.code === 'feathers', 'bez Piór błąd');
-  const prof = await o.ctx.storage.get('profile'); await post(o, 'state', { pl: PL }); const pr = (await o.ctx.storage.get('profile')) || newProfile(); pr.feathers = 50; await o.ctx.storage.put('profile', pr);
+  assert((await post(o, 'kurnik', { pl: PL, id: 'spizarnia' })).j.code === 'locked', 'poniżej 20. poziomu: zamknięte');
+  await post(o, 'state', { pl: PL }); const pr = (await o.ctx.storage.get('profile')) || newProfile(); pr.xp = KURNIK_XP; await o.ctx.storage.put('profile', pr);
+  assert((await post(o, 'kurnik', { pl: PL, id: 'spizarnia' })).j.code === 'feathers', 'bez Piór błąd'); pr.feathers = 50; await o.ctx.storage.put('profile', pr);
   const buy = await post(o, 'kurnik', { pl: PL, id: 'spizarnia' }); assert(buy.j.ok && buy.j.kurnikBought.lvl === 1 && buy.j.profile.kurnik.spizarnia === 1 && buy.j.profile.feathers === 50 - 12, 'zakup przez BgPlayer');
   const st = await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' }); eq(st.j.run.coins, 1, 'run startuje z poziomami Kurnika'); assert(st.j.run.kurnik.spizarnia === 1, 'poziomy w widoku');
+});
+
+test('Kurnik od 20. poziomu Stażu: jednorazowa utrata ulepszeń poniżej progu, start runu ignoruje zamknięty Kurnik', async () => {
+  const { kurnikGate, kurnikOpen, publicProfile: pub } = await import('../../../src/games/bulgot/profile.js');
+  eq(D.KURNIK_MIN_STAZ, 20, 'próg 20');
+  const lo = newProfile(); lo.kurnik = { spizarnia: 2, silownia: 3 }; lo.feathers = 7; lo.counters.kurnikBuys = 5; lo.xp = KURNIK_XP - 1;
+  assert(!kurnikOpen(lo), 'poziom 19: zamknięte'); assert(kurnikGate(lo), 'pierwsze wywołanie zmienia profil');
+  eq(Object.keys(lo.kurnik).length, 0, 'ulepszenia utracone'); eq(lo.feathers, 7, 'Pióra zostają, bez zwrotu'); eq(lo.counters.kurnikBuys, 0, 'licznik zakupów wyzerowany'); eq(lo.kurnikLegacy.silownia, 3, 'kopia zapasowa');
+  lo.xp = KURNIK_XP; assert(kurnikOpen(lo) && !kurnikGate(lo), 'po dojściu do 20. poziomu nic już nie jest resetowane'); eq(Object.keys(lo.kurnik).length, 0, 'ulepszenia nie wracają');
+  const hi = newProfile(); hi.kurnik = { spizarnia: 1 }; hi.xp = KURNIK_XP; kurnikGate(hi); eq(hi.kurnik.spizarnia, 1, 'od 20. poziomu ulepszenia zostają');
+  const v = pub(newProfile()); assert(v.kurnikOpen === false && v.kurnikNeed === 20, 'widok profilu niesie stan bramki');
+  // BgPlayer: stary profil z ulepszeniami poniżej progu traci je przy pierwszym żądaniu; start nie daje premii
+  const o = new BgPlayer({ storage: mkStorage() }, mkEnv()); await post(o, 'state', { pl: PL });
+  const raw = await o.ctx.storage.get('profile'); raw.kurnik = { spizarnia: 3 }; delete raw.flags.kurnikGate; await o.ctx.storage.put('profile', raw);
+  const s = await post(o, 'state', { pl: PL }); eq(Object.keys(s.j.profile.kurnik).length, 0, 'BgPlayer: utrata ulepszeń przy wczytaniu');
+  const st = await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' }); eq(st.j.run.coins, 0, 'run bez premii Kurnika'); assert(!st.j.run.kurnik.spizarnia, 'brak poziomów w widoku');
 });
 
 test('Nowości: kompletność danych (klątwy, trasy, bossowie, osiągnięcia), RUN_V', () => {
