@@ -2530,3 +2530,17 @@ test('Patch 1.1: Siła (płaski Atak w dziesiątych częściach) liczy się prze
   assert(s.critMult > 200 && s.critMult <= 200 + D.RULES.critOverMax, 'siła rośnie, ale ma limit ×2,5');
   r.tiles = Array(3).fill('czujne-oko'); const m = R.statsOf(r); assert(m.critRaw <= 100 ? m.critMult === 200 : m.crit === 100, 'poniżej 100% siła bez zmian');
 });
+
+test('Patch 1.1: zlew 2→3 z wyborem: przegrzany daje wadę fabryczną i +flawBoost% efektu, zlew 1→2 i poza poziomem 2 nie ma wyboru', () => {
+  const mk = (id) => { const r = fresh(); r.tiles = [id, id]; r.flawed = []; r.hp = R.statsOf(r).maxHp; return r; };
+  const l1 = mk('pazurek-z-tasmy'); eq(R.upgrade(l1, 'pazurek-z-tasmy', true).code, 'level', 'przegrzany tylko dla zlewu 2 → 3'); eq(l1.tiles.length, 2, 'nieudany zlew nic nie zabiera');
+  assert(R.upgrade(l1, 'pazurek-z-tasmy').ok && l1.tiles[0] === 'pazur-hodowlany' && !l1.flawed.length, 'zlew 1 → 2 bez wady');
+  const clean = mk('pazur-hodowlany'); const rc = R.upgrade(clean, 'pazur-hodowlany'); assert(rc.ok && !rc.upgraded.hot && !clean.flawed.length && clean.tiles[0] === 'szpon-brygadzisty', 'czysty: bez wady');
+  const hot = mk('pazur-hodowlany'); const rh = R.upgrade(hot, 'pazur-hodowlany', true);
+  assert(rh.ok && rh.upgraded.hot === true && hot.tiles[0] === 'szpon-brygadzisty', 'przegrzany: ten sam kafelek poziomu 3');
+  eq(hot.flawed.length, 1, 'jedna wada fabryczna'); assert(hot.flawed[0].id === 'szpon-brygadzisty' && D.FLAWS[hot.flawed[0].flaw] && hot.flawed[0].on === false, 'wada ukryta do ujawnienia');
+  assert(R.statsOf(hot).atk > R.statsOf(clean).atk, 'przegrzany daje większy Atak (+' + D.RULES.flawBoost + '% efektu): ' + R.statsOf(hot).atk + ' > ' + R.statsOf(clean).atk);
+  eq(R.view(hot).flawed[0].flaw, null, 'widok nie zdradza wady przed ujawnieniem');
+  assert(hot.log.length === 0 && hot.cur.upgrades[0].hot === true, 'decyzja zapisana w dzienniku rundy');
+  const x = mk('pazur-hodowlany'); x.phase = 'fight'; eq(R.upgrade(x, 'pazur-hodowlany', true).code, 'phase', 'poza fazą oferty nie można');
+});
