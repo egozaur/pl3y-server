@@ -13,11 +13,10 @@ export const TYPES = { stat: 'Statystyka', skill: 'Umiejętność', item: 'Przed
 // elite: rundy z elitą (nagroda: Odznaka). zoneMul: dodatkowy mnożnik życia/ataku zwykłych wrogów w strefie (%, null = brak).
 export const MODES = {
   quick: { name: 'Szybki', extraPct: { hp: 80, atk: 90 }, rounds: 10, bosses: { 5: 'brojler', 10: 'prezes' }, bonusAfter: [5], early: { rounds: 3, hp: 120, atk: 80 }, grow: { hp: 1.090, atk: 1.060 }, bossPct: { hp: 80, atk: 90 },
-    zones: [{ upTo: 5, zone: 0 }, { upTo: 10, zone: 1 }], elite: [4, 8], doors: [2, 6, 9] },
+    zones: [{ upTo: 5, zone: 0 }, { upTo: 10, zone: 1 }], elite: [4, 8] },
   full: { name: 'Pełny', extraPct: { hp: 80, atk: 90 }, rounds: 20, bosses: { 6: 'brojler', 12: 'skubarka', 20: 'prezes' }, bonusAfter: [6, 12], early: { rounds: 4, hp: 120, atk: 80 }, grow: { hp: 1.091, atk: 1.056 }, bossPct: { hp: 100, atk: 100 },
-    zones: [{ upTo: 6, zone: 0 }, { upTo: 12, zone: 1 }, { upTo: 20, zone: 2 }], elite: [4, 10, 16], zoneMul: [null, null, { hp: 130, atk: 112 }], doors: [2, 5, 8, 11, 14, 17] },
+    zones: [{ upTo: 6, zone: 0 }, { upTo: 12, zone: 1 }, { upTo: 20, zone: 2 }], elite: [4, 10, 16], zoneMul: [null, null, { hp: 130, atk: 112 }] },
 };
-// doors: piętra z Rozwidleniem Korytarza (wybór: zwykłe piętro albo wróg z cechą elity za nagrodę).
 
 export const ZONES = [
   { name: 'Kurnik i Podwórze', tag: 'I' },
@@ -33,8 +32,6 @@ export const RULES = {
   eliteCoinsPct: 50, scoreRound: 1000, scoreCoin: 50, scoreTimeMax: 2000, garnekScore: 25, maxSkills: 3, maxSkillLvl: 3,
   // Odsetki w Spiżarni: +1 Ziarno za każde `interestPer` niewydanych Ziaren po wygranej walce, najwyżej `interestMax` (Kaczor: CHARS.kaczor.interestMax).
   interestPer: 10, interestMax: 3,
-  // Rozwidlenie Korytarza: ryzykowne drzwi = pierwszy wróg z cechą elity (życie/atak w %), nagroda: Ziarna albo wybór rzadkiego kafelka.
-  doorCoins: 10, doorHp: 161, doorAtk: 124,   // doorCoins: zamiast rzadkiego kafelka można wziąć tyle Ziaren; zwykłe drzwi leczą jak Odpoczynek, ryzykowne odbierają leczenie po walce
   // Łup z bossa: po pokonaniu bossa (poza ostatnim) wybierasz 1 z `lootSize` legendarnych statystyk (kafelki z flagą boss).
   lootSize: 3, lootChance: 15, upgradeCost: 2,   // % szans, że po bossie (nie ostatnim) pojawia się okno wyboru łupu
   // Lombard Lisa: zastaw = pełna cena rzadkości teraz, wykup na następnym piętrze za `pawnBack`% ceny; przepadek wzmacnia Lisy o `pawnFox`%.
@@ -858,7 +855,6 @@ const ACHIEVEMENTS_ALL = [
   { id: 'a-mutant', g: 'style', s: '◎', name: 'Mutant', text: 'Zmutuj umiejętność (trzecia kopia).' },
   { id: 'a-trzy-mutacje', g: 'style', s: '◎', name: 'Trzy Mutacje, Jeden Kurczak', text: 'Zmutuj trzy umiejętności w jednym runie.' },
   { id: 'a-odznaki', g: 'style', s: '◎', name: 'Pracownik Miesiąca', text: 'Zdobądź 6 Odznak w jednym runie.' },
-  { id: 'a-rozwidlenia', g: 'style', s: '◎', name: 'Tylko Dla Personelu', text: 'Wybierz ryzykowne drzwi w 3 rozwidleniach w jednym runie.' },
   // walka
   { id: 'a-sekunda', g: 'fight', s: '⚡', name: 'Mgnienie Dzioba', text: 'Wygraj walkę w mniej niż sekundę.' },
   { id: 'a-minuta', g: 'fight', s: '⌛', name: 'Długa Zupa', text: 'Wygraj walkę, która trwała dłużej niż 60 sekund.' },

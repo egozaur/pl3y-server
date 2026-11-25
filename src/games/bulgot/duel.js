@@ -80,7 +80,7 @@ export function autoStep(run) {
     for (const i of [...plain, ...evs]) { const r = ok(pickTile(run, i, 0, 1)); if (r) return r; }
     return null;
   }
-  if (ph === 'route' || ph === 'door' || ph === 'badge' || ph === 'loot') return ok(choose(run, 0));
+  if (ph === 'route' || ph === 'badge' || ph === 'loot') return ok(choose(run, 0));
   if (ph === 'bonus') { for (let i = 0; i < run.offer.length; i++) if (run.offer[i]) { const r = ok(bonusPick(run, i, 0, 1)); if (r) return r; } return null; }
   if (ph === 'victory') return ok(choose(run, 1));   // Prezes pokonany: koniec (bez Dogrywki)
   if (ph === 'event' && P) {

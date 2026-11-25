@@ -18,7 +18,7 @@ export function completion(p) {
     { id: 'clears', name: 'Zwycięstwa (tryb × postać × palnik)', done: Object.keys(p.clears || {}).length, total: modes.length * chars.length * 6, w: 35 },
     { id: 'tiles', name: 'Poznane kafelki', done: seenTotal(p), total: tilesTotal(), w: 20 },
     { id: 'combos', name: 'Kombinacje (przepisy Wylęgarni i Reakcje)', done: (p.recipes || []).length + (p.reactions || []).length, total: RECIPES.length + Object.keys(REACTIONS).length, w: 15 },
-    { id: 'ach', name: 'Osiągnięcia', done: (p.ach || []).length, total: ACHIEVEMENTS.length, w: 30 },
+    { id: 'ach', name: 'Osiągnięcia', done: (p.ach || []).filter(id => ACHIEVEMENTS.some(a => a.id === id)).length, total: ACHIEVEMENTS.length, w: 30 },   // usunięte osiągnięcia (np. a-rozwidlenia) nie liczą się do ukończenia
   ];
   let pct = 0; for (const x of parts) pct += x.w * Math.min(1, x.done / x.total);
   return { pct: Math.floor(pct + 1e-9), parts };
@@ -47,7 +47,6 @@ const CHECKS = {
   'a-mutant': (p, r) => !!r && (st(r).muts || 0) >= 1,
   'a-trzy-mutacje': (p, r) => !!r && (st(r).muts || 0) >= 3,
   'a-odznaki': (p, r) => !!r && (st(r).badges || 0) >= 6,
-  'a-rozwidlenia': (p, r) => !!r && (st(r).doors || 0) >= 3,
   'a-sekunda': (p, r) => v2(r) && st(r).fastWin !== undefined && st(r).fastWin < 10,
   'a-minuta': (p, r) => v2(r) && (st(r).longWin || 0) >= 600,
   'a-wlosek': (p, r) => !!r && !!st(r).lowWin,

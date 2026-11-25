@@ -10,6 +10,7 @@ import { BgPlayer } from '../../../src/games/bulgot/player.js';
 import { BgRanks } from '../../../src/games/bulgot/ranks.js';
 import { newProfile, evaluate, onRunEnd, poolFor, onBossKill } from '../../../src/games/bulgot/profile.js';
 import * as P from '../../../src/games/bulgot/profile.js';
+import { completion } from '../../../src/games/bulgot/achievements.js';
 import { Players, playerToken } from '../../../src/core/players.js';
 import { signToken } from '../../../src/core/auth.js';
 import worker from '../../../src/index.js';
@@ -617,8 +618,7 @@ test('run: walka → nagrody, leczenie, następna runda; bonus po bossie; zwyci�
   const run = fresh(); force(run, 'ziarno-mocy'); R.pickTile(run, 0);
   const sset = R.fightSetup(run); assert(sset.ok && sset.setup.enemies.length === 1 && sset.setup.hero.hp === run.hp, 'setup');
   const hpBefore = run.hp;
-  const out = R.fightFinish(run, []); assert(out.ok && out.result.win && run.round === 2 && run.phase === 'door', 'wygrana, runda 2 (Rozwidlenie)');
-  assert(R.choose(run, 0).ok && run.phase === 'offer' && run.offer.length === 4, 'zwykłe drzwi: oferta');
+  const out = R.fightFinish(run, []); assert(out.ok && out.result.win && run.round === 2 && run.phase === 'offer' && run.offer.length === 4, 'wygrana, runda 2 (od razu oferta, bez drzwi)');
   eq(out.reward, 4, 'nagroda 4 Ziarna'); assert(run.done === 1 && run.coins === 4, 'licznik rund i Ziarna');
   assert(run.hp >= out.result.hp && run.hp <= run.hp, 'leczenie');
   assert(run.hp === Math.min(R.statsOf(run).maxHp, out.result.hp + Math.floor(R.statsOf(run).maxHp * 35 / 100)), 'leczenie o 35% maks. Życia');
@@ -1108,25 +1108,16 @@ test('Kafelki rosnące: Trofeum z Piór, Skarbonka Pisklęcia, Pierze Weterana (
   assert(D.TILES.filter(t => t.grow).every(t => D.STARTER_TILES.includes(t.id)), 'rosnące kafelki są w puli od startu');
 });
 
-test('Rozwidlenie Korytarza: drzwi na stałych piętrach, ryzykowny wróg z cechą elity, nagroda Ziarna albo rzadki kafelek', () => {
+test('Patch 1.1: drzwi (Rozwidlenie Korytarza) usunięte całkiem, w tym osiągnięcie i dane', () => {
+  // Patch 1.1: Rozwidlenia Korytarza (drzwi) usunięte całkiem; piętra po dawnych drzwiach to zwykłe piętra z ofertą.
   const d = fresh(); force(d, 'ziarno-mocy'); R.pickTile(d, 0); win(d);
-  assert(d.phase === 'door' && d.pending.kind === 'door' && D.AFFIXES[d.pending.affix] && d.pending.reward === 'rare', 'drzwi po 1. piętrze (nagroda zawsze rzadki kafelek lub Ziarna)');
-  assert(R.choose(d, 5).code === 'index', 'złe drzwi'); assert(R.choose(d, 1).ok && d.door.risky && d.phase === 'offer', 'ryzykowne drzwi');
-  eq(R.view(d).doors, D.MODES.full.doors, 'widok zna piętra z drzwiami');
-  const strong = x => { x.tiles = [...Array(12).fill('ziarno-mocy'), ...Array(8).fill('twardy-grzebien')]; x.hp = R.statsOf(x).maxHp; return x; };
-  const c = strong(fresh()); c.round = 5; c.door = { risky: true, affix: 'szybki', reward: 'rare' };
-  const st = R.buildSetup(c); assert(st.door && st.enemies[0].elite && st.enemies[0].affixes[0] === 'szybki' && st.enemies.length <= 2, 'wróg z cechą');
-  const plain = strong(fresh()); plain.round = 5; assert(R.floorTemplate(c) === null, 'ryzykowne drzwi bez szablonu piętra');
-  plain.door = null; assert(R.buildSetup({ ...plain, door: { risky: false } }).enemies.every(e => !e.elite), 'zwykłe drzwi: bez elity');
-  const same = { ...c, door: null }; const tp = R.floorTemplate(same);
-  if (!tp || tp === 'roj' || tp === 'para') assert(R.buildSetup(same).enemies[0].hp < st.enemies[0].hp, 'mocniejszy niż zwykle');
-  c.hp = Math.floor(R.statsOf(c).maxHp / 2); const hp0 = c.hp; const oc = win(c); assert(oc.result.win && !oc.badge && c.phase === 'bonus', 'ryzykowne drzwi: łup do wyboru');
-  assert(c.hp === hp0 - 0 || c.hp <= hp0, 'ryzykowne drzwi: brak leczenia po walce (' + hp0 + ' → ' + c.hp + ')');
-  const c0 = c.coins; const sk = R.bonusPick(c, -1); assert(sk.ok && c.coins === c0 + D.RULES.doorCoins, 'zamiast kafelka można wziąć Ziarna');
-  const nb = strong(fresh()); nb.round = 5; nb.door = null; assert(R.bonusPick({ ...nb, phase: 'bonus', door: { risky: false }, log: [] }, -1).code, 'bez ryzykownych drzwi nie ma Ziaren za łup');
-  const rr = strong(fresh()); rr.round = 5; rr.door = { risky: true, affix: 'szybki', reward: 'rare' }; const orr = win(rr);
-  assert(orr.result.win && rr.phase === 'bonus' && rr.offer.length === 3 && rr.offer.every(id => D.TILE_BY_ID[id].rarity >= 1), 'nagroda: rzadki kafelek');
-  assert(!D.MODES.full.doors.some(n => D.MODES.full.bosses[n] || D.MODES.full.elite.includes(n)) && !D.MODES.quick.doors.some(n => D.MODES.quick.bosses[n] || D.MODES.quick.elite.includes(n)), 'drzwi nie trafiają na bossa ani elitę');
+  assert(d.phase === 'offer' && !d.pending && d.offer.length === 4, 'po 1. piętrze od razu oferta (bez fazy drzwi)');
+  assert(!('door' in d) && !('door' in R.view(d)) && !('doors' in R.view(d)), 'brak stanu i widoku drzwi');
+  assert(!D.MODES.full.doors && !D.MODES.quick.doors && D.RULES.doorCoins === undefined && D.RULES.doorHp === undefined, 'brak danych drzwi');
+  assert(R.choose(d, 0).code, 'choose poza fazą decyzji nie przechodzi');
+  const c = fresh(); c.round = 5; const st = R.buildSetup(c); assert(!('door' in st) && !st.enemies[0].elite, 'walka bez cechy drzwi i bez elity');
+  assert(!D.ACHIEVEMENTS.some(a => a.id === 'a-rozwidlenia'), 'osiągnięcie rozwidleń usunięte');
+  const p = newProfile(); p.ach = ['a-rozwidlenia', 'a-wygrana']; assert(completion(p).parts.find(x => x.id === 'ach').done === 1, 'usunięte osiągnięcie nie liczy się do ukończenia');
 });
 
 test('Lombard Lisa: zastaw za pełną cenę, wykup tylko na następnym piętrze za 150%, przepadek wzmacnia Lisy', () => {
@@ -1204,7 +1195,7 @@ test('Awans Wroga: zabójca zostaje Nemezis, kradnie kafelek, czeka w następnym
   const nx = n.killer.next; assert(D.NEMESIS_TITLES.includes(nx.title) && D.NEMESIS_NAMES.includes(nx.given) && D.AFFIXES[nx.affix] && ['opaska-rambo', 'twardy-grzebien'].includes(nx.tile), 'awans: tytuł, imię, cecha, łup');
   const p = newProfile(); onRunEnd(p, n); eq(p.nemesis, nx, 'Nemezis w profilu');
   const m = fresh({ nemesis: p.nemesis }); const M = D.MODES.full, nr = m.nemesis.round;
-  assert(nr >= 2 && !M.bosses[nr] && !M.elite.includes(nr) && !M.doors.includes(nr) && R.zoneOf('full', nr) === D.ENEMIES[nx.enemy].zone, 'piętro w strefie wroga');
+  assert(nr >= 2 && !M.bosses[nr] && !M.elite.includes(nr) && R.zoneOf('full', nr) === D.ENEMIES[nx.enemy].zone, 'piętro w strefie wroga');
   m.round = nr; const ids = R.encounterIds(m); assert(ids[0] === nx.enemy && ids.length === 2, 'Nemezis z pomocnikiem');
   const st = R.buildSetup(m); assert(st.nemesis && st.enemies[0].nemesis && st.enemies[0].name === R.nemesisName(nx) && st.enemies[0].affixes[0] === nx.affix, 'Nemezis w walce');
   assert(R.view(m).nemesisRound && R.view(m).nemesis.name === R.nemesisName(nx), 'widok');
@@ -1245,7 +1236,7 @@ test('BgPlayer: Testament Pyrtka (po przegranej, piąta karta następnego runu, 
 });
 
 // ---------- Szablony pięter i ukryty podgląd (2026-11-22) ----------
-test('szablony pięter: Czempion, Rój, Zwiad, Para losowane z ziarna, bez bossów, elit, Nemezis, drzwi i wczesnych pięter', () => {
+test('szablony pięter: Czempion, Rój, Zwiad, Para losowane z ziarna, bez bossów, elit, Nemezis i wczesnych pięter', () => {
   const seen = {};
   for (let seed = 1; seed <= 120; seed++) for (const mode of ['full', 'quick']) {
     const M = D.MODES[mode], r = fresh({ seed, mode });
@@ -1267,9 +1258,8 @@ test('szablony pięter: Czempion, Rój, Zwiad, Para losowane z ziarna, bez boss�
   // Czempion ma +80% Życia względem tego samego wroga bez szablonu
   let r = null; for (let seed = 1; seed < 500 && !r; seed++) { const x = fresh({ seed }); x.round = 8; if (R.floorTemplate(x) === 'czempion') r = x; }
   assert(r, 'znaleziono Czempiona'); const ch = R.buildSetup(r).enemies[0];
-  // Nemezis i ryzykowne drzwi wyłączają szablon
+  // Nemezis wyłącza szablon
   const n = fresh(); n.round = 8; n.nemesis = { enemy: 'lis-windykator', round: 8, affix: 'szybki', lvl: 1 }; eq(R.floorTemplate(n), null, 'Nemezis bez szablonu');
-  const d = fresh(); d.round = 8; d.door = { risky: true, affix: 'szybki', reward: 'coins' }; eq(R.floorTemplate(d), null, 'ryzykowne drzwi bez szablonu');
   // Rój: każdy wróg osłabiony
   let rj = null; for (let seed = 1; seed < 500 && !rj; seed++) { const x = fresh({ seed }); x.round = 9; if (R.floorTemplate(x) === 'roj') rj = x; }
   assert(rj && R.buildSetup(rj).enemies.length === 3, 'Rój ma 3 wrogów');
@@ -1426,7 +1416,7 @@ test('łup z bossa: posiadane legendarne nie są proponowane, dopóki są inne; 
 });
 
 test('RUN_V = 7: stary run (wersja 2) jest unieważniany', async () => {
-  eq(R.RUN_V, 22, 'wersja reguł');
+  eq(R.RUN_V, 23, 'wersja reguł');
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
   await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
   const run = await st.get('run'); run.v = 2; await st.put('run', run);
@@ -1908,7 +1898,7 @@ test('Nowości: kompletność danych (klątwy, trasy, bossowie, osiągnięcia), 
   for (const id of D.SUPER_BOSSES) assert(D.BOSSES[id].super, 'super-boss ' + id);
   for (const [id, b] of Object.entries(D.KURNIK)) { assert(b.name && b.text && b.cost.length === 3 && b.cost[0] < b.cost[2], 'budynek ' + id); }
   for (const a of ['a-klatwa', 'a-klatwy3', 'a-dogrywka', 'a-dogrywka15', 'a-duch', 'a-towarzysz', 'a-trasy', 'a-kurnik', 'a-kurnik-max']) assert(D.ACH_BY_ID[a], 'osiągnięcie ' + a);
-  eq(R.RUN_V, 22, 'RUN_V 22');
+  eq(R.RUN_V, 23, 'RUN_V 23');
 });
 
 test('Jajko Dinozaura: tylko jedno na run (po wykluciu nie wraca do ofert)', () => {
@@ -2146,7 +2136,7 @@ test('etap 4: wzmocnienia: Pobudka, Echo, Przyspieszony Obieg', () => {
   const o2 = new Fight(setup({ hp: 400, lo: { skills: [{ id: 'obieg', lvl: 3, mut: 2 }] }, enemies: [foe({ hp: 1e7, atk: 1, aspd: 10 })] })); o2.hp = 50; o2.skills[0].cd = 0; o2.step([0]); assert(o2.hp > 50, 'Obieg Zamknięty leczy');
 });
 test('etap 4: RUN_V 20, nowe umiejętności trafiają do ofert', () => {
-  eq(R.RUN_V, 22, 'RUN_V');
+  eq(R.RUN_V, 23, 'RUN_V');
   const seen = new Set();
   for (let seed = 1; seed < 300; seed++) { const r = R.newRun({ mode: 'full', char: 'pyrtek', garnek: 0, pool: ALL, seed }); const run = r.run; for (const o of (run.cur && run.cur.offer) || []) { const t = D.TILE_BY_ID[o.id || o]; if (t && t.skill && NEW20.includes(t.skill)) seen.add(t.skill); } }
   assert(seen.size >= 5, 'nowe umiejętności pojawiają się w ofertach (widziano ' + seen.size + ')');
@@ -2208,12 +2198,9 @@ test('zestawy: Szok Termiczny w konflikcie bije mocniej, pierwszy atak Armii to 
   assert(first && first.crit, 'pierwszy atak jest krytyczny');
 });
 
-test('zwykłe drzwi: darmowy Odpoczynek na wejściu', () => {
-  const d = fresh(); force(d, 'ziarno-mocy'); R.pickTile(d, 0); win(d);
-  assert(d.phase === 'door', 'drzwi'); const S = R.statsOf(d); d.hp = Math.floor(S.maxHp / 2); const before = d.hp, coins = d.coins;
-  const r = R.choose(d, 0); assert(r.ok && r.healed > 0 && d.hp > before && d.coins === coins && !d.rested, 'zwykłe drzwi leczą za darmo i nie zużywają odpoczynku');
-  const e = fresh(); force(e, 'ziarno-mocy'); R.pickTile(e, 0); win(e); e.hp = Math.floor(R.statsOf(e).maxHp / 2); const hb = e.hp;
-  assert(R.choose(e, 1).ok && e.hp === hb, 'ryzykowne drzwi nie leczą');
+test('po każdej wygranej walce leczenie działa tak samo (bez drzwi)', () => {
+  const d = fresh(); force(d, 'ziarno-mocy'); R.pickTile(d, 0); d.hp = Math.floor(R.statsOf(d).maxHp / 2); const before = d.hp;
+  win(d); assert(d.phase === 'offer' && d.hp > before, 'wygrana leczy po walce, od razu następna oferta');
 });
 
 // ---------- Dodatkowe rundy: Gruszka (piętro 3) i Pipsztal (piętro 6) ----------
@@ -2390,11 +2377,11 @@ test('Arena Duchów: duch z krótkiego runu nie trafia na późne piętra (wtedy
   const g2 = { ...g, curve: Array(20).fill([100, 30, 100, 0, 5, 0]) }; await rq('ghost-put', { n: 'cyc', nick: 'Cyc', avatar: 1, ghost: g2, at: 6 });
   assert((await rq('ghost-pick', { n: 'ala', mode: 'full', round: 26, salt: 1 })).ghost.n === 'cyc', 'na piętro 26 pasuje duch z 20 pięter');
 });
-test('Dogrywka: skok trudności na progu i dziennik rund z decyzjami (drzwi, trasa) oraz hpAfterHeal', () => {
+test('Dogrywka: skok trudności na progu i dziennik rund z decyzjami (trasa) oraz hpAfterHeal', () => {
   const s20 = R.buildSetup(Object.assign(fresh({ mode: 'quick' }), { round: 10, endless: true })), s11 = R.buildSetup(Object.assign(fresh({ mode: 'quick' }), { round: 11, endless: true }));
   assert(s11.enemies[0].hp > s20.enemies[0].hp * 1.2 || s11.enemies.length !== s20.enemies.length, 'pierwsze piętro Dogrywki wyraźnie trudniejsze');
-  const r = fresh({ mode: 'quick' }); r.hp = 99999; r.cur = { offer: [], picked: 'x', rerolls: 0, bought: [], event: null, door: 0, route: 'chlodnia' }; r.phase = 'fight'; r.fight = {}; R.fightFinish(r, []);
-  const e = r.log[0]; eq([e.door, e.route], [0, 'chlodnia'], 'decyzje w dzienniku'); assert('hpAfterHeal' in e && !('hpHealed' in e), 'hpAfterHeal zamiast hpHealed');
+  const r = fresh({ mode: 'quick' }); r.hp = 99999; r.cur = { offer: [], picked: 'x', rerolls: 0, bought: [], event: null, route: 'chlodnia' }; r.phase = 'fight'; r.fight = {}; R.fightFinish(r, []);
+  const e = r.log[0]; eq(e.route, 'chlodnia', 'decyzje w dzienniku'); assert('hpAfterHeal' in e && !('hpHealed' in e), 'hpAfterHeal zamiast hpHealed');
   const l = fresh({ mode: 'quick' }); l.hp = 1; l.round = 3; l.phase = 'fight'; l.fight = {}; R.fightFinish(l, []);
   assert(l.log.length && l.log[l.log.length - 1].reward === 0 && l.log[l.log.length - 1].hpAfterHeal !== undefined, 'porażka też ma reward i hpAfterHeal');
 });

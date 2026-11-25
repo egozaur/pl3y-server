@@ -58,7 +58,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 
 // ---------- Nowy run ----------
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
-export const RUN_V = 22;
+export const RUN_V = 23;   // Patch 1.1: bez drzwi, Siła, krytyk z przepełnieniem, zlewanie z wyborem
 
 export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null, curses = [], kurnik = {} }) {
   const M = MODES[mode], ch = CHARS[char];
@@ -73,7 +73,7 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null
     stats: { riskPicks: 0, fox: 0, maxCoins: ch.coins, maxHit: 0, lowWin: false, maxRound: 1, bossKills: [], picks: 0, rerolls: 0, v2: 1, syn: false, rests: 0, skillUses: 0, flawless: 0, bossFlawless: false, maxChainsFight: 0, longWin: 0 },
     log: [],
     curses: curses.slice(), kurnik: Object.fromEntries(Object.keys(KURNIK).filter(k => (kurnik[k] | 0) > 0).map(k => [k, Math.min(KURNIK_MAX, kurnik[k] | 0)])), routes: [null, null, null], companion: null, bossWins: 0, arena: null, endless: false, cleared: null,
-    grow: {}, flawed: [], flawAt: -1, pawned: null, foxDebt: 0, door: null, nemesis: null, will: null, willUsed: false,
+    grow: {}, flawed: [], flawAt: -1, pawned: null, foxDebt: 0, nemesis: null, will: null, willUsed: false,
   };
   run.decrees = decreesOf(run.seed);
   run.coins += kLv(run, 'spizarnia');   // Kurnik: Spiżarnia
@@ -103,7 +103,7 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null
 function tileAvailable(run, t) {
   if (t.hatched || t.boss) return false;
   if (t.minRound && run.round < t.minRound) return false;   // np. Arena Duchów dopiero od 3. piętra
-  if (t.event === 'arena' && (bossAt(run) || isElite(run) || isNemesisRound(run) || riskyDoor(run))) return false;
+  if (t.event === 'arena' && (bossAt(run) || isElite(run) || isNemesisRound(run))) return false;
   if (t.legend && (run.round - 1) / MODES[run.mode].rounds < 0.6) return false;   // legendarne przedmioty dopiero od 60% runu (strefa III w trybie pełnym)   // wyklute i legendarne z bossów nie trafiają do ofert
   if (t.dino && run.tiles.includes('dinozaur')) return false;   // Jajko Dinozaura tylko raz na run: po wyklutym Dinozaurze nie wraca do ofert
   if (t.repeat) return true;
@@ -249,7 +249,7 @@ function nextRound(run) {
   const M = MODES[run.mode];
   if (run.round > M.rounds && !run.endless) return endRun(run, 'win');
   run.stats.maxRound = Math.max(run.stats.maxRound, run.round);
-  run.phase = 'offer'; run.pending = null; run.rested = false; run.rerolls = 0; run.paid = 0; run.door = null; run.arena = null; run.extra = null;
+  run.phase = 'offer'; run.pending = null; run.rested = false; run.rerolls = 0; run.paid = 0; run.arena = null; run.extra = null;
   // Lombard Lisa: niewykupiony zastaw przepada, a Lisy Windykatory rosną w siłę.
   if (run.pawned && run.round > run.pawned.round + 1) { run.foxDebt = (run.foxDebt || 0) + 1; run.lostPawn = run.pawned.id; run.pawned = null; }
   // Wybór trasy na początku strefy II i III.
@@ -261,30 +261,21 @@ function nextRound(run) {
   }
   return startFloor(run);
 }
-// Początek piętra po ewentualnym wyborze trasy: Rozwidlenie albo zwykła oferta.
+// Początek piętra po ewentualnym wyborze trasy: zwykła oferta kafelków.
 function startFloor(run) {
   run.phase = 'offer'; run.pending = null;
-  const M = MODES[run.mode];
   const zoneFirst = run.round === 1 || run.round === zoneStart(run.mode, run.round);
   run.freeLeft = freeRerolls(run) + (zoneFirst ? kLv(run, 'kantyna') : 0);
-  if (isDoor(run)) {
-    const rr = makeRng(mix(run.seed, run.round, hash('door')));
-    run.phase = 'door'; run.offer = []; run.flawAt = -1;
-    run.pending = { kind: 'door', affix: rr.pick(Object.keys(AFFIXES)), reward: 'rare', coins: RULES.doorCoins };
-    run.cur = freshCur(run);
-    return { ok: true, door: true };
-  }
   setOffer(run, 0);
   run.cur = freshCur(run);
   return { ok: true };
 }
-const isDoor = run => (MODES[run.mode].doors || []).includes(run.round) && !MODES[run.mode].bosses[run.round] && !MODES[run.mode].elite.includes(run.round) && !(run.nemesis && !run.nemesis.beaten && run.nemesis.round === run.round);
 
-// Awans Wroga: na którym piętrze czeka Nemezis (strefa jego pochodzenia, zwykłe piętro bez drzwi, elity i bossa).
+// Awans Wroga: na którym piętrze czeka Nemezis (strefa jego pochodzenia, zwykłe piętro bez elity i bossa).
 function nemesisRound(run, n) {
   const M = MODES[run.mode], maxZone = M.zones[M.zones.length - 1].zone;
   const zone = Math.min(ENEMIES[n.enemy].zone, maxZone);
-  const plain = r => r >= 2 && !M.bosses[r] && !M.elite.includes(r) && !(M.doors || []).includes(r);
+  const plain = r => r >= 2 && !M.bosses[r] && !M.elite.includes(r);
   let cand = []; for (let r = 2; r <= M.rounds; r++) if (plain(r) && zoneOf(run.mode, r) === zone) cand.push(r);
   if (!cand.length) for (let r = 2; r <= M.rounds; r++) if (plain(r)) cand.push(r);
   return makeRng(mix(run.seed, hash('nemesis'))).pick(cand);
@@ -521,18 +512,6 @@ export function bet(run, amount) {
 // Wybór w oknie decyzji: Odznaka po bossie/elicie (faza badge), Kontrakt z HR i Kapliczka (faza event).
 export function choose(run, i) {
   const P = run.pending;
-  if (run.phase === 'door' && P && P.kind === 'door') {
-    if (i !== 0 && i !== 1) return fail('Nie ma takich drzwi.', 'index');
-    run.door = { risky: i === 1, affix: P.affix, reward: P.reward };
-    run.pending = null; run.phase = 'offer';
-    setOffer(run, 0);
-    run.cur = freshCur(run); cur(run).door = i;
-    if (i === 1) run.stats.doors = (run.stats.doors || 0) + 1;
-    // Zwykłe drzwi: darmowy Odpoczynek (leczy jak zwykły, nie zużywa odpoczynku rundy).
-    let healed = 0;
-    if (i === 0) { const S = statsOf(run), before = run.hp; run.hp = Math.min(S.maxHp, run.hp + Math.max(1, fl(S.maxHp * restPctOf(run, S) / 100))); healed = run.hp - before; cur(run).doorHeal = healed; }
-    return { ok: true, chose: i, healed };
-  }
   if (run.phase === 'badge' && P && P.kind === 'badge') {
     const b = P.offer[i];
     if (!b || !BADGES[b]) return fail('Nie ma takiej Odznaki.', 'index');
@@ -638,12 +617,6 @@ function afterFight(run, bonus, loot) {
 
 export function bonusPick(run, i, slot, mut) {
   if (run.phase !== 'bonus') return fail('Teraz nie ma oferty bonusowej.', 'phase');
-  // Łup zza ryzykownych drzwi: zamiast kafelka można wziąć Ziarna (i = -1).
-  if (i === -1 && run.door && run.door.risky && !(run.log.length && run.log[run.log.length - 1].boss)) {
-    setCoins(run, run.coins + RULES.doorCoins);
-    if (run.log.length) run.log[run.log.length - 1].bonus = 'coins';
-    const r = nextRound(run); if (r && r.ok) r.coins = RULES.doorCoins; return r;
-  }
   const t = TILE_BY_ID[run.offer[i]];
   if (!t) return fail('Nie ma takiego kafelka.', 'index');
   const e = applyTile(run, t, slot, mut);
@@ -681,12 +654,11 @@ export const zoneOf = (mode, round) => { if (MODES[mode].bosses[round] === 'prez
 const zoneStart = (mode, round) => { let prev = 0; for (const z of MODES[mode].zones) { if (round <= z.upTo) return prev + 1; prev = z.upTo; } return 1; };
 
 export const isNemesisRound = run => !!(run.nemesis && !run.nemesis.beaten && run.nemesis.round === run.round);
-const riskyDoor = run => !!(run.door && run.door.risky);
 // Szablon zwykłego piętra (Czempion, Rój, Zwiad, Para) albo null (zwykłe piętro). Losowany z osobnej soli,
 // więc nie zmienia losowania zwykłych wrogów.
 export function floorTemplate(run) {
   const M = MODES[run.mode], r = run.round;
-  if (bossAt(run, r) || r <= M.early.rounds || isElite(run) || riskyDoor(run) || isNemesisRound(run)) return null;
+  if (bossAt(run, r) || r <= M.early.rounds || isElite(run) || isNemesisRound(run)) return null;
   const zi = zoneOf(run.mode, r), keys = Object.keys(FLOOR_TPL).filter(k => (k !== 'zwiad' || zi < 2) && zi >= (FLOOR_TPL[k].minZone || 0));
   let tot = 0; for (const k of keys) tot += FLOOR_TPL[k].w;
   let x = makeRng(mix(run.seed, r, hash('tpl'))).int(tot);
@@ -721,7 +693,7 @@ export function encounterIds(run) {
   const ids = []; for (let i = 0; i < count; i++) ids.push(rr.pick(pool));
   const sw = ids.find(id => ENEMIES[id].swarm);
   const out = sw ? Array(ENEMIES[sw].swarm).fill(sw) : ids;
-  return isElite(run) || riskyDoor(run) ? out.slice(0, 2) : out;   // elita (i ryzykowne drzwi) przychodzi najwyżej z jednym pomocnikiem
+  return isElite(run) ? out.slice(0, 2) : out;   // elita przychodzi najwyżej z jednym pomocnikiem
 }
 
 // Profil buildu gracza (adaptacja bossów, elit i dodatkowych bossów): wynik punktowy każdego stylu, main = najsilniejszy powyżej progu.
@@ -803,7 +775,7 @@ export function buildSetup(run) {
     const foes = [be];
     if ((def.mech || []).includes('pet')) foes.unshift(concrete(EXTRA_DOG, s, gm, { pet: true }));
     const S0 = statsOf(run);
-    return { v: 1, round: run.round, mode: run.mode, seed: mix(run.seed, run.round, hash('extra')), boss: null, extra: def.id, elite: false, zone: zoneOf(run.mode, run.round), door: false, nemesis: false,
+    return { v: 1, round: run.round, mode: run.mode, seed: mix(run.seed, run.round, hash('extra')), boss: null, extra: def.id, elite: false, zone: zoneOf(run.mode, run.round), nemesis: false,
       hero: { loadout: loadoutOf(run), hp: Math.min(run.hp, S0.maxHp), revive: S0.revive && !run.flags.revived }, enemies: foes, minion: concrete(ENEMIES['pisklak-stazysta'], s, gm, { minion: true }) };
   }
   const arena = arenaOn(run), ids = arena ? [] : encounterIds(run), boss = arena ? null : bossAt(run), elite = !arena && isElite(run);
@@ -842,8 +814,6 @@ export function buildSetup(run) {
     }
     if (tpl === 'para') { const big = enemies[0].hp >= enemies[1].hp ? enemies[0] : enemies[1]; big.armor += TP.armor; for (const e of enemies) e.regenPct = (e.regenPct || 0) + TP.regen; }
     if (elite) { const e0 = enemies[0]; e0.hp = fl(e0.hp * 130 / 100); e0.atk = fl(e0.atk * 112 / 100); e0.elite = true; e0.name = 'Elitarny ' + e0.name; e0.affixes = eliteAffixes(run); for (const a of e0.affixes) applyAffix(e0, a); e0.counters = counterPlan(run, 'elite'); }
-    // Rozwidlenie Korytarza: za ryzykownymi drzwiami pierwszy wróg ma cechę elity.
-    if (riskyDoor(run) && !elite) { const e0 = enemies[0]; e0.hp = fl(e0.hp * RULES.doorHp / 100); e0.atk = fl(e0.atk * RULES.doorAtk / 100); e0.elite = true; e0.name = 'Elitarny ' + e0.name; e0.affixes = [run.door.affix]; applyAffix(e0, run.door.affix); e0.counters = counterPlan(run, 'elite'); }
     // Awans Wroga: Nemezis (z każdym awansem mocniejszy).
     if (isNemesisRound(run)) {
       const n = run.nemesis, e0 = enemies[0], lv = (n.lvl || 1) - 1;
@@ -869,7 +839,7 @@ export function buildSetup(run) {
   const S = statsOf(run);
   return {
     v: 1, round: run.round, mode: run.mode, seed: mix(run.seed, run.round, hash('fight')), boss, elite, zone: zoneOf(run.mode, run.round),
-    door: riskyDoor(run) && !arena, nemesis: isNemesisRound(run) && !arena, arena: arena || undefined, tpl: arena ? undefined : floorTemplate(run) || undefined, fury: decreeIs(run, 'pilny') || hasCurse(run, 'pospiech') ? 300 : undefined,
+    nemesis: isNemesisRound(run) && !arena, arena: arena || undefined, tpl: arena ? undefined : floorTemplate(run) || undefined, fury: decreeIs(run, 'pilny') || hasCurse(run, 'pospiech') ? 300 : undefined,
     hero: { loadout: loadoutOf(run), hp: Math.min(run.hp, S.maxHp), revive: S.revive && !run.flags.revived },
     enemies, minion: concrete(ENEMIES['pisklak-stazysta'], s, gm, { minion: true }),
   };
@@ -889,8 +859,8 @@ export function fightFinish(run, inputs) {
     offer: c.offer, picked: c.picked, bought: c.bought, upgrades: c.upgrades || [], rerolls: c.rerolls, rested: c.rested || 0, event: c.event, bet: c.bet || null,
     hero: { maxHp: S.maxHp, atk: S.atk, aspd: S.aspd, armor: S.armor, crit: S.crit, evade: S.evade, regen: S.regen }, tiles: run.tiles.length, skills: run.skills.map(s => s.id + (s.lvl > 1 ? '*' : '')),
     coinsBefore, coinsAfter: run.coins, hpBefore, hpAfter: res.hp, win: res.win, foeLeft: res.foeLeft, inputs: (Array.isArray(inputs) ? inputs : []).slice(0, 120).map(x => Array.isArray(x) ? [x[0] | 0, x[1] | 0] : [0, 0]), ticks: res.ticks, dealt: res.dealt, taken: res.taken, maxHit: res.maxHit, skillsUsed: res.skillsUsed, stolen: res.stolen, revived: res.usedRevive, timeout: res.timeout,
-    // Decyzje poza ofertą (do analizy partii): drzwi, trasa, adopcja, arena, kontrakt, kapliczka, lombard.
-    ...Object.fromEntries(['door', 'doorHeal', 'route', 'adopt', 'arena', 'contract', 'shrine', 'pawn', 'redeem'].filter(k => c[k] !== undefined).map(k => [k, c[k]])),
+    // Decyzje poza ofertą (do analizy partii): trasa, adopcja, arena, kontrakt, kapliczka, lombard.
+    ...Object.fromEntries(['route', 'adopt', 'arena', 'contract', 'shrine', 'pawn', 'redeem'].filter(k => c[k] !== undefined).map(k => [k, c[k]])),
     companion: run.companion ? run.companion.id + ':' + run.companion.lvl : null, endless: !!run.endless });
   setCoins(run, run.coins - Math.min(run.coins, res.stolen) + (res.coinsWon || 0));
   if (res.usedRevive) run.flags.revived = true;
@@ -950,7 +920,6 @@ export function fightFinish(run, inputs) {
   // Odsetki w Spiżarni: +1 Ziarno za każde 10 niewydanych (po kradzieżach), najwyżej 3 (Kaczor 5).
   const interest = Math.min(CHARS[run.char].interestMax || RULES.interestMax, fl(run.coins / RULES.interestPer));
   coins += interest; out.interest = interest;
-  if (setup.door && run.door.reward === 'coins') { coins += RULES.doorCoins; out.doorCoins = RULES.doorCoins; }   // stare runy (sprzed zmiany drzwi) mogą mieć nagrodę Ziarnami
   const upkeep = coins < 0 ? -coins : 0;   // ujemny dochód (umowy, odsetki, Klątwa Podatku) zjada oszczędności zamiast przepadać
   coins = Math.max(0, coins);
   // Kafelki rosnące.
@@ -978,7 +947,7 @@ export function fightFinish(run, inputs) {
   run.stats.freezes = (run.stats.freezes || 0) + (res.freezes || 0);
   setCoins(run, run.coins + coins); out.reward = coins;
   if (upkeep) { const pay = Math.min(run.coins, upkeep); setCoins(run, run.coins - pay); out.upkeep = pay; }
-  if (!setup.door) {
+  {
     const heal = fl(S.maxHp * Math.max(0, gm.healPct + S.healBonus + ((rt && rt.heal) || 0) - (decreeIs(run, 'homeoffice') ? 10 : 0)) / 100);
     if (exId) extraHeal = heal;   // dodatkowa runda zaczyna się z życiem po walce; leczenie dopiero po niej (albo po odwrocie)
     else run.hp = Math.min(statsOf(run).maxHp, run.hp + heal);
@@ -1005,7 +974,7 @@ export function fightFinish(run, inputs) {
     out.victory = true;
     return out;
   }
-  const bonus = MODES[run.mode].bonusAfter.includes(run.round) || (setup.door && run.door.reward === 'rare') || !!setup.arena;
+  const bonus = MODES[run.mode].bonusAfter.includes(run.round) || !!setup.arena;
   const loot = !!setup.boss && lootRoll(run);   // szansa RULES.lootChance %; ostatni boss kończy run wcześniej (return powyżej)
   run.fight = null;
   const after = { bonus, loot, badge: !!(setup.boss || setup.elite) };
@@ -1076,7 +1045,7 @@ export function view(run) {
     decree: over ? null : decreeOf(run), priceMul: priceMul(run), grow: run.grow || {}, flawAt: run.phase === 'offer' ? run.flawAt : -1,
     flawed: (run.flawed || []).map(w => ({ id: w.id, flaw: w.on ? w.flaw : null, on: w.on })),
     up: run.phase === 'offer' ? upgradable(run) : [], pawned: run.pawned ? { ...run.pawned, cost: redeemCost(run.pawned), canRedeem: run.round === run.pawned.round + 1 } : null, foxDebt: run.foxDebt || 0, lostPawn: run.lostPawn || null,
-    door: run.door, doors: (M.doors || []).filter(r => !M.bosses[r] && !M.elite.includes(r)), will: run.will && !run.willUsed && run.round === 1 ? run.will : null,
+    will: run.will && !run.willUsed && run.round === 1 ? run.will : null,
     nemesis: run.nemesis ? { name: nemesisName(run.nemesis), enemy: run.nemesis.enemy, affix: run.nemesis.affix, tile: run.nemesis.tile, lvl: run.nemesis.lvl || 1, round: run.nemesis.round, beaten: run.nemesis.beaten } : null,
     // Tablica Zarządu (faktury za pokonane piętra): tylko liczby z dziennika wygranych walk, bez składu przyszłych pięter.
     board: (run.log || []).filter(e => e.win).map(e => ({ r: e.r, boss: !!e.boss, ticks: e.ticks, dealt: e.dealt, reward: e.reward | 0 })),
