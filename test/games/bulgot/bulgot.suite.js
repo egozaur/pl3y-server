@@ -1209,24 +1209,11 @@ test('Awans Wroga: zabójca zostaje Nemezis, kradnie kafelek, czeka w następnym
   const bossRun = fresh(); bossRun.round = 6; bossRun.hp = 1; bossRun.phase = 'fight'; bossRun.fight = {}; R.fightFinish(bossRun, []); assert(!bossRun.killer, 'boss nie zostaje Nemezis');
 });
 
-test('BgPlayer: Testament Pyrtka (po przegranej, piąta karta następnego runu, inna postać) i Nemezis znika po pokonaniu', async () => {
+test('BgPlayer: Nemezis znika po pokonaniu, a stary zapis testamentu jest czyszczony z profilu', async () => {
   const env = mkEnv(), st = mkStorage(), o = new BgPlayer({ storage: st }, env);
-  let r = await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
-  const okTile = id => !D.TILE_BY_ID[id].event && D.TILE_BY_ID[id].rarity <= 1 && D.TILE_BY_ID[id].type !== 'skill';
-  for (let k = 0; k < 40 && !r.j.run.offer.some(okTile); k++) { await post(o, 'abandon', { pl: PL }); r = await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' }); }   // oferta bez zwykłego/rzadkiego kafelka: losuj nowy run
-  const i = r.j.run.offer.findIndex(okTile);
-  await post(o, 'pick', { pl: PL, i, slot: 0, mut: 1 });
-  assert((await post(o, 'will', { pl: PL, i: 0 })).status === 409, 'testament dopiero po przegranej');
-  r = await post(o, 'abandon', { pl: PL }); const opts = r.j.run.willOptions; assert(Array.isArray(opts) && opts.length >= 1, 'opcje testamentu');
-  r = await post(o, 'will', { pl: PL, i: 0 }); assert(r.j.ok && r.j.profile.will.tile === opts[0] && r.j.run.willOptions === null, 'testament spisany');
-  assert((await post(o, 'will', { pl: PL, i: 0 })).status === 409, 'tylko raz');
-  r = await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' });
-  assert(r.j.run.offer.includes(opts[0]) && r.j.run.will === opts[0] && r.j.profile.will === null, 'kafelek z testamentu w pierwszej ofercie');
-  const k = r.j.run.offer.indexOf(opts[0]); r = await post(o, 'pick', { pl: PL, i: k, slot: 0, mut: 1 }); assert(r.j.run.will === null, 'testament zużyty');
-  await post(o, 'abandon', { pl: PL }); await post(o, 'will', { pl: PL, i: 0 });
-  st.m.get('profile').chars.push('barista');
-  r = await post(o, 'start', { pl: PL, mode: 'quick', char: 'pyrtek' }); assert(r.j.run.will === null && r.j.profile.will, 'ta sama postać: testament czeka');
-  await post(o, 'abandon', { pl: PL }); r = await post(o, 'start', { pl: PL, mode: 'quick', char: 'barista' }); assert(r.j.run.will && r.j.profile.will === null, 'inna postać: działa');
+  let r = await post(o, 'state', { pl: PL });
+  st.m.get('profile').will = { tile: 'ziarno-mocy', char: 'pyrtek' };
+  r = await post(o, 'state', { pl: PL }); assert(!('will' in r.j.profile) && !('will' in st.m.get('profile')), 'stary testament usunięty z profilu');
   await post(o, 'abandon', { pl: PL });
   const prof = st.m.get('profile'); prof.nemesis = { enemy: 'szczur-pasz', title: 'Kierownik', given: 'Zbigniew', affix: 'szybki', tile: null, lvl: 1 };
   r = await post(o, 'state', { pl: PL }); assert(r.j.profile.nemesis.name === 'Kierownik Szczur Pasz Zbigniew', 'Nemezis w profilu publicznym');

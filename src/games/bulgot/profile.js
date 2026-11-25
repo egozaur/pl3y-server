@@ -267,7 +267,7 @@ export function publicProfile(p) {
   return {
     nick: p.nick, avatar: p.avatar || 0, chars: p.chars, tiles: p.tiles, garnek: p.garnek, best: p.best,
     counters: p.counters, bosses: p.bosses, seen: p.seen, unlocked: p.unlocked, ach: p.ach || [], clears: p.clears || {}, completion: completion(p), recipes: p.recipes || [], reactions: p.reactions || [],
-    nemesis: p.nemesis ? { ...p.nemesis, name: nemesisName(p.nemesis) } : null, will: p.will || null, feathers: p.feathers | 0, kurnik: p.kurnik || {}, kurnikOpen: kurnikOpen(p), kurnikNeed: KURNIK_MIN_STAZ,
+    nemesis: p.nemesis ? { ...p.nemesis, name: nemesisName(p.nemesis) } : null, feathers: p.feathers | 0, kurnik: p.kurnik || {}, kurnikOpen: kurnikOpen(p), kurnikNeed: KURNIK_MIN_STAZ,
     staz: { ...stazLevel(p.xp | 0), xp: p.xp | 0, title: stazTitle(stazLevel(p.xp | 0).level), talons: p.talons | 0 },
     lvlPending: p.lvlPending && p.lvlPending[0] ? { lvl: p.lvlPending[0].lvl, opts: p.lvlPending[0].opts, left: p.lvlPending.length } : null,
     wardrobe: p.wardrobe || { owned: [], eq: {} }, buffs: p.buffs || {}, soups: p.soups || {}, casino: p.casino || null,

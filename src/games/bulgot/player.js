@@ -2,10 +2,10 @@
 // i aktywny run. Całą logikę gry liczy serwer: oferty, rerolle, zakupy, walki (powtórka z wejść gracza).
 //
 // Gracz przychodzi już sprawdzony przez Worker (index.js → playerFromToken): body.pl = { n, nick, avatar }.
-// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /upgrade /will /fightstart /fightfinish /abandon /history /analysis /skillorder /code /kurnik /levelchoice /shopbuy /wear (Staż i Sklepik) /casino (tryb kasynowy), /duel (pojedynek: op create|join|vote|state|leave), start z { daily: true } = Dyżur dnia, start z { duel: true } = bieg pojedynku.
+// Klucze: „profile”, „run”. Trasy (POST): /state /start /pick /buy /reroll /rest /shop /bet /bonus /choose /pawn /redeem /upgrade /fightstart /fightfinish /abandon /history /analysis /skillorder /code /kurnik /levelchoice /shopbuy /wear (Staż i Sklepik) /casino (tryb kasynowy), /duel (pojedynek: op create|join|vote|state|leave), start z { daily: true } = Dyżur dnia, start z { duel: true } = bieg pojedynku.
 // Odpowiedź: { ok, profile, run, ...wynik akcji } albo { err, code } z kodem 400/409.
 import { mix, hash } from './rng.js';
-import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, endRun, swapSkills, view, statsOf, pawn, redeem, upgrade, willOptions, ghostOf, RUN_V } from './rules.js';
+import { newRun, pickTile, reroll, buyOffer, rest, shopBuy, bet, bonusPick, choose, fightSetup, fightFinish, abandon, endRun, swapSkills, view, statsOf, pawn, redeem, upgrade, ghostOf, RUN_V } from './rules.js';
 import { DUEL, duelSetDl, autoStep } from './duel.js';
 import { newProfile, poolFor, evaluate, evaluateAchievements, onBossKill, onRunEnd, onNemesisBeaten, markSeen, publicProfile, kurnikBuy, kurnikOpen, kurnikGate, levelChoose, shopBuyItem, wearItem, takeBuffs, dailyKey, dailyOf, dailyView } from './profile.js';
 import { MODES, CHARS, UNLOCKS, TILE_BY_ID, UNLOCK_BY_ID, STARTER_TILES, CASINO_REROLLS } from './data.js';
@@ -30,6 +30,7 @@ export class BgPlayer {
     const st = this.ctx.storage;
     const profile = (await st.get('profile')) || newProfile();
     profile.nick = pl.nick; profile.avatar = pl.avatar || 0;
+    delete profile.will;   // dawny Testament Pyrtka (funkcja usunięta): czyścimy stary zapis
     kurnikGate(profile);   // jednorazowo: Kurnik od 20. poziomu Stażu, niżsi tracą ulepszenia (zapis na końcu żądania)
     let run = (await st.get('run')) || null;
     const path = url.pathname.replace(/^\//, '');
@@ -67,11 +68,9 @@ export class BgPlayer {
         if (!CHARS[char] || CHARS[char].retired || !profile.chars.includes(char)) return json({ err: 'Ta postać jest jeszcze zablokowana.', code: 'char' }, 400);
         if (g < 0 || g > profile.garnek) return json({ err: 'Ten poziom Garnka jest jeszcze zablokowany.', code: 'garnek' }, 400);
         const seed = mix(Date.now() & 0x7fffffff, hash(pl.n), (crypto.getRandomValues(new Uint32Array(1)))[0]);
-        // Testament Pyrtka działa w runie inną postacią niż ta, która go spisała (chyba że masz tylko jedną postać).
-        const w = profile.will, useWill = !!(w && TILE_BY_ID[w.tile] && !(profile.chars.length > 1 && w.char === char));
-        r = newRun({ mode, char, garnek: g, pool: poolFor(profile), seed, now: this.now(), nemesis: profile.nemesis || null, will: useWill ? w.tile : null, curses: Array.isArray(b.curses) ? b.curses.map(String) : [], kurnik: kurnikOpen(profile) ? (profile.kurnik || {}) : {} });
+        r = newRun({ mode, char, garnek: g, pool: poolFor(profile), seed, now: this.now(), nemesis: profile.nemesis || null, curses: Array.isArray(b.curses) ? b.curses.map(String) : [], kurnik: kurnikOpen(profile) ? (profile.kurnik || {}) : {} });
         if (r.ok) {
-          run = r.run; if (useWill) profile.will = null;
+          run = r.run;
           const bf = takeBuffs(profile); run.buffs = bf;   // premie z nagród za poziom Stażu (jednorazowe)
           if (bf.coins) { run.coins += bf.coins; run.stats.maxCoins = Math.max(run.stats.maxCoins, run.coins); }
           if (bf.rerolls) run.freeLeft += bf.rerolls;
@@ -81,14 +80,6 @@ export class BgPlayer {
       case 'pawn': r = need(run) || pawn(run, String(b.id || '')); break;
       case 'redeem': r = need(run) || redeem(run); break;
       case 'upgrade': r = need(run) || upgrade(run, String(b.id || ''), b.hot === true || b.hot === 1); break;
-      case 'will': {
-        const opts = willOptions(run), i = Number(b.i);
-        if (!opts) return json({ err: 'Teraz nie spiszesz testamentu.', code: 'phase', ...this.out(profile, run) }, 409);
-        if (i !== -1 && !opts[i]) return json({ err: 'Nie ma takiego kafelka.', code: 'index', ...this.out(profile, run) }, 409);
-        run.willDone = true;
-        if (i >= 0) { profile.will = { tile: opts[i], char: run.char }; r = { ok: true, will: opts[i] }; }
-        break;
-      }
       case 'pick': {
         // Arena Duchów: duch (build innego gracza) pochodzi z BgRanks; bez niego pojawia się Odbicie gracza.
         const t = run && run.phase === 'offer' ? TILE_BY_ID[run.offer[Number(b.i)]] : null;
@@ -223,7 +214,7 @@ export class BgPlayer {
     const o = this.out(profile, run);
     const body = { ok: true, ...o, ...extra };
     if (r.setup) body.setup = r.setup;
-    for (const k of ['reward', 'healed', 'result', 'reward', 'boss', 'bonus', 'event', 'crate', 'bought', 'price', 'bet', 'won', 'tile', 'cost', 'left', 'badge', 'automat', 'chose', 'interest', 'grew', 'revealed', 'nemesis', 'pawned', 'redeemed', 'upgraded', 'loot', 'looted', 'dino', 'will', 'victory', 'compUp', 'arena', 'extra', 'extraOffer', 'bossVar', 'route', 'companion', 'upkeep']) if (r[k] !== undefined) body[k] = r[k];
+    for (const k of ['reward', 'healed', 'result', 'reward', 'boss', 'bonus', 'event', 'crate', 'bought', 'price', 'bet', 'won', 'tile', 'cost', 'left', 'badge', 'automat', 'chose', 'interest', 'grew', 'revealed', 'nemesis', 'pawned', 'redeemed', 'upgraded', 'loot', 'looted', 'dino', 'victory', 'compUp', 'arena', 'extra', 'extraOffer', 'bossVar', 'route', 'companion', 'upkeep']) if (r[k] !== undefined) body[k] = r[k];
     return json(body);
   }
 

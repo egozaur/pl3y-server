@@ -60,7 +60,7 @@ const cur = run => run.cur || (run.cur = freshCur(run));
 // Wersja reguł runu. Run zapisany w innej wersji serwer unieważnia (inne spotkania = niezgodna powtórka walki).
 export const RUN_V = 23;   // Patch 1.1: bez drzwi, Siła, krytyk z przepełnieniem, zlewanie z wyborem
 
-export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, will = null, curses = [], kurnik = {} }) {
+export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null, curses = [], kurnik = {} }) {
   const M = MODES[mode], ch = CHARS[char];
   if (!M) return fail('Nieznany tryb.', 'mode');
   if (!ch) return fail('Nieznana postać.', 'char');
@@ -73,7 +73,7 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null
     stats: { riskPicks: 0, fox: 0, maxCoins: ch.coins, maxHit: 0, lowWin: false, maxRound: 1, bossKills: [], picks: 0, rerolls: 0, v2: 1, syn: false, rests: 0, skillUses: 0, flawless: 0, bossFlawless: false, maxChainsFight: 0, longWin: 0 },
     log: [],
     curses: curses.slice(), kurnik: Object.fromEntries(Object.keys(KURNIK).filter(k => (kurnik[k] | 0) > 0).map(k => [k, Math.min(KURNIK_MAX, kurnik[k] | 0)])), routes: [null, null, null], companion: null, bossWins: 0, arena: null, endless: false, cleared: null,
-    grow: {}, flawed: [], flawAt: -1, pawned: null, foxDebt: 0, nemesis: null, will: null, willUsed: false,
+    grow: {}, flawed: [], flawAt: -1, pawned: null, foxDebt: 0, nemesis: null,
   };
   run.decrees = decreesOf(run.seed);
   run.coins += kLv(run, 'spizarnia');   // Kurnik: Spiżarnia
@@ -85,7 +85,6 @@ export function newRun({ mode, char, garnek, pool, seed, now = 0, nemesis = null
     while (run.skills.length < Math.min(ch.randomSkill === true ? 1 : ch.randomSkill, maxSkillsOf(run), keys.length)) { const id = rr.pick(keys); if (!run.skills.some(s => s.id === id)) run.skills.push({ id, lvl: 1 }); }
   }
   if (nemesis && ENEMIES[nemesis.enemy]) run.nemesis = { ...nemesis, round: nemesisRound(run, nemesis), beaten: false };
-  if (will && TILE_BY_ID[will]) run.will = will;
   run.stats.maxCoins = Math.max(run.stats.maxCoins, run.coins);
   run.hp = statsOf(run).maxHp;
   setOffer(run, 0);
@@ -154,8 +153,6 @@ export function makeOffer(run, salt, opt = {}) {
       out[at] = pick.id;
     }
   }
-  // Testament Pyrtka: zapisany kafelek jako piąta karta pierwszej oferty (także po rerollach), dopóki go nie weźmiesz.
-  if (run.will && !run.willUsed && run.round === 1 && (salt === 0 || (salt >= 100 && salt < 200)) && !out.includes(run.will) && tileAvailable(run, TILE_BY_ID[run.will])) out.push(run.will);
   return out;
 }
 
@@ -164,19 +161,18 @@ const flawable = t => t && !t.event && !t.hatched && !t.hidden && !t.grow && (t.
 function flawSlot(run, salt) {
   const rr = makeRng(mix(run.seed, run.round, salt, hash('flaw')));
   if (rr.int(100) >= RULES.flawChance) return -1;
-  const idx = run.offer.map((id, i) => i).filter(i => i < RULES.offerSize && run.offer[i] !== run.will && flawable(TILE_BY_ID[run.offer[i]]));
+  const idx = run.offer.map((id, i) => i).filter(i => i < RULES.offerSize && flawable(TILE_BY_ID[run.offer[i]]));
   return idx.length ? rr.pick(idx) : -1;
 }
 // Główna oferta piętra (salt 0, rerolle 100+): kafelki i ewentualna wada.
 function setOffer(run, salt) { run.offer = makeOffer(run, salt); run.flawAt = flawSlot(run, salt); }
-// Po wzięciu kafelka z oferty: wada fabryczna (ukryta do następnej walki) i Testament.
+// Po wzięciu kafelka z oferty: wada fabryczna (ukryta do następnej walki).
 function afterTake(run, i, id) {
   if (i === run.flawAt) {
     const rr = makeRng(mix(run.seed, run.round, hash('flawkind'), run.flawed.length));
     (run.flawed = run.flawed || []).push({ id, flaw: rr.pick(Object.keys(FLAWS)), on: false, round: run.round });
     run.flawAt = -1;
   }
-  if (run.will && id === run.will && run.round === 1) run.willUsed = true;
 }
 
 export const priceMul = run => run && decreeIs(run, 'audyt') ? 150 : 100;   // Okólnik „Audyt Wydatków”: dokupowanie o 50% droższe
@@ -1005,13 +1001,6 @@ function winTail(run, after) {
   return afterFight(run, after.bonus, after.loot);
 }
 
-// Testament Pyrtka: po przegranej gracz zapisuje jeden kafelek (zwykły albo rzadki) do pierwszej oferty następnego runu.
-export function willOptions(run) {
-  if (!run || run.phase !== 'over' || run.ended !== 'lose' || run.willDone) return null;
-  const ids = [...new Set(run.tiles)].filter(id => { const t = TILE_BY_ID[id]; return t && t.rarity <= 1 && !t.hidden && !t.hatched && !t.event; });
-  return ids.length ? ids : null;
-}
-
 // Zamiana kolejności umiejętności (sloty = klawisze 1/2/3 w walce; pierwszy slot dostaje „Pierwszą gotową”). Tylko przed walką.
 export function swapSkills(run, a, b) {
   if (run.phase === 'over') return fail('Run już się skończył.', 'phase');
@@ -1066,11 +1055,10 @@ export function view(run) {
     decree: over ? null : decreeOf(run), priceMul: priceMul(run), grow: run.grow || {}, flawAt: run.phase === 'offer' ? run.flawAt : -1,
     flawed: (run.flawed || []).map(w => ({ id: w.id, flaw: w.on ? w.flaw : null, on: w.on })),
     preview: over ? null : previewOf(run, S), up: run.phase === 'offer' ? upgradable(run) : [], pawned: run.pawned ? { ...run.pawned, cost: redeemCost(run.pawned), canRedeem: run.round === run.pawned.round + 1 } : null, foxDebt: run.foxDebt || 0, lostPawn: run.lostPawn || null,
-    will: run.will && !run.willUsed && run.round === 1 ? run.will : null,
     nemesis: run.nemesis ? { name: nemesisName(run.nemesis), enemy: run.nemesis.enemy, affix: run.nemesis.affix, tile: run.nemesis.tile, lvl: run.nemesis.lvl || 1, round: run.nemesis.round, beaten: run.nemesis.beaten } : null,
     // Tablica Zarządu (faktury za pokonane piętra): tylko liczby z dziennika wygranych walk, bez składu przyszłych pięter.
     board: (run.log || []).filter(e => e.win).map(e => ({ r: e.r, boss: !!e.boss, ticks: e.ticks, dealt: e.dealt, reward: e.reward | 0 })),
-    nemesisRound: !over && isNemesisRound(run), interestMax: CHARS[run.char].interestMax || RULES.interestMax, willOptions: willOptions(run),
+    nemesisRound: !over && isNemesisRound(run), interestMax: CHARS[run.char].interestMax || RULES.interestMax,
   };
   // Podgląd wrogów: na Garnku 0 widać skład piętra i szablon; od Garnka 1 tylko zapowiedź bossa (reszta ukryta po stronie serwera).
   if (!over) {
