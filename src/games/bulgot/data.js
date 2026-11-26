@@ -86,19 +86,19 @@ export const CHARS = {
   indor: { id: 'indor', retired: true, name: 'Indor Bogdan', style: 'Ciężkie ciosy', text: '+55% Ataku, -30% szybkości ataku, 15% szansy na dziobnięcie.', base: BASE,
     fx: [{ k: 'atkPct', v: 55 }, { k: 'aspdPct', v: -30 }, { k: 'crit', v: 10 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-indor' },
   zjarany: { id: 'zjarany', name: 'Zjarany Kurczak', style: 'Oparzenie i luz', secret: true,
-    text: 'Podpala wrogów (30% Oparzenia, limit +4, leczy się od płonących), ale jest najarany od rana: -45% szybkości ataku i -10% Ataku. Co 4 s Chmura Dymu: Oparzenie i spowolnienie wrogów.', base: BASE,
-    fx: [{ k: 'burnHit', v: 30 }, { k: 'burnMax', v: 4 }, { k: 'regen', v: 14 }, { k: 'burnHeal', v: 3 }, { k: 'aspdPct', v: -45 }, { k: 'atkPct', v: -10 }, { k: 'smoke', v: 40 }],
+    text: 'Podpala wrogów (30% Oparzenia, limit +4, leczy się od płonących), ale jest najarany od rana: -35% szybkości ataku i -5% Ataku. Co 4 s Chmura Dymu: Oparzenie i spowolnienie wrogów.', base: BASE,
+    fx: [{ k: 'burnHit', v: 30 }, { k: 'burnMax', v: 4 }, { k: 'regen', v: 14 }, { k: 'burnHeal', v: 3 }, { k: 'aspdPct', v: -35 }, { k: 'atkPct', v: -5 }, { k: 'smoke', v: 40 }],
     startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-420', hasCode: true },
   barista: { id: 'barista', name: 'Kurczak Barista', style: 'Szybkie ciosy', text: 'Espresso w żyłach: każdy cios w walce daje +5% szybkości ataku (maks. +60%), nowa walka zaczyna się od zera. Zaczyna ze Szałem Dziobów, ma -20% maks. Życia i -5% Ataku, a każda walka zaczyna się od zimnego startu.', base: BASE,
     fx: [{ k: 'aspdPct', v: 0 }, { k: 'hpPct', v: -20 }, { k: 'atkPct', v: -5 }, { k: 'ramp', v: 5 }], startSkills: [['dziobniecie', 1]], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-barista' },
-  ges: { id: 'ges', name: 'Gęś Księgowa', style: 'Ekonomia', text: 'Kapitał pracuje: za każde 5 Ziaren w kieszeni +1% Ataku (maks. +25%). +15 Ziaren na start, +1 Ziarno po wygranej, Odsetki do 6 Ziaren. Każde wydane Ziarno to utracona moc, a -10% Ataku bez kapitału boli.', base: BASE,
+  ges: { id: 'ges', name: 'Gęś Księgowa', style: 'Ekonomia', text: 'Kapitał pracuje: za każde 5 Ziaren w kieszeni +2% Ataku (maks. +25% przy 60 Ziarnach). +15 Ziaren na start, +1 Ziarno po wygranej, Odsetki do 6 Ziaren. Każde wydane Ziarno to utracona moc, a -10% Ataku bez kapitału boli.', base: BASE,
     fx: [{ k: 'coinFlat', v: 1 }, { k: 'atkPct', v: -10 }], startSkills: [], coins: 15, freeRerolls: 0, riskWeight: 1, lock: 'u-ges', interestMax: 6, coinAtk: true },
   lodziarz: { id: 'lodziarz', retired: true, name: 'Kurczak Lodziarz', style: 'Mróz', text: '15% szans na Mróz przy ataku, wrogowie z Mrozem zadają o 10% mniej obrażeń, -25% szybkości ataku. Zaczyna z Lodowym Dziobem.', base: BASE,
     fx: [{ k: 'frostHit', v: 15 }, { k: 'frostWeak', v: 10 }, { k: 'aspdPct', v: -25 }], startSkills: [['lodowy', 1]], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-lodziarz' },
   pielegniarka: { id: 'pielegniarka', retired: true, name: 'Kura Pielęgniarka', style: 'Leczenie', text: '+0,8 Regeneracji / s, leczenie po rundzie +5 pkt proc., -25% Ataku. Zaczyna z Zagrzebaniem w Sianie. Nie wygra szybko, ale też nie padnie.', base: BASE,
     fx: [{ k: 'regen', v: 8 }, { k: 'healBonus', v: 5 }, { k: 'atkPct', v: -25 }], startSkills: [['zagrzebanie', 1]], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-pielegniarka' },
-  rzeznik: { id: 'rzeznik', name: 'Kogut Rzeźnik', style: 'Krwawienie', text: 'Każdy atak nakłada Krwawienie, limit stosów +1. Zabicie krwawiącego wroga leczy 5% maks. Życia. Zaczyna z Darciem Pierza, ale ma -10% maks. Życia i -5% Ataku.', base: BASE,
-    fx: [{ k: 'bleed', v: 1 }, { k: 'bleedMax', v: 1 }, { k: 'hpPct', v: -10 }, { k: 'atkPct', v: -5 }, { k: 'bleedKillHeal', v: 5 }], startSkills: [['darcie', 1]], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-rzeznik' },
+  rzeznik: { id: 'rzeznik', name: 'Kogut Rzeźnik', style: 'Krwawienie', text: 'Każdy atak nakłada Krwawienie, limit stosów +1. Zabicie krwawiącego wroga leczy 3% maks. Życia. Zaczyna z Darciem Pierza, ale ma -10% maks. Życia i -5% Ataku.', base: BASE,
+    fx: [{ k: 'bleed', v: 1 }, { k: 'bleedMax', v: 1 }, { k: 'hpPct', v: -10 }, { k: 'atkPct', v: -5 }, { k: 'bleedKillHeal', v: 3 }], startSkills: [['darcie', 1]], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-rzeznik' },
   wrozka: { id: 'wrozka', retired: true, name: 'Indyczka Wróżka', style: 'Szczęście', text: '+30 Szczęścia (lepsze oferty), 1 darmowy reroll na rundę, +8% Ataku. Zawsze wie, że coś się wydarzy, tylko nie zawsze co.', base: BASE,
     fx: [{ k: 'luck', v: 30 }, { k: 'atkPct', v: 8 }], startSkills: [], coins: 0, freeRerolls: 1, riskWeight: 1, lock: 'u-wrozka' },
   stazysta: { id: 'stazysta', retired: true, name: 'Kurczak Stażysta', style: 'Powolny start', text: '-22% Ataku i maks. Życia na start, ale każde wygrane piętro daje +5% wszystkich statystyk (maks. +40%). Zaczyna słabo, pod koniec jest najgroźniejszy.', base: BASE,
@@ -110,8 +110,8 @@ export const CHARS = {
   // Memiczne kurczaki „na hardkorze”: każdy ma jedną wielką wadę, która rządzi całym runem. Wygrana nimi to wyczyn.
   gigachad: { id: 'gigachad', name: 'Kurczak Monocykl', style: 'Jedna umiejętność', text: 'Jedzie na monocyklu i ma tylko 1 slot umiejętności, ale ta jedna uderza z mocą 250% i ładuje się szybciej. Jedna doskonała sztuczka zamiast zestawu. Cena: -10% szybkości ataku i -10% maks. Życia, a każdy kafelek umiejętności poza jedną jest martwy.', base: BASE,
     fx: [{ k: 'skillPow', v: 150 }, { k: 'cdPct', v: 30 }, { k: 'atkPct', v: 15 }, { k: 'aspdPct', v: -10 }, { k: 'hpPct', v: -10 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-gigachad', skillSlots: 1 },
-  jajeczko: { id: 'jajeczko', name: 'Pan Jajeczko', style: 'Szklana kula', text: 'Ma 3 punkty życia (!) i zapasowe gniazdo na start, ale 75% uniku, +150% Ataku i +30% szybkości ataku. Każdy unik daje +5% Ataku do końca walki (maks. +50%). Pierwszy trafiony cios to koniec.', base: BASE,
-    fx: [{ k: 'hpPct', v: -95 }, { k: 'evade', v: 75 }, { k: 'atkPct', v: 150 }, { k: 'aspdPct', v: 30 }, { k: 'dodgeAtk', v: 5 }], startSkills: [], startTiles: ['gniazdo-zapasowe'], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-jajeczko' },
+  jajeczko: { id: 'jajeczko', name: 'Pan Jajeczko', style: 'Szklana kula', text: 'Ma 3 punkty życia (!) i zapasowe gniazdo na start (wskrzeszenie z 70% Życia), ale 75% uniku, +150% Ataku i +30% szybkości ataku. Każdy unik daje +5% Ataku do końca walki (maks. +50%). Pierwszy trafiony cios to koniec.', base: BASE,
+    fx: [{ k: 'hpPct', v: -95 }, { k: 'evade', v: 75 }, { k: 'atkPct', v: 150 }, { k: 'aspdPct', v: 30 }, { k: 'dodgeAtk', v: 5 }, { k: 'revivePct', v: 70 }], startSkills: [], startTiles: ['gniazdo-zapasowe'], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-jajeczko' },
   krypto: { id: 'krypto', retired: true, name: 'Kurczak Kryptowalutowy', style: 'Rynek', text: 'Co piętro jego wszystkie statystyki zmieniają się losowo od -30% do +55% („rynek”). Raz jest księciem, raz bankrutem, a kurs poznasz dopiero w walce.', base: BASE,
     fx: [], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-krypto', crypto: [-30, 55] },
   alkoholik: { id: 'alkoholik', retired: true, name: 'Kogut Alkoholik', style: 'Wieczny Poniedziałek', text: '+30% szansy na dziobnięcie i +120% Mocy Dziobnięcia, ale -25% szybkości ataku i -15% maks. Życia. Trafia rzadko, za to z impetem.', base: BASE,
@@ -124,7 +124,7 @@ export const CHARS = {
     fx: [{ k: 'crit', v: 35 },{ k: 'hpPct', v: -25 }, { k: 'atkPct', v: -15 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-influencer' },
   skibidi: { id: 'skibidi', retired: true, name: 'Kurczak Skibidi', style: 'Chaos', text: 'Zaczyna z dwiema losowymi umiejętnościami (nie wybierasz ich), cooldowny -10%, ale -25% maks. Życia i -12% Ataku. Czasem trafi ultimate, czasem w ścianę.', base: BASE,
     fx: [{ k: 'cdPct', v: 10 }, { k: 'hpPct', v: -25 }, { k: 'atkPct', v: -12 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-skibidi', randomSkill: 2 },
-  emeryt: { id: 'emeryt', name: 'Emeryt Janusz', style: 'Twardy staruszek', text: 'Za moich czasów twardzi byli. Każde 4 punkty Pancerza dają +3% Ataku (maks. +45%). +10% maks. Życia, +6 Pancerza, +1 Regeneracji / s, ale -35% szybkości ataku. Bije wolno i ciągle narzeka.', base: BASE,
+  emeryt: { id: 'emeryt', name: 'Emeryt Janusz', style: 'Twardy staruszek', text: 'Za moich czasów twardzi byli. Każde 2 punkty Pancerza dają +3% Ataku (maks. +45%). +10% maks. Życia, +6 Pancerza, +1 Regeneracji / s, ale -35% szybkości ataku. Bije wolno i ciągle narzeka.', base: BASE,
     fx: [{ k: 'hpPct', v: 10 }, { k: 'armor', v: 6 }, { k: 'regen', v: 10 }, { k: 'aspdPct', v: -35 }, { k: 'armorAtk', v: 3 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-emeryt' },
   sigma: { id: 'sigma', retired: true, name: 'Kurczak Sigma Solo', style: 'Samotny wilk', text: 'Bonusy zestawów (2/3/4/6) nie działają, powiązania żywiołów też nie. Do tego tylko +3% Ataku i Życia. Każdy kafelek liczy się osobno, nikt mu nie pomaga.', base: BASE,
     fx: [{ k: 'atkPct', v: 3 }, { k: 'hpPct', v: 3 }], startSkills: [], coins: 0, freeRerolls: 0, riskWeight: 1, lock: 'u-sigma', noSets: true },
@@ -556,7 +556,7 @@ export const UNLOCKS = [
   { id: 'u-mutant', kind: 'char', target: 'mutant', text: 'Zmutuj trzy umiejętności w jednym runie' },
   { id: 'u-dino', kind: 'char', target: 'dinozaur', secret: true, text: 'Wyklu Dinozaura z Jajka Dinozaura' },
   { id: 'u-gigachad', kind: 'char', target: 'gigachad', text: 'Zadaj jednym trafieniem 100 obrażeń' },
-  { id: 'u-jajeczko', kind: 'char', target: 'jajeczko', text: 'Zakończ 10 runów' },
+  { id: 'u-jajeczko', kind: 'char', target: 'jajeczko', text: 'Dojdź do 10. piętra w trybie pełnym' },
   { id: 'u-krypto', kind: 'char', target: 'krypto', text: 'Miej 150 Ziaren naraz' },
   { id: 'u-alkoholik', kind: 'char', target: 'alkoholik', text: 'Przegraj 10 runów' },
   { id: 'u-wegan', kind: 'char', target: 'wegan', text: 'Ukończ tryb szybki i pełny' },
@@ -634,8 +634,8 @@ export const BOSSES = {
   'wampir-hr': { id: 'wampir-hr', slot: 'prezes', name: 'Wampir z Działu HR', title: 'Zarząd', hp: 112, atk: 12, aspd: 90, armor: 5, evade: 10, crit: 0, art: 'cat', tint: 'blood', mech: ['summon', 'rage'], vamp: 45, summon: { every: 180, n: 1, max: 3 }, rage: { at: 40, aspd: 145 },
     text: 'Leczy się 45% zadanych obrażeń, przyzywa stażystów na rozmowy kwalifikacyjne, a poniżej 40% życia wpada w szał.', quote: 'Zapraszamy na rozmowę. Nie wychodzi się z niej żywym.' },
   // Dodatkowe (opcjonalne) rundy po wygranej na piętrze 3 i 6 (EXTRA_AT): extra: true, slot: null. Pies Pipsztala, Lakuś, to osobny wróg (EXTRA_DOG).
-  gruszka: { id: 'gruszka', slot: null, extra: true, name: 'Gruszka', title: 'Pan Sadu', hp: 120, atk: 7, aspd: 95, armor: 5, evade: 0, crit: 10, art: 'gruszka', idle: 20, mech: ['rage'], rage: { at: 40, aspd: 135 },
-    text: 'Wielki kurczak z głową gruszki. Na starcie wyśmiewa twój build, a poniżej 40% życia wpada w szał.', quote: 'Najpierw cię wyśmieję, potem obiorę.' },
+  gruszka: { id: 'gruszka', slot: null, extra: true, name: 'Gruszka', title: 'Mędrzec z Patykiem', hp: 120, atk: 7, aspd: 95, armor: 5, evade: 0, crit: 10, art: 'gruszka', idle: 20, mech: ['rage'], rage: { at: 40, aspd: 135 },
+    text: 'Facet-gruszka z dragon staffem. Na starcie ocenia twój build jak stand-uper po jednym artykule z internetu, a poniżej 40% życia kręci kijem szybciej i przestaje udawać miłego.', quote: 'Przeczytałem o tobie wszystko. Zajęło mi trzy sekundy.' },
   pipsztal: { id: 'pipsztal', slot: null, extra: true, name: 'Pipsztal', title: 'Dresiarz z Psem', hp: 145, atk: 10, aspd: 90, armor: 4, evade: 0, crit: 20, art: 'pipsztal', mech: ['stunhero', 'pet'], stunHero: { every: 70, dur: 12 },
     text: 'Zawsze z psem: pies sika na ciebie i spowalnia twoje ataki. Pipsztal tnie nożem i co 7 s na chwilę cię ogłusza.', quote: 'Ej, kurczak! Masz pięć złotych? Pies lubi pieniądze.' },
   // Dogrywka (po Prezesie): co superEvery pięter jeden z poniższych, po kolei.
@@ -673,7 +673,7 @@ export const COUNTERS = {
 };
 export const COUNTER_OF = Object.fromEntries(Object.entries(COUNTERS).filter(([, c]) => c.vs).map(([id, c]) => [c.vs, id]));
 export const COUNTER_K = [45, 52, 58, 64, 70, 75];   // % bazowej siły i długości kontr wg palnika 0..5
-export const COUNTER_SLOT_K = { brojler: 0.5, skubarka: 0.8, prezes: 1 };   // mnożnik wg miejsca bossa: pierwszy najlżejszy, Prezes pełna siła   // % bazowej siły i długości kontr wg palnika 0..5
+export const COUNTER_SLOT_K = { brojler: 0.4, skubarka: 0.8, prezes: 1 };   // mnożnik wg miejsca bossa: pierwszy najlżejszy, Prezes pełna siła   // % bazowej siły i długości kontr wg palnika 0..5
 
 // ---------- Szablony zwykłych pięter ----------
 // Losowane z ziarna runu (rules.js → floorTemplate). Nie dotyczą wczesnych pięter, bossów, elit, Nemezis ani ryzykownych drzwi.
@@ -750,24 +750,24 @@ export const NEMESIS_NAMES = ['Zbigniew', 'Halina', 'Mirosław', 'Grażyna', 'Bo
 // Dwie trasy z pięciu losuje się z ziarna runu. Modyfikator działa na całą strefę: wrogowie (poza bossami): enemyHp/enemyAtk (%),
 // slow {pct,ticks}, ignite (% Ataku wroga na stos), shieldHits; ekonomia: coins (Ziarna po wygranej), freeReroll (na piętro), heal (pkt proc.), priceDisc (%), luck (Szczęście w ofertach).
 export const ROUTES = {
-  chlodnia: { name: 'Chłodnia', icon: 'chlodnia', text: 'Wrogowie mają +3% Życia i lekko spowalniają twoje ataki, ale każde piętro daje +3 Ziarna.', enemyHp: 3, slow: { pct: 10, ticks: 20 }, coins: 3 },
-  kotlownia: { name: 'Kotłownia', icon: 'kotlownia', text: 'Wrogowie mają +4% Ataku, ale w ofertach jest znacznie więcej rzadkich kafelków (+35 Szczęścia).', enemyAtk: 4, luck: 35 },
-  magazyn: { name: 'Magazyn Pasz', icon: 'magazyn', text: 'Wrogowie mają -12% Życia, ale +8% Ataku (szklane armaty). Dostajesz 1 darmowy reroll na piętro.', enemyHp: -12, enemyAtk: 8, freeReroll: 1 },
-  kanaly: { name: 'Kanały Wentylacyjne', icon: 'kanaly', text: 'Wrogowie mają +6% Życia, ale po każdej walce leczysz się o 20 pkt proc. więcej.', enemyHp: 6, heal: 20 },
-  sortownia: { name: 'Sortownia Jaj', icon: 'sortownia', text: 'Wrogowie mają tarczę na 1 cios i -10% Życia, a dokupowanie jest o 30% tańsze.', enemyHp: -10, shieldHits: 1, priceDisc: 30 },
+  chlodnia: { name: 'Chłodnia', icon: 'chlodnia', text: 'Wrogowie mają +3% Życia i lekko spowalniają twoje ataki, ale każde piętro daje +5 Ziaren.', enemyHp: 3, slow: { pct: 10, ticks: 20 }, coins: 5 },
+  kotlownia: { name: 'Kotłownia', icon: 'kotlownia', text: 'Wrogowie mają +4% Ataku, ale w ofertach jest znacznie więcej rzadkich kafelków (+60 Szczęścia).', enemyAtk: 4, luck: 60 },
+  magazyn: { name: 'Magazyn Pasz', icon: 'magazyn', text: 'Wrogowie mają -12% Życia, ale +8% Ataku (szklane armaty). Dostajesz 2 darmowe rerolle na piętro.', enemyHp: -12, enemyAtk: 8, freeReroll: 2 },
+  kanaly: { name: 'Kanały Wentylacyjne', icon: 'kanaly', text: 'Wrogowie mają +6% Życia, ale po każdej walce leczysz się o 30 pkt proc. więcej.', enemyHp: 6, heal: 30 },
+  sortownia: { name: 'Sortownia Jaj', icon: 'sortownia', text: 'Wrogowie mają tarczę na 1 cios i -10% Życia, a dokupowanie jest o 40% tańsze.', enemyHp: -10, shieldHits: 1, priceDisc: 40 },
 };
 
 // ---------- Klątwy Prezesa (dobrowolne, wybierane przed runem; do CURSE_MAX naraz) ----------
 // pct = premia do wyniku (sumuje się). Efekty: rules.js (rerolle, odpoczynek, Ziarna, sloty, wrogowie, podgląd), stats.js (Kruche Kości), sim.js (Pospiech).
 export const CURSES = {
-  'zakaz-wymian': { name: 'Zakaz Wymian', text: 'Reroll jest niemożliwy (także darmowy).', pct: 25, icon: 'zakaz' },
-  'przegrzany-piec': { name: 'Przegrzany Piec', text: 'Wrogowie mają +15% Życia i +15% Ataku.', pct: 30, icon: 'piec' },
-  'zakaz-drzemek': { name: 'Zakaz Drzemek', text: 'Odpoczynek jest wyłączony.', pct: 5, icon: 'drzemka' },
-  'podatek': { name: 'Podatek Kurzy', text: 'Po każdej wygranej walce o 2 Ziarna mniej.', pct: 18, icon: 'podatek' },
-  'ciasne-gniazdo': { name: 'Ciasne Gniazdo', text: 'Tylko 2 sloty umiejętności.', pct: 20, icon: 'gniazdo' },
-  'pospiech': { name: 'Pospiech', text: 'Wrogowie wpadają w Furię już po 30 s walki.', pct: 6, icon: 'pospiech' },
-  'mgla': { name: 'Mgła Zarządu', text: 'Nie widzisz składu piętra przed walką.', pct: 8, icon: 'mgla' },
-  'kruche-kosci': { name: 'Kruche Kości', text: '-25% maks. Życia.', pct: 30, icon: 'kosci' },
+  'zakaz-wymian': { name: 'Zakaz Wymian', text: 'Reroll jest niemożliwy (także darmowy).', pct: 30, icon: 'zakaz' },
+  'przegrzany-piec': { name: 'Przegrzany Piec', text: 'Wrogowie mają +10% Życia i +10% Ataku.', pct: 35, icon: 'piec' },
+  'zakaz-drzemek': { name: 'Zakaz Drzemek', text: 'Odpoczynek jest wyłączony.', pct: 8, icon: 'drzemka' },
+  'podatek': { name: 'Podatek Kurzy', text: 'Po każdej wygranej walce o 1 Ziarno mniej.', pct: 22, icon: 'podatek' },
+  'ciasne-gniazdo': { name: 'Ciasne Gniazdo', text: 'Tylko 2 sloty umiejętności, ale umiejętności są o 20% mocniejsze.', pct: 30, icon: 'gniazdo' },
+  'pospiech': { name: 'Pospiech', text: 'Wrogowie wpadają w Furię już po 30 s walki.', pct: 10, icon: 'pospiech' },
+  'mgla': { name: 'Mgła Zarządu', text: 'Nie widzisz składu piętra przed walką.', pct: 10, icon: 'mgla' },
+  'kruche-kosci': { name: 'Kruche Kości', text: '-15% maks. Życia.', pct: 35, icon: 'kosci' },
 };
 export const CURSE_MAX = 3;
 export const cursePct = list => (list || []).reduce((a, id) => a + (CURSES[id] ? CURSES[id].pct : 0), 0);
@@ -823,7 +823,7 @@ export function garnekMods(level) {
   return {
     enemyHp: (L >= 1 ? 10 : 0) + (L >= 3 ? 3 : 0) + (L >= 5 ? 8 : 0),
     enemyAtk: (L >= 2 ? 7 : 0) + (L >= 5 ? 8 : 0),
-    bossHp: (L >= 4 ? 15 : 0) + (L >= 5 ? 10 : 0),
+    bossHp: (L >= 4 ? 15 : 0) + (L >= 5 ? 5 : 0),   // P5: bossowie +20% zamiast +25% (łagodniejszy skok z P4)
     coinMinus: L >= 5 ? 1 : 0,
     rerollExtra: L >= 2 ? 1 : 0,
     elites: true, eliteAffixes: L >= 2 ? 2 : 1,
